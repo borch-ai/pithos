@@ -1,4 +1,4 @@
-.PHONY: all build test clean lint fmt tidy check-coverage check-plans vuln
+.PHONY: all build test clean lint fmt tidy check-coverage vuln
 
 # Go parameters
 GOCMD=go
