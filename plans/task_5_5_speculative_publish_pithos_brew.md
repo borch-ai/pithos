@@ -14,7 +14,7 @@ This plan outlines packaging and publishing Pithos as a Homebrew package (`brew 
 
 ### Release Workflow
 
-#### [NEW] [.github/workflows/release.yml](file:///Users/human/code/pithos/.github/workflows/release.yml)
+#### [NEW] [release.yml](file:///Users/human/code/pithos/.github/workflows/release.yml)
 - Create a post-merge release workflow in Pithos.
 - Use `go-semantic-release/action` to version the code, tag it, and create GitHub Releases.
 - Cross-compile Pithos binaries for macOS (amd64, arm64), Linux (amd64, arm64), and Windows (amd64).

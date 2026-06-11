@@ -1,6 +1,9 @@
 # plan: Task 4.1: The `assemble` Engine
 
 **Status:** Completed
+**Go Version:** Go 1.26.4
+**Date Completed:** 2026-06-11
+**Unit Test Coverage:** 92.5%
 
 Implement the `assemble` command to calculate print constraints and generate a valid KDP layout manifest from the raw brewed assets.
 
