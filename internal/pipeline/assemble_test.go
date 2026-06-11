@@ -32,7 +32,9 @@ func setupMockKDPMathServer(t *testing.T, ctx context.Context, serverTransport m
 			PaperType   string `json:"paper_type"`
 			TrimSize    string `json:"trim_size"`
 		}
-		_ = json.Unmarshal(req.Params.Arguments, &args)
+		if err := json.Unmarshal(req.Params.Arguments, &args); err != nil {
+			return nil, err
+		}
 
 		if args.PageCount == 999 { // Special error trigger page count
 			return &mcpsdk.CallToolResult{
