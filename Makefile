@@ -15,7 +15,7 @@ BINARY_NAME=pithos
 BIN_DIR=bin
 MAIN_PATH=./cmd/pithos
 
-all: lint vuln check-coverage build install-hooks
+all: lint vuln check-coverage build
 
 build:
 	@echo "Building $(BINARY_NAME)..."
@@ -62,9 +62,9 @@ tidy:
 
 install-hooks:
 	@echo "Installing git hooks..."
-	@mkdir -p .git/hooks
-	@cp scripts/git-hooks/pre-push .git/hooks/pre-push
-	@chmod +x .git/hooks/pre-push
+	@mkdir -p $$(git rev-parse --git-path hooks)
+	@cp scripts/git-hooks/pre-push $$(git rev-parse --git-path hooks)/pre-push
+	@chmod +x $$(git rev-parse --git-path hooks)/pre-push
 
 clean:
 	@echo "Cleaning..."
