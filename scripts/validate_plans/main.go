@@ -193,11 +193,13 @@ func validateFileLinks(filePath string, isCompleted bool, workspaceRoot string) 
 
 		if strings.HasPrefix(trimmed, "#") {
 			matches := linkRegex.FindAllStringSubmatch(line, -1)
+			isActionHeading := strings.Contains(line, "[NEW]") || strings.Contains(line, "[MODIFY]") || strings.Contains(line, "[DELETE]")
+
 			for _, match := range matches {
 				label := strings.TrimSpace(match[1])
 				urlStr := strings.TrimSpace(match[2])
 
-				if strings.HasPrefix(urlStr, "file://") {
+				if isActionHeading || strings.HasPrefix(urlStr, "file://") {
 					if err := validateFileLink(line, label, urlStr, isCompleted, workspaceRoot); err != nil {
 						errs = append(errs, fmt.Errorf("line %d: %w", lineNum, err))
 					}
