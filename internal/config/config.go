@@ -46,13 +46,6 @@ var Cfg *Config
 // LoadConfig initializes Viper and loads configuration from the specified file,
 // fallback locations, or environment variables.
 func LoadConfig(cfgFile string) (*Config, error) {
-	// Load environment variables from .env if present
-	if cfgFile != "" {
-		loadEnvFile(filepath.Dir(cfgFile))
-	} else {
-		loadEnvFile(".")
-	}
-
 	v := viper.New()
 
 	// Set default values so environment variables can bind even if keys are missing from the config file.
@@ -67,34 +60,51 @@ func LoadConfig(cfgFile string) (*Config, error) {
 
 	if cfgFile != "" {
 		v.SetConfigFile(cfgFile)
-	} else {
-		// Default config locations:
-		// 1. Current working directory: ./ .pithos.toml
-		v.AddConfigPath(".")
-		v.SetConfigName(".pithos")
-		v.SetConfigType("toml")
-
-		// 2. User config directory: ~/.config/pithos/config.toml
-		home, err := os.UserHomeDir()
-		if err == nil {
-			v.AddConfigPath(filepath.Join(home, ".config", "pithos"))
-			// Also support searching under home dir directly
-			v.AddConfigPath(home)
+		loadEnvFile(filepath.Dir(cfgFile))
+		if err := v.ReadInConfig(); err != nil {
+			return nil, fmt.Errorf("failed to read config file: %w", err)
 		}
+		return finalizeLoad(v)
 	}
 
+	// Default config locations:
+	// 1. Current working directory: ./ .pithos.toml
+	v.AddConfigPath(".")
+	v.SetConfigName(".pithos")
+	v.SetConfigType("toml")
+
+	// 2. User config directory: ~/.config/pithos/config.toml
+	if home, err := os.UserHomeDir(); err == nil {
+		v.AddConfigPath(filepath.Join(home, ".config", "pithos"))
+		v.AddConfigPath(home)
+	}
+
+	err := v.ReadInConfig()
+	if err == nil {
+		// A config file was successfully loaded. Load sibling .env file.
+		envDir := "."
+		if used := v.ConfigFileUsed(); used != "" {
+			envDir = filepath.Dir(used)
+		}
+		loadEnvFile(envDir)
+		return finalizeLoad(v)
+	}
+
+	if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+		fmt.Fprintln(os.Stderr, "Warning: .pithos.toml not found. Running with environment variables or default settings.")
+		loadEnvFile(".")
+		return finalizeLoad(v)
+	}
+
+	return nil, fmt.Errorf("failed to read config file: %w", err)
+}
+
+// finalizeLoad unmarshals configuration and validates paths.
+func finalizeLoad(v *viper.Viper) (*Config, error) {
 	// Environment variable configuration
 	v.SetEnvPrefix("PITHOS")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
-
-	if err := v.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			fmt.Fprintln(os.Stderr, "Warning: .pithos.toml not found. Running with environment variables or default settings.")
-		} else {
-			return nil, fmt.Errorf("failed to read config file: %w", err)
-		}
-	}
 
 	var rawConfig Config
 	if err := v.Unmarshal(&rawConfig); err != nil {
@@ -138,8 +148,12 @@ func validateOrFallbackPath(path string, defaultName string) (string, error) {
 	if path == "" {
 		return defaultName, nil
 	}
-	if _, err := os.Stat(path); err != nil {
+	info, err := os.Stat(path)
+	if err != nil {
 		return "", fmt.Errorf("configured path for %s does not exist at %s: %w", defaultName, path, err)
+	}
+	if info.IsDir() {
+		return "", fmt.Errorf("configured path for %s at %s is a directory, expected executable file", defaultName, path)
 	}
 	return path, nil
 }
@@ -169,6 +183,9 @@ func loadEnvFile(dir string) {
 		// Strip optional single or double quotes
 		val = strings.Trim(val, `"'`)
 
-		_ = os.Setenv(key, val)
+		// Shell/CI environment variables take precedence over .env file
+		if _, exists := os.LookupEnv(key); !exists {
+			_ = os.Setenv(key, val)
+		}
 	}
 }

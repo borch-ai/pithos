@@ -11,9 +11,9 @@ func TestLoadConfig_Defaults(t *testing.T) {
 	_ = os.Unsetenv("PITHOS_API_GEMINI_KEY")
 	_ = os.Unsetenv("PITHOS_API_OPENAI_KEY")
 	_ = os.Unsetenv("PITHOS_MCP_IMAGEGEN_PATH")
-	_ = os.Unsetenv("PITHOS_MCP_KDPMATH_PATH")
-	_ = os.Unsetenv("PITHOS_MCP_SEOPATH")
-	_ = os.Unsetenv("PITHOS_MCP_VIDEOPATH")
+	_ = os.Unsetenv("PITHOS_MCP_KDP_MATH_PATH")
+	_ = os.Unsetenv("PITHOS_MCP_SEO_PATH")
+	_ = os.Unsetenv("PITHOS_MCP_VIDEO_PATH")
 
 	// Load with empty string config path to trigger fallback/warning and defaults
 	cfg, err := LoadConfig("")
@@ -124,6 +124,31 @@ imagegen_path = "/nonexistent/path/to/imagegen"
 	}
 }
 
+func TestLoadConfig_DirectoryPath(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos_test_dir")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+	}()
+
+	// We pass the temp directory itself as the imagegen_path
+	tomlContent := `
+[mcp]
+imagegen_path = "` + tmpDir + `"
+`
+	configFile := filepath.Join(tmpDir, "config.toml")
+	if wErr := os.WriteFile(configFile, []byte(tomlContent), 0600); wErr != nil {
+		t.Fatalf("failed to write config file: %v", wErr)
+	}
+
+	_, err = LoadConfig(configFile)
+	if err == nil {
+		t.Fatal("expected error since imagegen_path is a directory, got nil")
+	}
+}
+
 func TestLoadConfig_EnvVars(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "pithos_test")
 	if err != nil {
@@ -191,6 +216,86 @@ INVALID_LINE_NO_EQUALS
 	}
 	if cfg.API.OpenAIKey != "file-openai-key" {
 		t.Errorf("expected API OpenAIKey 'file-openai-key' loaded from .env, got '%s'", cfg.API.OpenAIKey)
+	}
+}
+
+func TestLoadConfig_EnvPrecedence(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos_precedence_test")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+	}()
+
+	_ = os.Setenv("PITHOS_API_GEMINI_KEY", "env-takes-precedence")
+	defer func() {
+		_ = os.Unsetenv("PITHOS_API_GEMINI_KEY")
+	}()
+
+	envContent := `PITHOS_API_GEMINI_KEY="dotenv-value"`
+	envFile := filepath.Join(tmpDir, ".env")
+	if wErr := os.WriteFile(envFile, []byte(envContent), 0600); wErr != nil {
+		t.Fatalf("failed to write .env: %v", wErr)
+	}
+
+	configFile := filepath.Join(tmpDir, "config.toml")
+	if wErr := os.WriteFile(configFile, []byte(""), 0600); wErr != nil {
+		t.Fatalf("failed to write config file: %v", wErr)
+	}
+
+	cfg, err := LoadConfig(configFile)
+	if err != nil {
+		t.Fatalf("expected no load error, got: %v", err)
+	}
+
+	if cfg.API.GeminiKey != "env-takes-precedence" {
+		t.Errorf("expected API GeminiKey 'env-takes-precedence' to take precedence over .env file 'dotenv-value', got '%s'", cfg.API.GeminiKey)
+	}
+}
+
+func TestLoadConfig_FallbackConfigSuccess(t *testing.T) {
+	tmpHome, err := os.MkdirTemp("", "mock_home")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() {
+		_ = os.RemoveAll(tmpHome)
+	}()
+
+	// Mock HOME directory
+	t.Setenv("HOME", tmpHome)
+
+	// Create ~/.config/pithos/config.toml
+	confDir := filepath.Join(tmpHome, ".config", "pithos")
+	if mkdirErr := os.MkdirAll(confDir, 0700); mkdirErr != nil {
+		t.Fatalf("failed to create conf dir: %v", mkdirErr)
+	}
+
+	tomlContent := `
+[mcp]
+imagegen_path = ""
+`
+	if writeErr := os.WriteFile(filepath.Join(confDir, ".pithos.toml"), []byte(tomlContent), 0600); writeErr != nil {
+		t.Fatalf("failed to write config: %v", writeErr)
+	}
+
+	// Create sibling .env in the same dir
+	envContent := `PITHOS_API_GEMINI_KEY="fallback-env-key"`
+	if writeErr := os.WriteFile(filepath.Join(confDir, ".env"), []byte(envContent), 0600); writeErr != nil {
+		t.Fatalf("failed to write env: %v", writeErr)
+	}
+
+	_ = os.Unsetenv("PITHOS_API_GEMINI_KEY")
+
+	// Load with empty string (triggers fallback paths)
+	cfg, err := LoadConfig("")
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	if cfg.API.GeminiKey != "fallback-env-key" {
+		t.Errorf("expected GeminiKey 'fallback-env-key' loaded from fallback config's sibling .env, got '%s'", cfg.API.GeminiKey)
 	}
 }
 
