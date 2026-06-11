@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"github.com/borch-ai/pithos/internal/config"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
+	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-var testImpl = &mcp.Implementation{
+var testImpl = &mcpsdk.Implementation{
 	Name:    "test-impl",
 	Version: "1.0.0",
 }
@@ -63,18 +63,18 @@ func TestResolveBinaryPath(t *testing.T) {
 	}
 }
 
-func setupMockMCPServer(t *testing.T, ctx context.Context, serverTransport mcp.Transport) (*mcp.ServerSession, func()) {
+func setupMockMCPServer(t *testing.T, ctx context.Context, serverTransport mcpsdk.Transport) (*mcpsdk.ServerSession, func()) {
 	t.Helper()
-	server := mcp.NewServer(testImpl, nil)
+	server := mcpsdk.NewServer(testImpl, nil)
 
 	// Add a success tool
-	server.AddTool(&mcp.Tool{
+	server.AddTool(&mcpsdk.Tool{
 		Name:        "greet",
 		Description: "say hello",
 		InputSchema: map[string]any{
 			"type": "object",
 		},
-	}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
 		name := "world"
 		if len(req.Params.Arguments) > 0 {
 			var args struct {
@@ -84,38 +84,38 @@ func setupMockMCPServer(t *testing.T, ctx context.Context, serverTransport mcp.T
 				name = args.Name
 			}
 		}
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: "hello " + name},
+		return &mcpsdk.CallToolResult{
+			Content: []mcpsdk.Content{
+				&mcpsdk.TextContent{Text: "hello " + name},
 			},
 		}, nil
 	})
 
 	// Add an error tool
-	server.AddTool(&mcp.Tool{
+	server.AddTool(&mcpsdk.Tool{
 		Name: "fail",
 		InputSchema: map[string]any{
 			"type": "object",
 		},
-	}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return &mcp.CallToolResult{
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		return &mcpsdk.CallToolResult{
 			IsError: true,
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: "failed execution error"},
+			Content: []mcpsdk.Content{
+				&mcpsdk.TextContent{Text: "failed execution error"},
 			},
 		}, nil
 	})
 
 	// Add a non-text tool (returns image data)
-	server.AddTool(&mcp.Tool{
+	server.AddTool(&mcpsdk.Tool{
 		Name: "image",
 		InputSchema: map[string]any{
 			"type": "object",
 		},
-	}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.ImageContent{
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		return &mcpsdk.CallToolResult{
+			Content: []mcpsdk.Content{
+				&mcpsdk.ImageContent{
 					Data:     []byte("fakeimage"),
 					MIMEType: "image/png",
 				},
@@ -137,7 +137,7 @@ func TestPluginClientLifecycle(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	clientTransport, serverTransport := mcp.NewInMemoryTransports()
+	clientTransport, serverTransport := mcpsdk.NewInMemoryTransports()
 
 	_, cleanup := setupMockMCPServer(t, ctx, serverTransport)
 	defer cleanup()

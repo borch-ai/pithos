@@ -9,7 +9,7 @@ import (
 	"sync"
 
 	"github.com/borch-ai/pithos/internal/config"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
+	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // PluginType represents the specific type/identity of the Powerword MCP plugin.
@@ -30,9 +30,9 @@ const (
 type PluginClient struct {
 	pluginType PluginType
 	binaryPath string
-	client     *mcp.Client
-	session    *mcp.ClientSession
-	transport  mcp.Transport // Injected for unit testing
+	client     *mcpsdk.Client
+	session    *mcpsdk.ClientSession
+	transport  mcpsdk.Transport // Injected for unit testing
 	mu         sync.Mutex
 }
 
@@ -95,12 +95,12 @@ func (pc *PluginClient) Start(ctx context.Context) error {
 	if transport == nil {
 		//nolint:gosec // G204: Subprocess launched with variable path from config fallback
 		cmd := exec.CommandContext(ctx, binary)
-		transport = &mcp.CommandTransport{
+		transport = &mcpsdk.CommandTransport{
 			Command: cmd,
 		}
 	}
 
-	pc.client = mcp.NewClient(&mcp.Implementation{
+	pc.client = mcpsdk.NewClient(&mcpsdk.Implementation{
 		Name:    "pithos",
 		Version: config.Version,
 	}, nil)
@@ -140,7 +140,7 @@ func (pc *PluginClient) CallTool(ctx context.Context, toolName string, args map[
 		return "", fmt.Errorf("plugin client not started")
 	}
 
-	params := &mcp.CallToolParams{
+	params := &mcpsdk.CallToolParams{
 		Name:      toolName,
 		Arguments: args,
 	}
@@ -153,13 +153,14 @@ func (pc *PluginClient) CallTool(ctx context.Context, toolName string, args map[
 	var sb strings.Builder
 	for _, content := range res.Content {
 		switch c := content.(type) {
-		case *mcp.TextContent:
+		case *mcpsdk.TextContent:
 			sb.WriteString(c.Text)
 		default:
 			data, err := json.Marshal(c)
-			if err == nil {
-				sb.Write(data)
+			if err != nil {
+				return "", fmt.Errorf("failed to marshal non-text tool content: %w", err)
 			}
+			sb.Write(data)
 		}
 	}
 
