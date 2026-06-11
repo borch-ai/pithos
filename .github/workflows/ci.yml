@@ -42,6 +42,11 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Check Dependency Tidy Hygiene
+        run: |
+          make tidy
+          git diff --exit-code go.mod go.sum
+
       - name: Run Vulnerability Scan
         run: make vuln
 
