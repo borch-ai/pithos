@@ -1,74 +1,53 @@
-# plan: Task 3.2: Local Critic Review Subsystem
+# plan: Task 3.2: Local Critic Review Subsystem (Direct Powerword Hook)
 
-**Status:** Open (Issue #[TBD])
+**Status:** Completed
+**Go Version:** 1.26.4
+**Date Completed:** 2026-06-11
+**Unit Test Coverage:** 92.20% total coverage (meets the 91% threshold)
 
-Implement the Local Critic subsystem to run quality gates (linting, compilation, and test coverage checks) and leverage an LLM to verify repository changes against the proposed implementation plans before they are pushed to GitHub.
+Leverage the generalized `powerword review --local` command directly in Pithos's Git pre-push hook. This avoids duplicating any review commands, configuration, or MCP client logic within the Pithos codebase, maintaining a pristine codebase while still enforcing quality and critic gates.
 
 ## User Review Required
 
-> [!NOTE]
-> **Plan Format Integration**:
-> The critic will parse implementation plans directly from the local `plans/` directory (e.g. searching for plans matching `plans/task_*.md` that are in the git diff).
-
 > [!IMPORTANT]
-> **Git pre-push Hook**:
-> Pushes to GitHub will be checked locally. If validation fails or the critic rejects the diff, the push is aborted and detailed feedback is written to `.pithos-critic.md` locally.
+> **Powerword Installation**:
+> This assumes the `powerword` CLI tool is globally installed or available in the path (e.g. at `/Users/human/go/bin/powerword`).
+
+> [!NOTE]
+> **Code Cleanup**:
+> Under this plan, all local review command and helper files in Pithos will be deleted, keeping the codebase free of unnecessary local developer-tooling code.
 
 ---
 
 ## Proposed Changes
 
-### Configuration
+### Git Hooks & Makefile
 
-#### [MODIFY] [config.go](../internal/config/config.go)
-- Add fields to the Viper configuration struct:
-  * `CriticProvider` (e.g., `gemini`, `openai`, `ollama`)
-  * `CriticModel` (e.g., `gemini-1.5-flash`, `gpt-4o`)
-  * `CriticEndpoint` (for custom LLM APIs / Ollama)
-- Bind them to default values and environment variables.
+#### [MODIFY] [pre-push](../scripts/git-hooks/pre-push)
+- Update the script to check if the `powerword` CLI is installed.
+- Call `powerword review --local` directly instead of `./bin/pithos review --local`.
 
-### Review Component
+---
 
-#### [NEW] [critic.go](../internal/review/critic.go)
-- Implement `ExtractGitDiff(ctx context.Context)`:
-  * Run `git diff origin/main...HEAD` (committed but unpushed changes) and `git diff` (uncommitted modifications).
-- Implement `LoadActivePlan(diff string) (*Plan, error)`:
-  * Locate plans modified or added in the diff (e.g. `plans/task_*.md`).
-  * Parse sections like `Goal`, `Proposed Changes`, and `Verification Plan`.
-- Implement `VerifyWorkspace(ctx context.Context, cfg *config.Config)`:
-  * Run local checks: `make lint`, `make build`, and `make check-coverage`.
-  * If local builds fail, write log details to `.pithos-critic.md` and exit.
-  * Extract the git diff and send it to the Critic LLM alongside the parsed plans.
-  * Instruct the Critic LLM to check if the changes align with the plan and output a `VERDICT: ACCEPT` or `VERDICT: REJECT`.
-  * Write feedback to `.pithos-critic.md` and exit with code `1` if rejected.
+### Clean Up Redundant Review Subsystem
 
-### Command Line Interface
+#### [DELETE] [review.go](../cmd/pithos/review.go)
+- Delete the file registering the `pithos review` Cobra subcommand.
 
-#### [NEW] [review.go](../cmd/pithos/review.go)
-- Register `pithos review` Cobra command with flags:
-  * `--local`: Run local build/test validations and review against local plans.
-  * `--plan`: Explicitly specify which implementation plan file to review against.
+#### [DELETE] [critic.go](../internal/review/critic.go)
+- Delete the stub/implementation file for workspace verification.
 
-### Hooks & build files
-
-#### [NEW] [pre-push](../scripts/git-hooks/pre-push)
-- A Git hook script that runs `pithos review --local` and blocks pushes if it exits with an error status.
-
-#### [MODIFY] [Makefile](../Makefile)
-- Add target `install-hooks` to copy `scripts/git-hooks/pre-push` into `.git/hooks/pre-push` and make it executable.
+#### [DELETE] [critic_test.go](../internal/review/critic_test.go)
+- Delete the corresponding unit tests for the stub workspace verification.
 
 ---
 
 ## Verification Plan
 
 ### Automated Tests
-- Run command: `go test ./internal/review/...`
-- Unit tests verifying:
-  * Extraction of diff outputs.
-  * Plan parsing logic (parsing sections of implementation plans).
-  * Mock LLM client responses triggering `ACCEPT`/`REJECT` behaviors.
+- Run `make lint` and `make check-coverage` in Pithos to ensure that deleting these files leaves the codebase compile-clean and test-coverage-passing.
 
 ### Manual Verification
-- Attempt to push a change that violates a plan guideline or drops unit test coverage.
-- Verify that the pre-push hook runs, runs `make check-coverage`, writes feedback to `.pithos-critic.md`, and blocks the push.
-- Fix the issue and verify that the hook successfully cleans up `.pithos-critic.md` and allows the push.
+- Install the updated pre-push hook by running `make install-hooks`.
+- Make a minor local modification and trigger `git push` to verify that `powerword review --local` runs, invokes the critic server, and performs validations as expected.
+

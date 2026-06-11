@@ -74,11 +74,11 @@ func validateTemplate(templatePath string) error {
 }
 
 // Extract plan metadata (status and headings)
-func parsePlanMetadata(filePath string) (bool, bool, bool, bool, error) {
+func parsePlanMetadata(filePath string) (bool, bool, bool, bool, bool, bool, bool, error) {
 	//nolint:gosec // script runs in controlled local development/testing environment
 	file, err := os.Open(filePath)
 	if err != nil {
-		return false, false, false, false, err
+		return false, false, false, false, false, false, false, err
 	}
 	defer func() {
 		_ = file.Close()
@@ -89,6 +89,9 @@ func parsePlanMetadata(filePath string) (bool, bool, bool, bool, error) {
 	hasProposedChanges := false
 	hasVerificationPlan := false
 	isCompleted := false
+	hasGoVersion := false
+	hasDateCompleted := false
+	hasUnitTestCoverage := false
 
 	for scanner.Scan() {
 		trimmed := strings.TrimSpace(scanner.Text())
@@ -100,6 +103,15 @@ func parsePlanMetadata(filePath string) (bool, bool, bool, bool, error) {
 				isCompleted = true
 			}
 		}
+		if strings.Contains(trimmed, "**Go Version:**") {
+			hasGoVersion = true
+		}
+		if strings.Contains(trimmed, "**Date Completed:**") {
+			hasDateCompleted = true
+		}
+		if strings.Contains(trimmed, "**Unit Test Coverage:**") {
+			hasUnitTestCoverage = true
+		}
 		if trimmed == "## Proposed Changes" {
 			hasProposedChanges = true
 		}
@@ -107,7 +119,7 @@ func parsePlanMetadata(filePath string) (bool, bool, bool, bool, error) {
 			hasVerificationPlan = true
 		}
 	}
-	return hasTopLevelHeader, hasProposedChanges, hasVerificationPlan, isCompleted, scanner.Err()
+	return hasTopLevelHeader, hasProposedChanges, hasVerificationPlan, isCompleted, hasGoVersion, hasDateCompleted, hasUnitTestCoverage, scanner.Err()
 }
 
 // Helper to determine the action for a given line
@@ -224,7 +236,7 @@ func validateFileLinks(filePath string, isCompleted bool, workspaceRoot string) 
 func validatePlanFile(filePath string, workspaceRoot string) []error {
 	var errs []error
 
-	hasTopLevelHeader, hasProposedChanges, hasVerificationPlan, isCompleted, err := parsePlanMetadata(filePath)
+	hasTopLevelHeader, hasProposedChanges, hasVerificationPlan, isCompleted, hasGoVersion, hasDateCompleted, hasUnitTestCoverage, err := parsePlanMetadata(filePath)
 	if err != nil {
 		return []error{fmt.Errorf("failed to parse plan metadata: %w", err)}
 	}
@@ -237,6 +249,17 @@ func validatePlanFile(filePath string, workspaceRoot string) []error {
 	}
 	if !hasVerificationPlan {
 		errs = append(errs, fmt.Errorf("missing heading '## Verification Plan'"))
+	}
+	if isCompleted {
+		if !hasGoVersion {
+			errs = append(errs, fmt.Errorf("completed plan is missing required '**Go Version:**' metadata"))
+		}
+		if !hasDateCompleted {
+			errs = append(errs, fmt.Errorf("completed plan is missing required '**Date Completed:**' metadata"))
+		}
+		if !hasUnitTestCoverage {
+			errs = append(errs, fmt.Errorf("completed plan is missing required '**Unit Test Coverage:**' metadata"))
+		}
 	}
 
 	linkErrs := validateFileLinks(filePath, isCompleted, workspaceRoot)

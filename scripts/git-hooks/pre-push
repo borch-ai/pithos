@@ -1,0 +1,27 @@
+#!/bin/sh
+
+# pre-push git hook
+# Runs powerword review --local to ensure quality gates and critic checks pass before pushing.
+
+echo "Running pre-push quality and critic checks..."
+
+# Check if powerword is installed
+if ! command -v powerword >/dev/null 2>&1; then
+  echo "Error: 'powerword' CLI tool is not installed or not in PATH."
+  echo "Please install it or build it from the powerword repository."
+  exit 1
+fi
+
+# Run the review command
+powerword review --local
+
+# Check exit code
+if [ $? -ne 0 ]; then
+  echo ""
+  echo "Error: Critic rejected the push or local validation failed."
+  echo "Review the feedback in .powerword-critic.md and fix the issues."
+  exit 1
+fi
+
+echo "All checks passed. Proceeding with push."
+exit 0

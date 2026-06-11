@@ -1,10 +1,10 @@
 # plan: Task 1.2: Cobra & Viper CLI Scaffolding
 
 **Status:** Completed
+**Go Version:** Go 1.26.4
+**Date Completed:** 2026-06-11
 
 Refactored the monolithic CLI scaffold in `cmd/pithos/main.go` into modular subcommands separated into individual files. Wired up Viper to parse, validate, and access a local `.pithos.toml` configuration file and local `.env` environment credentials file.
-
-- **Go Version:** Go 1.26.4
 - **Viper Version:** github.com/spf13/viper v1.21.0
 - **Cobra Version:** github.com/spf13/cobra v1.10.2
 - **Unit Test Coverage:** 94.40% total coverage (meets the 91% threshold constraint)

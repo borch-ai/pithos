@@ -60,6 +60,12 @@ fmt:
 tidy:
 	$(GOCMD) mod tidy
 
+install-hooks:
+	@echo "Installing git hooks..."
+	@mkdir -p $$(git rev-parse --git-path hooks)
+	@cp scripts/git-hooks/pre-push $$(git rev-parse --git-path hooks)/pre-push
+	@chmod +x $$(git rev-parse --git-path hooks)/pre-push
+
 clean:
 	@echo "Cleaning..."
 	$(GOCLEAN)
