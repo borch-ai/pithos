@@ -29,7 +29,7 @@ test:
 
 
 check-coverage: test
-	@go run scripts/check_coverage/main.go $(MIN_COVERAGE) coverage.out
+	powerword check-coverage $(MIN_COVERAGE) coverage.out
 
 lint:
 	@echo "Running linter..."
