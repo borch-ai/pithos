@@ -377,9 +377,12 @@ func TestBrew_ResumabilityAndCheckpoints(t *testing.T) {
 	m2.Progress.Pages[1].Text = "Success Stanza 2"
 	_ = m2.Save()
 
-	// Recreate transports for next run
+	// Recreate transports and context for next run
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel2()
+
 	clientTransport2, serverTransport2 := mcpsdk.NewInMemoryTransports()
-	_, cleanupMCP2 := setupMockImageGenServer(t, ctx, serverTransport2, dummySourceImage)
+	_, cleanupMCP2 := setupMockImageGenServer(t, ctx2, serverTransport2, dummySourceImage)
 	defer cleanupMCP2()
 
 	optsBrew2 := BrewOptions{
@@ -387,7 +390,7 @@ func TestBrew_ResumabilityAndCheckpoints(t *testing.T) {
 		MCPTransport: clientTransport2,
 	}
 
-	err = Brew(ctx, optsBrew2)
+	err = Brew(ctx2, optsBrew2)
 	if err != nil {
 		t.Fatalf("expected Brew to succeed on rerun, got %v", err)
 	}
@@ -792,5 +795,38 @@ func TestBrew_CopyFileMkdirAllFailure(t *testing.T) {
 	err = Brew(ctx, optsBrew)
 	if err == nil {
 		t.Error("expected error because images is a file and cannot create directory, got nil")
+	}
+}
+
+func TestBrew_NoIllustrationsNeeded(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos-no-ill-needed-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	optsInit := InitiateOptions{
+		OutputDir:       tmpDir,
+		Theme:           "Theme",
+		TargetPageCount: 1,
+	}
+	m, err := Initiate(optsInit)
+	if err != nil {
+		t.Fatalf("failed to initiate: %v", err)
+	}
+
+	m.Progress.ManuscriptGenerated = true
+	m.Progress.Pages = []manifest.PageState{
+		{PageIndex: 1, Status: manifest.StatusCompleted, ImagePath: "images/page_1.png", Text: "Stanza 1"},
+	}
+	_ = m.Save()
+
+	ctx := context.Background()
+	optsBrew := BrewOptions{
+		OutputDir: tmpDir,
+	}
+	err = Brew(ctx, optsBrew)
+	if err != nil {
+		t.Fatalf("expected Brew to short-circuit and succeed, got %v", err)
 	}
 }

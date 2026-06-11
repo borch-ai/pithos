@@ -37,11 +37,19 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 	}
 
 	// Apply overrides if specified
+	hasOverrides := false
 	if opts.Theme != "" {
 		m.BookProperties.Theme = opts.Theme
+		hasOverrides = true
 	}
 	if opts.Style != "" {
 		m.BookProperties.Style = opts.Style
+		hasOverrides = true
+	}
+	if hasOverrides {
+		if err := m.Save(); err != nil {
+			return fmt.Errorf("failed to save manifest overrides: %w", err)
+		}
 	}
 
 	// 1. Generate manuscript text if not yet generated
@@ -102,7 +110,20 @@ func generateManuscript(ctx context.Context, m *manifest.Manifest, opts BrewOpti
 	return nil
 }
 
+func needsIllustrationGen(m *manifest.Manifest) bool {
+	for _, page := range m.Progress.Pages {
+		if page.Status != manifest.StatusCompleted || page.ImagePath == "" {
+			return true
+		}
+	}
+	return false
+}
+
 func generateIllustrations(ctx context.Context, m *manifest.Manifest, opts BrewOptions) error {
+	if !needsIllustrationGen(m) {
+		return nil
+	}
+
 	mcpClient := mcp.NewPluginClient(mcp.PluginImageGen)
 	if opts.MCPTransport != nil {
 		mcpClient.SetTransport(opts.MCPTransport)
@@ -134,7 +155,9 @@ func generateIllustrations(ctx context.Context, m *manifest.Manifest, opts BrewO
 		}
 		if err := generateSingleImage(ctx, mcpClient, page, styleID, opts.OutputDir); err != nil {
 			page.Status = manifest.StatusPending
-			_ = m.Save()
+			if saveErr := m.Save(); saveErr != nil {
+				return fmt.Errorf("failed to save manifest status to pending: %w (original error: %v)", saveErr, err)
+			}
 			return err
 		}
 		if err := m.Save(); err != nil {
