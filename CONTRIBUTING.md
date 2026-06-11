@@ -6,17 +6,17 @@ Thank you for your interest in contributing to **Pithos**! We welcome pull reque
 
 ## Code Quality Standards
 
-Before submitting a pull request, your changes must pass our automated quality checks. You can run these locally using the provided [Makefile](file:///Users/human/code/pithos/Makefile):
+Before submitting a pull request, your changes must pass our automated quality checks. You can run these locally using the provided [Makefile](./Makefile):
 
 1.  **Formatting and Linting**:
     *   Format all Go code: `make fmt`
-    *   Verify lint rules: `make lint` (uses `golangci-lint` configured via [`.golangci.yml`](file:///Users/human/code/pithos/.golangci.yml) to check for AST security vulnerabilities, TCP resource body leaks, and proper context usage).
+    *   Verify lint rules: `make lint` (uses `golangci-lint` configured via [`.golangci.yml`](./.golangci.yml) to check for AST security vulnerabilities, TCP resource body leaks, and proper context usage).
 2.  **Vulnerability Scanner**:
     *   Audit third-party modules: `make vuln` (runs `govulncheck` to detect CVEs in packages reached by our code path).
 3.  **Strict Unit Test Coverage**:
     *   All new code must be fully unit-tested (suffix `_test.go`).
     *   **We enforce a minimum 91% unit test coverage gate.**
-    *   Run tests and verify coverage: `make check-coverage` (runs unit tests and evaluates output via [scripts/check_coverage.go](file:///Users/human/code/pithos/scripts/check_coverage.go)).
+    *   Run tests and verify coverage: `make check-coverage` (runs unit tests and evaluates output via [scripts/check_coverage.go](./scripts/check_coverage.go)).
 
 Run the entire verification pipeline before pushing:
 ```bash

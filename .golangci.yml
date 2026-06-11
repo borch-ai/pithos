@@ -2,7 +2,7 @@ version: "2"
 run:
   issues-exit-code: 1
   tests: true
-  go: "1.24"
+  go: "1.26"
 linters:
   default: none
   enable:

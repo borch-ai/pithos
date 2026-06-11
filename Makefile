@@ -24,7 +24,8 @@ build:
 
 test:
 	@echo "Running tests..."
-	$(GOTEST) -v -race -coverprofile=coverage.out -coverpkg=./internal/... ./internal/...
+	$(GOTEST) -v -race -coverprofile=coverage.out -coverpkg=./internal/... ./...
+
 
 
 check-coverage: test
