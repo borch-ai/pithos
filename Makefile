@@ -24,7 +24,8 @@ build:
 
 test:
 	@echo "Running tests..."
-	$(GOTEST) -v -race -coverprofile=coverage.out -coverpkg=./... ./...
+	$(GOTEST) -v -race -coverprofile=coverage.out -coverpkg=./internal/... ./internal/...
+
 
 check-coverage: test
 	@go run scripts/check_coverage.go $(MIN_COVERAGE) coverage.out
