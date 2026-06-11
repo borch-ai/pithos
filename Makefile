@@ -29,11 +29,12 @@ test:
 
 
 check-coverage: test
-	@if ! command -v powerword >/dev/null 2>&1; then \
-		echo "Error: 'powerword' CLI tool is not installed or not in PATH."; \
-		exit 1; \
+	@if command -v powerword >/dev/null 2>&1; then \
+		powerword check-coverage $(MIN_COVERAGE) coverage.out; \
+	else \
+		echo "Warning: 'powerword' CLI not found. Falling back to local awk verification..."; \
+		go tool cover -func=coverage.out | awk -v min="$(MIN_COVERAGE)" '/total:/ {print $$0; gsub("%","",$$NF); if($$NF < min) {print "FAIL: coverage " $$NF "% is below threshold " min "%"; exit 1} else {print "PASS: coverage " $$NF "% meets threshold " min "%"; exit 0}}'; \
 	fi
-	powerword check-coverage $(MIN_COVERAGE) coverage.out
 
 lint:
 	@echo "Running linter..."
