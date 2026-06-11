@@ -1,6 +1,11 @@
 # plan: Task [Task Number]: [Task Title]
 
 **Status:** Open (Issue #[TBD])
+<!-- Note: When status is set to Completed, the following metadata fields must also be provided:
+**Go Version:** [Go Version]
+**Date Completed:** [Date Completed]
+**Unit Test Coverage:** [Unit Test Coverage]
+-->
 
 Provide a brief description of the goal of this task, any background context, and what the changes accomplish.
 

@@ -1,10 +1,10 @@
 # plan: Task 1.3: Project State & Resumability Manifest
 
 **Status:** Completed
+**Go Version:** Go 1.26.4
+**Date Completed:** 2026-06-11
 
 Define the structured schema of `manifest.json` (or `state.json`) which serves as the source-of-truth and checkpoint logger for long-running book generation runs. Create helper routines for loading, writing, validating, and resuming states.
-
-- **Go Version:** Go 1.26.4
 - **Unit Test Coverage:** 91.70% total coverage (meets the 91% threshold constraint)
 
 ## Proposed Changes
