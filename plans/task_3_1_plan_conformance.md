@@ -19,7 +19,7 @@ Implement a validation tool to enforce structural consistency across all impleme
 
 ### Scripting & Tooling
 
-#### [NEW] [main.go](file:///Users/human/code/pithos/scripts/validate_plans/main.go)
+#### [NEW] main.go
 - Create a lightweight helper utility in Go that:
   * Reads the template structure from `plans/TEMPLATE.md`.
   * Scans the `plans/` folder for files matching `task_*.md`.

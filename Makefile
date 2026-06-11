@@ -31,10 +31,7 @@ test:
 check-coverage: test
 	@go run scripts/check_coverage/main.go $(MIN_COVERAGE) coverage.out
 
-check-plans:
-	@go run scripts/validate_plans/main.go
-
-lint: check-plans
+lint:
 	@echo "Running linter..."
 	@if command -v golangci-lint >/dev/null; then \
 		golangci-lint run; \

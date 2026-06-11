@@ -7,6 +7,11 @@
 Define the structured schema of `manifest.json` (or `state.json`) which serves as the source-of-truth and checkpoint logger for long-running book generation runs. Create helper routines for loading, writing, validating, and resuming states.
 - **Unit Test Coverage:** 91.70% total coverage (meets the 91% threshold constraint)
 
+## User Review Required
+
+> [!NOTE]
+> None.
+
 ## Proposed Changes
 
 ### State Management Subsystem

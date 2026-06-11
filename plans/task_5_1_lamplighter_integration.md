@@ -4,6 +4,11 @@
 
 Integrate real-time WebRTC and Firebase signaling into Pithos so the long-running pipeline can be monitored and approved from the Lamplighter Android application.
 
+## User Review Required
+
+> [!NOTE]
+> None.
+
 ## Proposed Changes
 
 ### Telemetry Subsystem

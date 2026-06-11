@@ -7,6 +7,11 @@
 
 Integrate the `modelcontextprotocol/go-sdk` into Pithos to allow the pipeline to securely launch and communicate with Powerword's MCP plugin ecosystem via standard I/O (stdio).
 
+## User Review Required
+
+> [!NOTE]
+> None.
+
 ## Proposed Changes
 
 ### MCP Subsystem

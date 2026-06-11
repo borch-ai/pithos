@@ -9,6 +9,11 @@ Refactored the monolithic CLI scaffold in `cmd/pithos/main.go` into modular subc
 - **Cobra Version:** github.com/spf13/cobra v1.10.2
 - **Unit Test Coverage:** 94.40% total coverage (meets the 91% threshold constraint)
 
+## User Review Required
+
+> [!NOTE]
+> None.
+
 ## Proposed Changes
 
 ### Command Scaffolding
