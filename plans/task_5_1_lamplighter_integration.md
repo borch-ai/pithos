@@ -1,4 +1,4 @@
-# plan: Task 4.1: Lamplighter Integration
+# plan: Task 5.1: Lamplighter Integration
 
 **Status:** Open (Issue #[TBD])
 

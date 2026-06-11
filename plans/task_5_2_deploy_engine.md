@@ -1,4 +1,4 @@
-# plan: Task 4.2: The `deploy` Engine
+# plan: Task 5.2: The `deploy` Engine
 
 **Status:** Open (Issue #[TBD])
 

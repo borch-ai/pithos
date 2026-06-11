@@ -1,4 +1,4 @@
-# plan: Task 3.1: The `assemble` Engine
+# plan: Task 4.1: The `assemble` Engine
 
 **Status:** Open (Issue #[TBD])
 
