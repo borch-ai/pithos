@@ -16,7 +16,7 @@ Before submitting a pull request, your changes must pass our automated quality c
 3.  **Strict Unit Test Coverage**:
     *   All new code must be fully unit-tested (suffix `_test.go`).
     *   **We enforce a minimum 91% unit test coverage gate.**
-    *   Run tests and verify coverage: `make check-coverage` (runs unit tests and evaluates output via [scripts/check_coverage.go](./scripts/check_coverage.go)).
+    *   Run tests and verify coverage: `make check-coverage` (runs unit tests and evaluates output using the `powerword check-coverage` tool or an awk fallback).
 
 Run the entire verification pipeline before pushing:
 ```bash

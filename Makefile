@@ -33,7 +33,7 @@ check-coverage: test
 		powerword check-coverage $(MIN_COVERAGE) coverage.out; \
 	else \
 		echo "Warning: 'powerword' CLI not found. Falling back to local awk verification..."; \
-		go tool cover -func=coverage.out | awk -v min="$(MIN_COVERAGE)" '/total:/ {print $$0; gsub("%","",$$NF); if($$NF < min) {print "FAIL: coverage " $$NF "% is below threshold " min "%"; exit 1} else {print "PASS: coverage " $$NF "% meets threshold " min "%"; exit 0}}'; \
+		go tool cover -func=coverage.out | awk -v min="$(MIN_COVERAGE)" 'BEGIN {matched=0} /total:/ {matched=1; print $$0; gsub("%","",$$NF); if($$NF < min) {print "FAIL: coverage " $$NF "% is below threshold " min "%"; exit 1} else {print "PASS: coverage " $$NF "% meets threshold " min "%"; exit 0}} END {if(matched==0) {print "Error: total coverage line not found or go tool cover failed"; exit 1}}'; \
 	fi
 
 lint:
