@@ -1,4 +1,4 @@
-module github.com/sinope-press/pithos
+module github.com/borch-ai/pithos
 
 go 1.26.4
 
