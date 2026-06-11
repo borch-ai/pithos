@@ -1,4 +1,4 @@
-.PHONY: all build test clean lint fmt tidy check-coverage vuln
+.PHONY: all build test clean lint fmt tidy check-coverage check-plans vuln
 
 # Go parameters
 GOCMD=go
@@ -29,9 +29,12 @@ test:
 
 
 check-coverage: test
-	@go run scripts/check_coverage.go $(MIN_COVERAGE) coverage.out
+	@go run scripts/check_coverage/main.go $(MIN_COVERAGE) coverage.out
 
-lint:
+check-plans:
+	@go run scripts/validate_plans/main.go
+
+lint: check-plans
 	@echo "Running linter..."
 	@if command -v golangci-lint >/dev/null; then \
 		golangci-lint run; \
