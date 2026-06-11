@@ -130,7 +130,7 @@ func TestAssemble_Success(t *testing.T) {
 		MCPTransport: clientTransport,
 	}
 
-	err = Assemble(ctx, optsAssemble)
+	_, err = Assemble(ctx, optsAssemble)
 	if err != nil {
 		t.Fatalf("Assemble failed: %v", err)
 	}
@@ -175,7 +175,7 @@ func TestAssemble_HardcoverValidation(t *testing.T) {
 		Format:   "hardcover",
 	}
 
-	err = Assemble(ctx, optsAssemble)
+	_, err = Assemble(ctx, optsAssemble)
 	if err == nil {
 		t.Error("expected hardcover assembly to fail validation for page count < 75, got nil")
 	} else if !strings.Contains(err.Error(), "hardcover validation failed: page count 15 is less than the KDP hardcover minimum limit of 75 pages") {
@@ -184,14 +184,14 @@ func TestAssemble_HardcoverValidation(t *testing.T) {
 }
 
 func TestAssemble_MissingInputDir(t *testing.T) {
-	err := Assemble(context.Background(), AssembleOptions{})
+	_, err := Assemble(context.Background(), AssembleOptions{})
 	if err == nil {
 		t.Error("expected error when InputDir is missing, got nil")
 	}
 }
 
 func TestAssemble_MissingManifest(t *testing.T) {
-	err := Assemble(context.Background(), AssembleOptions{InputDir: "/nonexistent-dir"})
+	_, err := Assemble(context.Background(), AssembleOptions{InputDir: "/nonexistent-dir"})
 	if err == nil {
 		t.Error("expected error when manifest is missing, got nil")
 	}
@@ -218,7 +218,7 @@ func TestAssemble_ZeroPageCount(t *testing.T) {
 	optsAssemble := AssembleOptions{
 		InputDir: tmpDir,
 	}
-	err = Assemble(context.Background(), optsAssemble)
+	_, err = Assemble(context.Background(), optsAssemble)
 	if err == nil {
 		t.Error("expected error when page count is zero, got nil")
 	}
@@ -252,7 +252,7 @@ func TestAssemble_MCPError(t *testing.T) {
 		MCPTransport: clientTransport,
 	}
 
-	err = Assemble(ctx, optsAssemble)
+	_, err = Assemble(ctx, optsAssemble)
 	if err == nil {
 		t.Error("expected error when MCP tool returns failure, got nil")
 	} else if !strings.Contains(err.Error(), "geometry calculation failed") {
@@ -288,10 +288,89 @@ func TestAssemble_UnmarshalJSONError(t *testing.T) {
 		MCPTransport: clientTransport,
 	}
 
-	err = Assemble(ctx, optsAssemble)
+	_, err = Assemble(ctx, optsAssemble)
 	if err == nil {
 		t.Error("expected error when MCP tool returns invalid json, got nil")
 	} else if !strings.Contains(err.Error(), "failed to parse geometry result JSON") {
 		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestAssemble_FormatDefaulting(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Case A: opts.Format is empty, but manifest.BookProperties.Format is "hardcover"
+	tmpDir, err := os.MkdirTemp("", "pithos-assemble-def-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	optsInit := InitiateOptions{
+		OutputDir:       tmpDir,
+		TargetPageCount: 80,
+		Format:          "hardcover",
+	}
+	m, err := Initiate(optsInit)
+	if err != nil {
+		t.Fatalf("Initiate failed: %v", err)
+	}
+	m.Progress.Pages = make([]manifest.PageState, 80)
+	_ = m.Save()
+
+	clientTransport, serverTransport := mcpsdk.NewInMemoryTransports()
+	_, cleanupMCP := setupMockKDPMathServer(t, ctx, serverTransport)
+	defer cleanupMCP()
+
+	optsAssemble := AssembleOptions{
+		InputDir:     tmpDir,
+		Format:       "", // empty to trigger defaulting to manifest
+		MCPTransport: clientTransport,
+	}
+
+	mRes, err := Assemble(ctx, optsAssemble)
+	if err != nil {
+		t.Fatalf("Assemble with manifest format failed: %v", err)
+	}
+	if mRes.BookProperties.Format != "hardcover" {
+		t.Errorf("expected format to remain 'hardcover', got %q", mRes.BookProperties.Format)
+	}
+
+	// Case B: both opts.Format and manifest.BookProperties.Format are empty
+	tmpDir2, err := os.MkdirTemp("", "pithos-assemble-def2-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir2) }()
+
+	optsInit2 := InitiateOptions{
+		OutputDir:       tmpDir2,
+		TargetPageCount: 15,
+		Format:          "", // empty
+	}
+	m2, err := Initiate(optsInit2)
+	if err != nil {
+		t.Fatalf("Initiate failed: %v", err)
+	}
+	m2.Progress.Pages = make([]manifest.PageState, 15)
+	_ = m2.Save()
+
+	clientTransport2, serverTransport2 := mcpsdk.NewInMemoryTransports()
+	_, cleanupMCP2 := setupMockKDPMathServer(t, ctx, serverTransport2)
+	defer cleanupMCP2()
+
+	optsAssemble2 := AssembleOptions{
+		InputDir:     tmpDir2,
+		Format:       "", // empty
+		MCPTransport: clientTransport2,
+	}
+
+	mRes2, err := Assemble(ctx, optsAssemble2)
+	if err != nil {
+		t.Fatalf("Assemble with default paperback failed: %v", err)
+	}
+	if mRes2.BookProperties.Format != "paperback" {
+		t.Errorf("expected format to default to 'paperback', got %q", mRes2.BookProperties.Format)
 	}
 }
