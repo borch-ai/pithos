@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,6 +23,7 @@ type BrewOptions struct {
 	Style        string
 	MCPTransport mcpsdk.Transport // For testing
 	LLM          LLMClient        // For testing
+	HTTPClient   *http.Client     // For testing
 }
 
 // Brew executes the manuscript generation and page-by-page illustration generation.
@@ -82,9 +84,9 @@ func generateManuscript(ctx context.Context, m *manifest.Manifest, opts BrewOpti
 	case opts.LLM != nil:
 		llmClient = opts.LLM
 	case config.Cfg != nil && config.Cfg.API.GeminiKey != "":
-		llmClient = &GeminiClient{APIKey: config.Cfg.API.GeminiKey}
+		llmClient = &GeminiClient{APIKey: config.Cfg.API.GeminiKey, Client: opts.HTTPClient}
 	case config.Cfg != nil && config.Cfg.API.OpenAIKey != "":
-		llmClient = &OpenAIClient{APIKey: config.Cfg.API.OpenAIKey}
+		llmClient = &OpenAIClient{APIKey: config.Cfg.API.OpenAIKey, Client: opts.HTTPClient}
 	default:
 		return errors.New("neither Gemini nor OpenAI API key is configured")
 	}
@@ -92,6 +94,10 @@ func generateManuscript(ctx context.Context, m *manifest.Manifest, opts BrewOpti
 	stanzas, err := llmClient.GenerateStanzas(ctx, theme, pageCount)
 	if err != nil {
 		return fmt.Errorf("manuscript text generation failed: %w", err)
+	}
+
+	if len(stanzas) != pageCount {
+		return fmt.Errorf("LLM generated %d stanzas, but target page count is %d", len(stanzas), pageCount)
 	}
 
 	m.Progress.Pages = make([]manifest.PageState, len(stanzas))

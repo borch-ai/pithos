@@ -19,7 +19,7 @@ Implement the logic for the `initiate` (workspace setup) and `brew` (manuscript 
 
 ### File Operations
 - Copies generated assets from the MCP output paths to the workspace's local `/images` directory using a clean, custom `copyFile` helper.
-- Standardizes on standard Go `io.Copy` combined with `os.Create` (with `gosec` G302/G304 rule exclusions explicitly audited and documented).
+- Standardizes on standard Go `io.Copy` combined with `os.OpenFile` (with `gosec` G302/G304 rule exclusions explicitly audited and documented).
 
 ## Proposed Changes
 

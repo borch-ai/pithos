@@ -165,7 +165,7 @@ func (g *GeminiClient) GenerateStanzas(ctx context.Context, theme string, count 
 
 	var finalResp stanzasResponse
 	if err := json.Unmarshal([]byte(rawJSONText), &finalResp); err != nil {
-		return nil, fmt.Errorf("failed to parse stanzas json from gemini: %w (raw content: %s)", err, rawJSONText)
+		return nil, fmt.Errorf("failed to parse stanzas json from gemini: %w (raw content: %s)", err, truncateString(rawJSONText, 200))
 	}
 
 	if len(finalResp.Stanzas) != count {
@@ -255,7 +255,7 @@ func (o *OpenAIClient) GenerateStanzas(ctx context.Context, theme string, count 
 
 	var finalResp stanzasResponse
 	if err := json.Unmarshal([]byte(rawJSONText), &finalResp); err != nil {
-		return nil, fmt.Errorf("failed to parse stanzas json from openai: %w (raw content: %s)", err, rawJSONText)
+		return nil, fmt.Errorf("failed to parse stanzas json from openai: %w (raw content: %s)", err, truncateString(rawJSONText, 200))
 	}
 
 	if len(finalResp.Stanzas) != count {
@@ -263,4 +263,11 @@ func (o *OpenAIClient) GenerateStanzas(ctx context.Context, theme string, count 
 	}
 
 	return finalResp.Stanzas, nil
+}
+
+func truncateString(s string, maxLen int) string {
+	if len(s) > maxLen {
+		return s[:maxLen] + "..."
+	}
+	return s
 }

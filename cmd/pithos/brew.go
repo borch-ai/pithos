@@ -13,7 +13,7 @@ var (
 
 var brewCmd = &cobra.Command{
 	Use:   "brew",
-	Short: "Generates the manuscript and stanzas illustrations",
+	Short: "Generates the manuscript and stanza illustrations",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		opts := pipeline.BrewOptions{
 			OutputDir: brewOutput,

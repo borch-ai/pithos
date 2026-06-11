@@ -304,6 +304,15 @@ func TestBrew_Errors(t *testing.T) {
 	if err == nil {
 		t.Error("expected error when no API keys are provided and no mock is set, got nil")
 	}
+
+	// 5. Stanzas count mismatch
+	mockLLMMismatch := &mockLLM{stanzas: []string{"Only 1 stanza"}}
+	err = Brew(context.Background(), BrewOptions{OutputDir: tmpDir, LLM: mockLLMMismatch})
+	if err == nil {
+		t.Error("expected error when LLM returns incorrect number of stanzas, got nil")
+	} else if !strings.Contains(err.Error(), "LLM generated 1 stanzas, but target page count is 3") {
+		t.Errorf("unexpected error message: %v", err)
+	}
 }
 
 func TestBrew_ResumabilityAndCheckpoints(t *testing.T) {
@@ -545,18 +554,17 @@ func TestLLMProviderSelection_Gemini(t *testing.T) {
 		},
 	}
 
-	origTransport := http.DefaultTransport
-	defer func() { http.DefaultTransport = origTransport }()
-
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if strings.Contains(req.URL.Host, "generativelanguage") {
-			w := httptest.NewRecorder()
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(geminiMockResp)
-			return w.Result(), nil
-		}
-		return nil, fmt.Errorf("unexpected request to: %s", req.URL)
-	})
+	mockHttpClient := &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if strings.Contains(req.URL.Host, "generativelanguage") {
+				w := httptest.NewRecorder()
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(geminiMockResp)
+				return w.Result(), nil
+			}
+			return nil, fmt.Errorf("unexpected request to: %s", req.URL)
+		}),
+	}
 
 	ctx := context.Background()
 	clientTransport, serverTransport := mcpsdk.NewInMemoryTransports()
@@ -568,6 +576,7 @@ func TestLLMProviderSelection_Gemini(t *testing.T) {
 	optsBrew := BrewOptions{
 		OutputDir:    tmpDir,
 		MCPTransport: clientTransport,
+		HTTPClient:   mockHttpClient,
 	}
 
 	err = Brew(ctx, optsBrew)
@@ -622,18 +631,17 @@ func TestLLMProviderSelection_OpenAI(t *testing.T) {
 		},
 	}
 
-	origTransport := http.DefaultTransport
-	defer func() { http.DefaultTransport = origTransport }()
-
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if strings.Contains(req.URL.Host, "api.openai.com") {
-			w := httptest.NewRecorder()
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(openAIMockResp)
-			return w.Result(), nil
-		}
-		return nil, fmt.Errorf("unexpected request to: %s", req.URL)
-	})
+	mockHttpClient := &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if strings.Contains(req.URL.Host, "api.openai.com") {
+				w := httptest.NewRecorder()
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(openAIMockResp)
+				return w.Result(), nil
+			}
+			return nil, fmt.Errorf("unexpected request to: %s", req.URL)
+		}),
+	}
 
 	ctx := context.Background()
 	clientTransport, serverTransport := mcpsdk.NewInMemoryTransports()
@@ -645,6 +653,7 @@ func TestLLMProviderSelection_OpenAI(t *testing.T) {
 	optsBrew := BrewOptions{
 		OutputDir:    tmpDir,
 		MCPTransport: clientTransport,
+		HTTPClient:   mockHttpClient,
 	}
 
 	err = Brew(ctx, optsBrew)
