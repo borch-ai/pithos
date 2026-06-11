@@ -27,7 +27,7 @@ Implement a validation tool to enforce structural consistency across all impleme
   * Inspects headings for correct file link references (using the `file:///` format) to ensure links resolve to valid codebase files.
   * Outputs detailed formatting warnings or exits with code `1` if check fails.
 
-#### [MODIFY] [main.go](file:///Users/human/code/pithos/scripts/check_coverage/main.go)
+#### [MODIFY] check_coverage/main.go
 - Relocated the check_coverage script to a subdirectory to avoid package `main` redeclaration conflicts when running `golangci-lint` over multiple files in the same directory.
 
 ### Build Integration
