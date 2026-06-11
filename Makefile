@@ -1,4 +1,4 @@
-.PHONY: all build test clean lint fmt tidy check-coverage vuln
+.PHONY: all build test clean lint fmt tidy check-coverage vuln install-hooks
 
 # Go parameters
 GOCMD=go
@@ -29,6 +29,10 @@ test:
 
 
 check-coverage: test
+	@if ! command -v powerword >/dev/null 2>&1; then \
+		echo "Error: 'powerword' CLI tool is not installed or not in PATH."; \
+		exit 1; \
+	fi
 	powerword check-coverage $(MIN_COVERAGE) coverage.out
 
 lint:
