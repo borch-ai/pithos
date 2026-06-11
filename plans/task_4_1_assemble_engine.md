@@ -4,6 +4,11 @@
 
 Implement the `assemble` command to calculate print constraints and generate a valid KDP layout manifest from the raw brewed assets.
 
+## User Review Required
+
+> [!NOTE]
+> None.
+
 ## Proposed Changes
 
 ### Pipeline Core

@@ -4,6 +4,11 @@
 
 Implement the `deploy` command to generate metadata and package the final book for Amazon KDP upload.
 
+## User Review Required
+
+> [!NOTE]
+> None.
+
 ## Proposed Changes
 
 ### Pipeline Core

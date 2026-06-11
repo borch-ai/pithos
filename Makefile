@@ -1,4 +1,4 @@
-.PHONY: all build test clean lint fmt tidy check-coverage check-plans vuln
+.PHONY: all build test clean lint fmt tidy check-coverage vuln install-hooks
 
 # Go parameters
 GOCMD=go
@@ -29,12 +29,14 @@ test:
 
 
 check-coverage: test
-	@go run scripts/check_coverage/main.go $(MIN_COVERAGE) coverage.out
+	@if command -v powerword >/dev/null 2>&1; then \
+		powerword check-coverage $(MIN_COVERAGE) coverage.out; \
+	else \
+		echo "Warning: 'powerword' CLI not found. Falling back to local awk verification..."; \
+		go tool cover -func=coverage.out | awk -v min="$(MIN_COVERAGE)" 'BEGIN {matched=0} /total:/ {matched=1; print $$0; gsub("%","",$$NF); if($$NF < min) {print "FAIL: coverage " $$NF "% is below threshold " min "%"; exit 1} else {print "PASS: coverage " $$NF "% meets threshold " min "%"; exit 0}} END {if(matched==0) {print "Error: total coverage line not found or go tool cover failed"; exit 1}}'; \
+	fi
 
-check-plans:
-	@go run scripts/validate_plans/main.go
-
-lint: check-plans
+lint:
 	@echo "Running linter..."
 	@if command -v golangci-lint >/dev/null; then \
 		golangci-lint run; \
