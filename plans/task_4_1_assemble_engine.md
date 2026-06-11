@@ -1,4 +1,4 @@
-# plan: Task 3.1: The `assemble` Engine
+# plan: Task 4.1: The `assemble` Engine
 
 **Status:** Open (Issue #[TBD])
 
@@ -8,7 +8,7 @@ Implement the `assemble` command to calculate print constraints and generate a v
 
 ### Pipeline Core
 
-#### [NEW] [assemble.go](file:///Users/human/code/pithos/internal/pipeline/assemble.go)
+#### [NEW] [assemble.go](../internal/pipeline/assemble.go)
 - [ ] Scan the book directory, load `manifest.json`, and count the total pages.
 - [ ] Implement validation rules matching KDP specifications:
   - [ ] If `--format hardcover` is requested, verify that the page count is at least 75 pages. If less, abort execution with a clear validation error.
@@ -18,7 +18,7 @@ Implement the `assemble` command to calculate print constraints and generate a v
 - [ ] If a local rendering engine is configured, pass the updated manifest to compile the final PDF; otherwise, output the manifest layout parameters for external layout services (e.g. BookBolt, Inkfluence AI).
 
 
-#### [MODIFY] [main.go](file:///Users/human/code/pithos/cmd/pithos/main.go)
+#### [MODIFY] [main.go](../cmd/pithos/main.go)
 - [ ] Wire up the `assemble` Cobra command execution to point to the new assemble function.
 
 ---

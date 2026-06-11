@@ -125,15 +125,22 @@ func determineAction(line string) (string, error) {
 }
 
 // Helper to validate a single file link match
-func validateFileLink(line string, label string, urlStr string, isCompleted bool, workspaceRoot string) error {
-	// 1. Must use file:/// (three slashes for absolute path)
-	if !strings.HasPrefix(urlStr, "file:///") {
-		return fmt.Errorf("file link '%s' must use 'file:///' scheme with absolute path", urlStr)
-	}
+func validateFileLink(planFilePath string, line string, label string, urlStr string, isCompleted bool, workspaceRoot string) error {
+	var cleanPath string
 
-	// Extract the absolute path from urlStr
-	filePathPart := strings.TrimPrefix(urlStr, "file://")
-	cleanPath := filepath.Clean(filePathPart)
+	if strings.HasPrefix(urlStr, "file://") {
+		// 1. Must use file:/// (three slashes for absolute path)
+		if !strings.HasPrefix(urlStr, "file:///") {
+			return fmt.Errorf("file link '%s' must use 'file:///' scheme with absolute path", urlStr)
+		}
+		// Extract the absolute path from urlStr
+		filePathPart := strings.TrimPrefix(urlStr, "file://")
+		cleanPath = filepath.Clean(filePathPart)
+	} else {
+		// Relative path: resolve relative to the directory containing the plan file
+		planDir := filepath.Dir(planFilePath)
+		cleanPath = filepath.Clean(filepath.Join(planDir, urlStr))
+	}
 
 	// 2. Must resolve to valid path inside workspace root
 	rel, err := filepath.Rel(workspaceRoot, cleanPath)
@@ -200,7 +207,7 @@ func validateFileLinks(filePath string, isCompleted bool, workspaceRoot string) 
 				urlStr := strings.TrimSpace(match[2])
 
 				if isActionHeading || strings.HasPrefix(urlStr, "file://") {
-					if err := validateFileLink(line, label, urlStr, isCompleted, workspaceRoot); err != nil {
+					if err := validateFileLink(filePath, line, label, urlStr, isCompleted, workspaceRoot); err != nil {
 						errs = append(errs, fmt.Errorf("line %d: %w", lineNum, err))
 					}
 				}
