@@ -3,6 +3,7 @@ package pipeline
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -116,7 +117,9 @@ func TestAssemble_Success(t *testing.T) {
 			Status:    manifest.StatusCompleted,
 		}
 	}
-	_ = m.Save()
+	if saveErr := m.Save(); saveErr != nil {
+		t.Fatalf("failed to save manifest: %v", saveErr)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -143,7 +146,7 @@ func TestAssemble_Success(t *testing.T) {
 		t.Fatalf("failed to load manifest: %v", err)
 	}
 
-	if m2.KDPLayout.SpineWidth != 0.15 {
+	if math.Abs(m2.KDPLayout.SpineWidth-0.15) > 1e-9 {
 		t.Errorf("expected SpineWidth 0.15, got %f", m2.KDPLayout.SpineWidth)
 	}
 	if !m2.KDPLayout.SpineTextEligible {
@@ -215,7 +218,9 @@ func TestAssemble_ZeroPageCount(t *testing.T) {
 		t.Fatalf("Initiate failed: %v", err)
 	}
 	m.BookProperties.TargetPageCount = 0
-	_ = m.Save()
+	if saveErr := m.Save(); saveErr != nil {
+		t.Fatalf("failed to save manifest: %v", saveErr)
+	}
 
 	optsAssemble := AssembleOptions{
 		InputDir: tmpDir,
@@ -319,7 +324,9 @@ func TestAssemble_FormatDefaulting(t *testing.T) {
 		t.Fatalf("Initiate failed: %v", err)
 	}
 	m.Progress.Pages = make([]manifest.PageState, 80)
-	_ = m.Save()
+	if saveErr := m.Save(); saveErr != nil {
+		t.Fatalf("failed to save manifest: %v", saveErr)
+	}
 
 	clientTransport, serverTransport := mcpsdk.NewInMemoryTransports()
 	_, cleanupMCP := setupMockKDPMathServer(t, ctx, serverTransport)
@@ -356,7 +363,9 @@ func TestAssemble_FormatDefaulting(t *testing.T) {
 		t.Fatalf("Initiate failed: %v", err)
 	}
 	m2.Progress.Pages = make([]manifest.PageState, 15)
-	_ = m2.Save()
+	if saveErr := m2.Save(); saveErr != nil {
+		t.Fatalf("failed to save manifest: %v", saveErr)
+	}
 
 	clientTransport2, serverTransport2 := mcpsdk.NewInMemoryTransports()
 	_, cleanupMCP2 := setupMockKDPMathServer(t, ctx, serverTransport2)
