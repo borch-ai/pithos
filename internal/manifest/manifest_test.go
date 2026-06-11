@@ -226,8 +226,9 @@ func TestConcurrentSaveAndUpdates(t *testing.T) {
 	m.SetFilePath(manifestPath)
 
 	var wg sync.WaitGroup
-	workers := 20
-	iterations := 50
+	const workers = 20
+	const iterations = 50
+	errChan := make(chan error, workers*iterations*3)
 
 	for i := 0; i < workers; i++ {
 		wg.Add(1)
@@ -235,14 +236,25 @@ func TestConcurrentSaveAndUpdates(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < iterations; j++ {
 				pageIdx := workerID*iterations + j
-				_ = m.UpdatePageStatus(pageIdx, StatusCompleted, "/path.png")
-				_ = m.RegisterAsset("key", "val")
-				_ = m.Save()
+				if opErr := m.UpdatePageStatus(pageIdx, StatusCompleted, "/path.png"); opErr != nil {
+					errChan <- opErr
+				}
+				if opErr := m.RegisterAsset("key", "val"); opErr != nil {
+					errChan <- opErr
+				}
+				if opErr := m.Save(); opErr != nil {
+					errChan <- opErr
+				}
 			}
 		}(i)
 	}
 
 	wg.Wait()
+	close(errChan)
+
+	for concurrentErr := range errChan {
+		t.Errorf("concurrent operation failed: %v", concurrentErr)
+	}
 
 	// Verify loaded
 	loaded, err := LoadManifest(manifestPath)

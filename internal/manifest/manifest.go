@@ -126,9 +126,10 @@ func (m *Manifest) Save() error {
 
 // SaveTo serializes and writes the manifest to the specified file path atomically.
 func (m *Manifest) SaveTo(path string) error {
-	m.mu.RLock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	data, err := json.MarshalIndent(m, "", "  ")
-	m.mu.RUnlock()
 	if err != nil {
 		return fmt.Errorf("failed to marshal manifest: %w", err)
 	}
