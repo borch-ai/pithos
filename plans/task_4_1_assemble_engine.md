@@ -1,6 +1,6 @@
 # plan: Task 4.1: The `assemble` Engine
 
-**Status:** Open (Issue #[TBD])
+**Status:** Completed
 
 Implement the `assemble` command to calculate print constraints and generate a valid KDP layout manifest from the raw brewed assets.
 
@@ -8,6 +8,13 @@ Implement the `assemble` command to calculate print constraints and generate a v
 
 > [!NOTE]
 > None.
+
+## Actual Choices & Configurations
+
+- **Go Version Used**: Go 1.26.4
+- **Math MCP Client**: Integrated with `pw-mcp-kdp-math` to resolve KDP geometry calculations via MCP Tool `kdp_calculate_geometry`.
+- **Validation Constraints**: Added hardcover minimum limit check (>= 75 pages).
+- **Manifest Storage**: Expanded `KDPLayout` to store all margins, cover dimensions, overhang height, hinge/wrap width, and guides.
 
 ## Proposed Changes
 

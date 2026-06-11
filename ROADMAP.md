@@ -36,10 +36,10 @@ Focus: Integrating with the `pw-mcp-*` ecosystem to perform core content generat
 ## Phase 3: Local Quality Gates & Critic
 Focus: Automated review tools, local critic hooks, metric instrumentation, and plan template linting.
 
-*   [ ] **Task 3.1: Plan Conformance Verification**
+*   [x] **Task 3.1: Plan Conformance Verification**
     *   Build a local structure check validator tool to verify all implementation plans under `plans/` conform to the project standard template format.
     *   [Implementation Plan](plans/task_3_1_plan_conformance.md)
-*   [ ] **Task 3.2: Local Critic Review Subsystem**
+*   [x] **Task 3.2: Local Critic Review Subsystem**
     *   Implement a `pithos review` CLI command and local critic engine to verify local Git diffs against proposed implementation plans.
     *   Set up a pre-push Git hook to run local builds, tests, and coverage checks, calling the Critic LLM before code is pushed to remote.
     *   [Implementation Plan](plans/task_3_2_local_critic.md)
@@ -53,7 +53,7 @@ Focus: Automated review tools, local critic hooks, metric instrumentation, and p
 ## Phase 4: Assembly & Layout
 Focus: Turning raw text and image assets into valid, print-ready files.
 
-*   [ ] **Task 4.1: The `assemble` Engine**
+*   [x] **Task 4.1: The `assemble` Engine**
     *   Implement hard layout validation checks (such as enforcing the KDP hardcover minimum limit of 75 pages).
     *   Connect to `pw-mcp-kdp-math` to calculate exact PDF geometries (margins, bleed, spine) and record calculations in the manifest.
     *   Generate layout instructions and compile final PDFs locally or prepare manifest for external layout engine consumption.
@@ -76,3 +76,9 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Amazon KDP uploads.
 *   [ ] **Task 5.3: MCP Telemetry Migration**
     *   Migrate token telemetry and billing calculations from the imported module to a decoupled, external `pw-mcp-telemetry` MCP server.
     *   [Implementation Plan](plans/task_5_3_mcp_telemetry_migration.md)
+*   [ ] **Task 5.4: Speculative: Homebrew Formula for Dependency Management**
+    *   Migrate dependency installation instructions to rely on Homebrew (`brew`) for installing required MCP plugin servers.
+    *   [Implementation Plan](plans/task_5_4_speculative_brew_dependencies.md)
+*   [ ] **Task 5.5: Speculative: Publish Pithos as Homebrew Package with Dependencies**
+    *   Publish pre-compiled Pithos binaries via Homebrew and list Powerword MCP plugins as package dependencies.
+    *   [Implementation Plan](plans/task_5_5_speculative_publish_pithos_brew.md)
