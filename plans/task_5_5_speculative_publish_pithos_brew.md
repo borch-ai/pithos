@@ -7,7 +7,7 @@ This plan outlines packaging and publishing Pithos as a Homebrew package (`brew 
 ## User Review Required
 
 > [!IMPORTANT]
-> - **Platform Support:** Pre-compiled binaries will be generated for macOS (Intel & Apple Silicon) and Linux.
+> - **Platform Support:** Pre-compiled binaries will be generated for macOS (Intel & Apple Silicon), Linux, and Windows.
 > - **Dependency Ordering:** The Homebrew tap formula for Pithos will declare dependencies on the Powerword plugin formulas to ensure they are fetched and linked first.
 
 ## Proposed Changes
