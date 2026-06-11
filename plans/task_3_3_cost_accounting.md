@@ -16,13 +16,13 @@ Implement tracking and logging of token counts and API consumption costs across 
 
 ### Dependencies
 
-#### [MODIFY] [go.mod](file:///Users/human/code/pithos/go.mod)
+#### [MODIFY] [go.mod](../go.mod)
 - Require `github.com/borch-ai/powerword v0.0.0` (or local replaced path).
 - Add `replace github.com/borch-ai/powerword => ../powerword`.
 
 ### State Representation
 
-#### [MODIFY] [manifest.go](file:///Users/human/code/pithos/internal/manifest/manifest.go)
+#### [MODIFY] [manifest.go](../internal/manifest/manifest.go)
 - Add a new struct `TelemetryMetrics` referencing the imported telemetry types:
   ```go
   import "github.com/borch-ai/powerword/pkg/telemetry"
@@ -37,11 +37,11 @@ Implement tracking and logging of token counts and API consumption costs across 
 
 ### Pipeline Integration
 
-#### [MODIFY] [llm.go](file:///Users/human/code/pithos/internal/pipeline/llm.go)
+#### [MODIFY] [llm.go](../internal/pipeline/llm.go)
 - Parse `usageMetadata` (Gemini API) and `usage` (OpenAI/GPT API) in HTTP response bodies into standard `telemetry.TokenUsage` mappings.
 - Use `telemetry.UsageTracker` to record LLM token usage and execute cost calculations using the shared model pricing tables.
 
-#### [MODIFY] [brew.go](file:///Users/human/code/pithos/internal/pipeline/brew.go)
+#### [MODIFY] [brew.go](../internal/pipeline/brew.go)
 - Capture token metrics from the LLM client responses.
 - Increment the image generation count when the MCP client completes illustrations.
 - Accumulate metrics and save the updated manifest state at each checkpoint.

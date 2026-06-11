@@ -16,17 +16,17 @@ Migrate Pithos's in-process token telemetry and cost accounting from the importe
 
 ### Dependencies & Configuration
 
-#### [MODIFY] [go.mod](file:///Users/human/code/pithos/go.mod)
+#### [MODIFY] [go.mod](../go.mod)
 - Remove `github.com/borch-ai/powerword` from required modules.
 - Remove the local `replace` directive mapping to `../powerword`.
 
-#### [MODIFY] [config.go](file:///Users/human/code/pithos/internal/config/config.go)
+#### [MODIFY] [config.go](../internal/config/config.go)
 - Add `TelemetryPath` to `MCPConfig` structure to manage the location of the `pw-mcp-telemetry` binary.
 - Bind default paths in Viper config initialization.
 
 ### State Representation
 
-#### [MODIFY] [manifest.go](file:///Users/human/code/pithos/internal/manifest/manifest.go)
+#### [MODIFY] [manifest.go](../internal/manifest/manifest.go)
 - Refactor the `TelemetryMetrics` struct to define native Pithos JSON structures instead of referencing `telemetry.ModelUsage` package types:
   ```go
   type TelemetryMetrics struct {
@@ -44,7 +44,7 @@ Migrate Pithos's in-process token telemetry and cost accounting from the importe
 
 ### Pipeline Integration
 
-#### [MODIFY] [llm.go](file:///Users/human/code/pithos/internal/pipeline/llm.go) / [brew.go](file:///Users/human/code/pithos/internal/pipeline/brew.go)
+#### [MODIFY] [llm.go](../internal/pipeline/llm.go) / [brew.go](../internal/pipeline/brew.go)
 - Initialize an MCP client connection to the `pw-mcp-telemetry` server process.
 - Call the `calculate_tokens_cost` tool with the model token parameters on every iteration response.
 - Update running totals and save them to `manifest.json`.

@@ -8,14 +8,14 @@ Integrate real-time WebRTC and Firebase signaling into Pithos so the long-runnin
 
 ### Telemetry Subsystem
 
-#### [NEW] [lamplighter.go](file:///Users/human/code/pithos/internal/telemetry/lamplighter.go)
+#### [NEW] [lamplighter.go](../internal/telemetry/lamplighter.go)
 - [ ] Implement a background daemon that runs parallel to the pipeline execution.
 - [ ] Use Firebase Admin SDK (or a lightweight REST client) to advertise the active Pithos session to the user's paired mobile device.
 - [ ] Stream standard output and token usage metrics (cost accounting) to Lamplighter.
 
 ### Pipeline Core Updates
 
-#### [MODIFY] [brew.go](file:///Users/human/code/pithos/internal/pipeline/brew.go)
+#### [MODIFY] [brew.go](../internal/pipeline/brew.go)
 - [ ] Add support for "Approval Checkpoints" (e.g., halting the pipeline after generating the cover art or after manuscript drafting).
 - [ ] Send an `APPROVAL_REQUIRED` payload to Lamplighter with the asset reference.
 - [ ] Record the checkpoint status (e.g., `awaiting_approval`) in `manifest.json` so the state persists.

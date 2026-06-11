@@ -20,7 +20,7 @@ Implement the Local Critic subsystem to run quality gates (linting, compilation,
 
 ### Configuration
 
-#### [MODIFY] [config.go](file:///Users/human/code/pithos/internal/config/config.go)
+#### [MODIFY] [config.go](../internal/config/config.go)
 - Add fields to the Viper configuration struct:
   * `CriticProvider` (e.g., `gemini`, `openai`, `ollama`)
   * `CriticModel` (e.g., `gemini-1.5-flash`, `gpt-4o`)
@@ -29,7 +29,7 @@ Implement the Local Critic subsystem to run quality gates (linting, compilation,
 
 ### Review Component
 
-#### [NEW] [critic.go](file:///Users/human/code/pithos/internal/review/critic.go)
+#### [NEW] [critic.go](../internal/review/critic.go)
 - Implement `ExtractGitDiff(ctx context.Context)`:
   * Run `git diff origin/main...HEAD` (committed but unpushed changes) and `git diff` (uncommitted modifications).
 - Implement `LoadActivePlan(diff string) (*Plan, error)`:
@@ -44,17 +44,17 @@ Implement the Local Critic subsystem to run quality gates (linting, compilation,
 
 ### Command Line Interface
 
-#### [NEW] [review.go](file:///Users/human/code/pithos/cmd/pithos/review.go)
+#### [NEW] [review.go](../cmd/pithos/review.go)
 - Register `pithos review` Cobra command with flags:
   * `--local`: Run local build/test validations and review against local plans.
   * `--plan`: Explicitly specify which implementation plan file to review against.
 
 ### Hooks & build files
 
-#### [NEW] [pre-push](file:///Users/human/code/pithos/scripts/git-hooks/pre-push)
+#### [NEW] [pre-push](../scripts/git-hooks/pre-push)
 - A Git hook script that runs `pithos review --local` and blocks pushes if it exits with an error status.
 
-#### [MODIFY] [Makefile](file:///Users/human/code/pithos/Makefile)
+#### [MODIFY] [Makefile](../Makefile)
 - Add target `install-hooks` to copy `scripts/git-hooks/pre-push` into `.git/hooks/pre-push` and make it executable.
 
 ---
