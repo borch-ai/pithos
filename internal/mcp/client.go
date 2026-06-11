@@ -51,6 +51,13 @@ func NewPluginClientWithBinary(pluginType PluginType, binaryPath string) *Plugin
 	}
 }
 
+// SetTransport sets the transport for the plugin client (primarily for unit testing).
+func (pc *PluginClient) SetTransport(t mcpsdk.Transport) {
+	pc.mu.Lock()
+	defer pc.mu.Unlock()
+	pc.transport = t
+}
+
 // resolveBinaryPath determines the executable path to run for this plugin.
 // Fallback path resolution prioritizes:
 // 1. Explicitly configured binaryPath passed during client creation.
