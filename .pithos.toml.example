@@ -8,12 +8,7 @@ kdp_math_path = "/usr/local/bin/pw-mcp-kdp-math"
 seo_path = "/usr/local/bin/pw-mcp-seo"
 video_path = "/usr/local/bin/pw-mcp-video"
 
-[api]
-# API keys for LLM and content services
-gemini_key = "YOUR_GEMINI_API_KEY"
-openai_key = "YOUR_OPENAI_API_KEY"
-
 [telemetry]
-# WebRTC / Firebase dashboard parameters for mobile notifications
+# WebRTC / Firebase dashboard parameters for remote pipeline monitoring
 lamplighter_enabled = false
 firebase_credentials_path = ""
