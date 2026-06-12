@@ -65,6 +65,10 @@ func setupMockImageGenServer(t *testing.T, ctx context.Context, serverTransport 
 		}
 		_ = json.Unmarshal(req.Params.Arguments, &args)
 
+		if strings.Contains(args.Prompt, "SLEEP") {
+			time.Sleep(50 * time.Millisecond)
+		}
+
 		if strings.Contains(args.Prompt, "FAIL_GENERATION") {
 			return &mcpsdk.CallToolResult{
 				IsError: true,
@@ -392,7 +396,7 @@ func TestBrew_ResumabilityAndCheckpoints(t *testing.T) {
 		t.Fatalf("failed to reload manifest: %v", err)
 	}
 
-	expectedStatuses := []manifest.PageStatus{manifest.StatusCompleted, manifest.StatusPending, manifest.StatusPending}
+	expectedStatuses := []manifest.PageStatus{manifest.StatusCompleted, manifest.StatusPending, manifest.StatusCompleted}
 	for idx, expected := range expectedStatuses {
 		if m2.Progress.Pages[idx].Status != expected {
 			t.Errorf("expected page %d to be %q, got %q", idx+1, expected, m2.Progress.Pages[idx].Status)
@@ -1010,5 +1014,73 @@ func TestBrew_TelemetryCustomPricing(t *testing.T) {
 	expectedCost := 0.20475
 	if math.Abs(m.Telemetry.TotalCostUSD-expectedCost) > 1e-6 {
 		t.Errorf("expected TotalCostUSD %f, got %f", expectedCost, m.Telemetry.TotalCostUSD)
+	}
+}
+
+func TestBrew_Concurrency(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos-brew-concurrency-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	dummySourceImage := filepath.Join(tmpDir, "source.png")
+	if writeErr := os.WriteFile(dummySourceImage, []byte("image"), 0600); writeErr != nil {
+		t.Fatalf("failed to write source image: %v", writeErr)
+	}
+
+	m, err := Initiate(InitiateOptions{
+		OutputDir:       tmpDir,
+		Theme:           "Concurrency Theme",
+		TargetPageCount: 4,
+	})
+	if err != nil {
+		t.Fatalf("failed to initiate: %v", err)
+	}
+
+	m.Progress.ManuscriptGenerated = true
+	m.Progress.Pages = []manifest.PageState{
+		{PageIndex: 1, Status: manifest.StatusPending, Text: "SLEEP: Stanza 1"},
+		{PageIndex: 2, Status: manifest.StatusPending, Text: "SLEEP: Stanza 2"},
+		{PageIndex: 3, Status: manifest.StatusPending, Text: "SLEEP: Stanza 3"},
+		{PageIndex: 4, Status: manifest.StatusPending, Text: "SLEEP: Stanza 4"},
+	}
+	if saveErr := m.Save(); saveErr != nil {
+		t.Fatalf("failed to save manifest: %v", saveErr)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	clientTransport, serverTransport := mcpsdk.NewInMemoryTransports()
+	_, cleanupMCP := setupMockImageGenServer(t, ctx, serverTransport, dummySourceImage)
+	defer cleanupMCP()
+
+	start := time.Now()
+	err = Brew(ctx, BrewOptions{
+		OutputDir:    tmpDir,
+		MCPTransport: clientTransport,
+		Concurrency:  4,
+	})
+	if err != nil {
+		t.Fatalf("Brew failed: %v", err)
+	}
+	elapsed := time.Since(start)
+
+	// Since we sleep for 50ms for each SLEEP prompt, if they run in parallel, it should take less than 150ms.
+	// If they ran sequentially, it would take at least 200ms.
+	if elapsed >= 150*time.Millisecond {
+		t.Errorf("expected parallel execution to take less than 150ms, took %v", elapsed)
+	}
+
+	// Verify all pages completed
+	m2, err := manifest.LoadManifest(filepath.Join(tmpDir, "manifest.json"))
+	if err != nil {
+		t.Fatalf("failed to reload manifest: %v", err)
+	}
+	for _, p := range m2.Progress.Pages {
+		if p.Status != manifest.StatusCompleted {
+			t.Errorf("expected page %d to be completed, got %q", p.PageIndex, p.Status)
+		}
 	}
 }

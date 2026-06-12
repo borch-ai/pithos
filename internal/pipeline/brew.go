@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/borch-ai/pithos/internal/config"
 	"github.com/borch-ai/pithos/internal/manifest"
@@ -22,6 +23,7 @@ type BrewOptions struct {
 	OutputDir    string
 	Theme        string
 	Style        string
+	Concurrency  int
 	MCPTransport mcpsdk.Transport // For testing
 	LLM          LLMClient        // For testing
 	HTTPClient   *http.Client     // For testing
@@ -164,18 +166,17 @@ func generateManuscript(ctx context.Context, m *manifest.Manifest, opts BrewOpti
 	return nil
 }
 
-func needsIllustrationGen(m *manifest.Manifest) bool {
-	for _, page := range m.Progress.Pages {
+//nolint:gocognit,funlen // Illustration loop handles MCP client lifecycle, style registration, and page checkpoint updates
+func generateIllustrations(ctx context.Context, m *manifest.Manifest, opts BrewOptions) error {
+	var pendingPages []*manifest.PageState
+	for i := range m.Progress.Pages {
+		page := &m.Progress.Pages[i]
 		if page.Status != manifest.StatusCompleted || page.ImagePath == "" {
-			return true
+			pendingPages = append(pendingPages, page)
 		}
 	}
-	return false
-}
 
-//nolint:gocognit // Illustration loop handles MCP client lifecycle, style registration, and page checkpoint updates
-func generateIllustrations(ctx context.Context, m *manifest.Manifest, opts BrewOptions) error {
-	if !needsIllustrationGen(m) {
+	if len(pendingPages) == 0 {
 		return nil
 	}
 
@@ -198,33 +199,75 @@ func generateIllustrations(ctx context.Context, m *manifest.Manifest, opts BrewO
 		}
 	}
 
-	for i := range m.Progress.Pages {
-		page := &m.Progress.Pages[i]
-		if page.Status == manifest.StatusCompleted && page.ImagePath != "" {
-			continue
+	concurrency := opts.Concurrency
+	if concurrency <= 0 {
+		if config.Cfg != nil && config.Cfg.Concurrency > 0 {
+			concurrency = config.Cfg.Concurrency
+		} else {
+			concurrency = 1
 		}
+	}
 
-		page.Status = manifest.StatusGeneratingImages
-		if err := m.Save(); err != nil {
-			return fmt.Errorf("failed to update page status to generating: %w", err)
-		}
-		if err := generateSingleImage(ctx, mcpClient, page, styleID, opts.OutputDir); err != nil {
-			page.Status = manifest.StatusPending
-			if saveErr := m.Save(); saveErr != nil {
-				return fmt.Errorf("failed to save manifest status to pending: %w (original error: %v)", saveErr, err)
+	sem := make(chan struct{}, concurrency)
+	var wg sync.WaitGroup
+	var errsMu sync.Mutex
+	var workerErrors []error
+
+	for _, page := range pendingPages {
+		wg.Add(1)
+		go func(p *manifest.PageState) {
+			defer wg.Done()
+			select {
+			case sem <- struct{}{}:
+			case <-ctx.Done():
+				errsMu.Lock()
+				workerErrors = append(workerErrors, ctx.Err())
+				errsMu.Unlock()
+				return
 			}
-			return err
-		}
+			defer func() { <-sem }()
 
-		var pricing map[string]telemetry.ModelPricing
-		if config.Cfg != nil {
-			pricing = config.Cfg.Pricing
-		}
-		m.RecordImageGeneration(pricing)
+			// 1. Update status to generating
+			if err := m.UpdatePageStatus(p.PageIndex, manifest.StatusGeneratingImages, ""); err != nil {
+				errsMu.Lock()
+				workerErrors = append(workerErrors, fmt.Errorf("failed to update page %d status to generating: %w", p.PageIndex, err))
+				errsMu.Unlock()
+				return
+			}
 
-		if err := m.Save(); err != nil {
-			return fmt.Errorf("failed to save manifest after page %d image generation: %w", page.PageIndex, err)
-		}
+			imgPath, err := generateSingleImage(ctx, mcpClient, p.PageIndex, p.Text, styleID, opts.OutputDir)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error generating image for page %d: %v\n", p.PageIndex, err)
+				// Revert to pending
+				if revertErr := m.UpdatePageStatus(p.PageIndex, manifest.StatusPending, ""); revertErr != nil {
+					fmt.Fprintf(os.Stderr, "Error reverting page %d status: %v\n", p.PageIndex, revertErr)
+				}
+				errsMu.Lock()
+				workerErrors = append(workerErrors, err)
+				errsMu.Unlock()
+				return
+			}
+
+			// 3. Record image generation and update status to completed
+			var pricing map[string]telemetry.ModelPricing
+			if config.Cfg != nil {
+				pricing = config.Cfg.Pricing
+			}
+			m.RecordImageGeneration(pricing)
+
+			if err := m.UpdatePageStatus(p.PageIndex, manifest.StatusCompleted, imgPath); err != nil {
+				errsMu.Lock()
+				workerErrors = append(workerErrors, fmt.Errorf("failed to update page %d status to completed: %w", p.PageIndex, err))
+				errsMu.Unlock()
+				return
+			}
+		}(page)
+	}
+
+	wg.Wait()
+
+	if len(workerErrors) > 0 {
+		return fmt.Errorf("failed to generate some illustrations: %w", workerErrors[0])
 	}
 	return nil
 }
@@ -254,9 +297,9 @@ func registerStyleProfile(ctx context.Context, mcpClient *mcp.PluginClient, styl
 	return styleID, nil
 }
 
-func generateSingleImage(ctx context.Context, mcpClient *mcp.PluginClient, page *manifest.PageState, styleID string, outputDir string) error {
+func generateSingleImage(ctx context.Context, mcpClient *mcp.PluginClient, pageIndex int, pageText string, styleID string, outputDir string) (string, error) {
 	generateArgs := map[string]interface{}{
-		"prompt": page.Text,
+		"prompt": pageText,
 		"size":   "1024x1024",
 	}
 	if styleID != "" {
@@ -265,12 +308,12 @@ func generateSingleImage(ctx context.Context, mcpClient *mcp.PluginClient, page 
 
 	resText, err := mcpClient.CallTool(ctx, "imagegen_generate", generateArgs)
 	if err != nil {
-		return fmt.Errorf("failed to generate image for page %d: %w", page.PageIndex, err)
+		return "", fmt.Errorf("failed to generate image for page %d: %w", pageIndex, err)
 	}
 
 	prefix := "Successfully generated image and saved to: "
 	if !strings.HasPrefix(resText, prefix) {
-		return fmt.Errorf("unexpected imagegen response format: %q", resText)
+		return "", fmt.Errorf("unexpected imagegen response format: %q", resText)
 	}
 
 	srcPath := strings.TrimPrefix(resText, prefix)
@@ -279,16 +322,14 @@ func generateSingleImage(ctx context.Context, mcpClient *mcp.PluginClient, page 
 		ext = ".png"
 	}
 
-	destFileName := fmt.Sprintf("page_%d%s", page.PageIndex, ext)
+	destFileName := fmt.Sprintf("page_%d%s", pageIndex, ext)
 	destPath := filepath.Join(outputDir, "images", destFileName)
 
 	if err := copyFile(srcPath, destPath); err != nil {
-		return fmt.Errorf("failed to copy generated image for page %d: %w", page.PageIndex, err)
+		return "", fmt.Errorf("failed to copy generated image for page %d: %w", pageIndex, err)
 	}
 
-	page.ImagePath = filepath.Join("images", destFileName)
-	page.Status = manifest.StatusCompleted
-	return nil
+	return filepath.Join("images", destFileName), nil
 }
 
 func copyFile(src, dst string) error {

@@ -6,9 +6,10 @@ import (
 )
 
 var (
-	brewTheme  string
-	brewStyle  string
-	brewOutput string
+	brewTheme       string
+	brewStyle       string
+	brewOutput      string
+	brewConcurrency int
 )
 
 var brewCmd = &cobra.Command{
@@ -16,9 +17,10 @@ var brewCmd = &cobra.Command{
 	Short: "Generates the manuscript and stanza illustrations",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		opts := pipeline.BrewOptions{
-			OutputDir: brewOutput,
-			Theme:     brewTheme,
-			Style:     brewStyle,
+			OutputDir:   brewOutput,
+			Theme:       brewTheme,
+			Style:       brewStyle,
+			Concurrency: brewConcurrency,
 		}
 		return pipeline.Brew(cmd.Context(), opts)
 	},
@@ -28,5 +30,6 @@ func init() {
 	brewCmd.Flags().StringVar(&brewTheme, "theme", "", "Theme for the manuscript (optional override)")
 	brewCmd.Flags().StringVar(&brewStyle, "style", "", "Style reference for images (optional override)")
 	brewCmd.Flags().StringVar(&brewOutput, "output", "book", "Output directory path")
+	brewCmd.Flags().IntVar(&brewConcurrency, "concurrency", 0, "Number of concurrent image generation workers (defaults to config or 1)")
 	rootCmd.AddCommand(brewCmd)
 }
