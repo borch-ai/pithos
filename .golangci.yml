@@ -21,6 +21,25 @@ linters:
     - funlen
     - gocognit
   settings:
+    errcheck:
+      check-blank: true
+      exclude-functions:
+        - (io.Closer).Close
+        - os.RemoveAll
+        - os.Remove
+        - (io.Writer).Write
+        - (*encoding/json.Encoder).Encode
+        - io.ReadAll
+        - os.WriteFile
+        - os.Setenv
+        - os.Unsetenv
+        - (*os.File).Close
+        - encoding/json.Marshal
+        - encoding/json.Unmarshal
+        - (net/http.ResponseWriter).Write
+        - (*github.com/borch-ai/pithos/internal/mcp.PluginClient).Stop
+        - (*github.com/modelcontextprotocol/go-sdk/mcp.ServerSession).Close
+        - (*github.com/modelcontextprotocol/go-sdk/mcp.ClientSession).Close
     nestif:
       min-complexity: 4
     funlen:

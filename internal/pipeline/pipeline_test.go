@@ -329,12 +329,11 @@ func TestBrew_ResumabilityAndCheckpoints(t *testing.T) {
 	}
 
 	// Setup pipeline initiate
-	optsInit := InitiateOptions{
+	m, err := Initiate(InitiateOptions{
 		OutputDir:       tmpDir,
 		Theme:           "Resume Theme",
 		TargetPageCount: 3,
-	}
-	m, err := Initiate(optsInit)
+	})
 	if err != nil {
 		t.Fatalf("failed to initiate: %v", err)
 	}
@@ -346,7 +345,9 @@ func TestBrew_ResumabilityAndCheckpoints(t *testing.T) {
 		{PageIndex: 2, Status: manifest.StatusPending, Text: "FAIL_GENERATION: Stanza 2"},
 		{PageIndex: 3, Status: manifest.StatusPending, Text: "Stanza 3"},
 	}
-	_ = m.Save()
+	if saveErr := m.Save(); saveErr != nil {
+		t.Fatalf("failed to save manifest: %v", saveErr)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -356,12 +357,10 @@ func TestBrew_ResumabilityAndCheckpoints(t *testing.T) {
 	defer cleanupMCP()
 
 	// Run Brew - should fail at page 2, but page 1 should remain complete, page 2 status should remain pending/saved, and page 3 untouched
-	optsBrew := BrewOptions{
+	err = Brew(ctx, BrewOptions{
 		OutputDir:    tmpDir,
 		MCPTransport: clientTransport,
-	}
-
-	err = Brew(ctx, optsBrew)
+	})
 	if err == nil {
 		t.Error("expected Brew to return error on imagegen failure for page 2, got nil")
 	}
@@ -372,19 +371,18 @@ func TestBrew_ResumabilityAndCheckpoints(t *testing.T) {
 		t.Fatalf("failed to reload manifest: %v", err)
 	}
 
-	if m2.Progress.Pages[0].Status != manifest.StatusCompleted {
-		t.Errorf("expected page 1 to remain Completed, got %q", m2.Progress.Pages[0].Status)
-	}
-	if m2.Progress.Pages[1].Status != manifest.StatusPending {
-		t.Errorf("expected page 2 to remain Pending after failure, got %q", m2.Progress.Pages[1].Status)
-	}
-	if m2.Progress.Pages[2].Status != manifest.StatusPending {
-		t.Errorf("expected page 3 to remain Pending (not reached), got %q", m2.Progress.Pages[2].Status)
+	expectedStatuses := []manifest.PageStatus{manifest.StatusCompleted, manifest.StatusPending, manifest.StatusPending}
+	for idx, expected := range expectedStatuses {
+		if m2.Progress.Pages[idx].Status != expected {
+			t.Errorf("expected page %d to be %q, got %q", idx+1, expected, m2.Progress.Pages[idx].Status)
+		}
 	}
 
 	// Fix page 2 and rerun Brew
 	m2.Progress.Pages[1].Text = "Success Stanza 2"
-	_ = m2.Save()
+	if saveErr := m2.Save(); saveErr != nil {
+		t.Fatalf("failed to save manifest: %v", saveErr)
+	}
 
 	// Recreate transports and context for next run
 	ctx2, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
@@ -394,12 +392,10 @@ func TestBrew_ResumabilityAndCheckpoints(t *testing.T) {
 	_, cleanupMCP2 := setupMockImageGenServer(t, ctx2, serverTransport2, dummySourceImage)
 	defer cleanupMCP2()
 
-	optsBrew2 := BrewOptions{
+	err = Brew(ctx2, BrewOptions{
 		OutputDir:    tmpDir,
 		MCPTransport: clientTransport2,
-	}
-
-	err = Brew(ctx2, optsBrew2)
+	})
 	if err != nil {
 		t.Fatalf("expected Brew to succeed on rerun, got %v", err)
 	}
@@ -438,7 +434,9 @@ func TestBrew_MCPFormatError(t *testing.T) {
 	m.Progress.Pages = []manifest.PageState{
 		{PageIndex: 1, Status: manifest.StatusPending, Text: "FAIL_FORMAT: Stanza 1"},
 	}
-	_ = m.Save()
+	if saveErr := m.Save(); saveErr != nil {
+		t.Fatalf("failed to save manifest: %v", saveErr)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -479,7 +477,9 @@ func TestBrew_CopyFileError(t *testing.T) {
 	m.Progress.Pages = []manifest.PageState{
 		{PageIndex: 1, Status: manifest.StatusPending, Text: "Stanza 1"},
 	}
-	_ = m.Save()
+	if saveErr := m.Save(); saveErr != nil {
+		t.Fatalf("failed to save manifest: %v", saveErr)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -744,7 +744,9 @@ func TestBrew_CopyFileDestDirectoryFailure(t *testing.T) {
 	m.Progress.Pages = []manifest.PageState{
 		{PageIndex: 1, Status: manifest.StatusPending, Text: "Stanza 1"},
 	}
-	_ = m.Save()
+	if saveErr := m.Save(); saveErr != nil {
+		t.Fatalf("failed to save manifest: %v", saveErr)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -787,7 +789,9 @@ func TestBrew_CopyFileMkdirAllFailure(t *testing.T) {
 	m.Progress.Pages = []manifest.PageState{
 		{PageIndex: 1, Status: manifest.StatusPending, Text: "Stanza 1"},
 	}
-	_ = m.Save()
+	if saveErr := m.Save(); saveErr != nil {
+		t.Fatalf("failed to save manifest: %v", saveErr)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -828,7 +832,9 @@ func TestBrew_NoIllustrationsNeeded(t *testing.T) {
 	m.Progress.Pages = []manifest.PageState{
 		{PageIndex: 1, Status: manifest.StatusCompleted, ImagePath: "images/page_1.png", Text: "Stanza 1"},
 	}
-	_ = m.Save()
+	if saveErr := m.Save(); saveErr != nil {
+		t.Fatalf("failed to save manifest: %v", saveErr)
+	}
 
 	ctx := context.Background()
 	optsBrew := BrewOptions{
