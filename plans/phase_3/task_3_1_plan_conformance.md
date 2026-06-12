@@ -30,7 +30,7 @@ Implement a validation tool to enforce structural consistency across all impleme
 
 ### Build & Hook Integration
 
-#### [MODIFY] [Makefile](file:///Users/human/code/pithos/Makefile)
+#### [MODIFY] [Makefile](../../Makefile)
 - Removed the `check-plans` target and its dependency on `make lint`.
 - Updated `check-coverage` to invoke `powerword check-coverage` instead of the local coverage script.
 

@@ -31,12 +31,12 @@ Implement the logic for the `initiate` (workspace setup) and `brew` (manuscript 
 
 ### Pipeline Core
 
-#### [NEW] [initiate.go](file:///Users/human/code/pithos/internal/pipeline/initiate.go)
+#### [NEW] [initiate.go](../../internal/pipeline/initiate.go)
 - [x] Implement command execution logic to scaffold a new book directory structure under the specified path.
 - [x] Create subdirectories for assets (`/images`) and final output (`/release`).
 - [x] Write an initial, empty `manifest.json` file defining book properties (theme, style, format, target page count) and structure template.
 
-#### [NEW] [brew.go](file:///Users/human/code/pithos/internal/pipeline/brew.go)
+#### [NEW] [brew.go](../../internal/pipeline/brew.go)
 - [x] Parse `--theme`, `--style`, and `--output` directory paths.
 - [x] Load the existing `manifest.json` state from the target directory. If it is a resumed run, detect what steps are already completed.
 - [x] If manuscript text is not yet generated:
@@ -48,10 +48,10 @@ Implement the logic for the `initiate` (workspace setup) and `brew` (manuscript 
   - [x] Save the generated image files locally under the `/images` folder, and write the path reference into `manifest.json` immediately.
 - [x] Ensure that failures at any step gracefully save the current `manifest.json` so the pipeline can resume execution directly from the failure checkpoint.
 
-#### [NEW] [llm.go](file:///Users/human/code/pithos/internal/pipeline/llm.go)
+#### [NEW] [llm.go](../../internal/pipeline/llm.go)
 - [x] Implement Gemini & OpenAI direct HTTP/REST client integrations.
 
-#### [MODIFY] [main.go](file:///Users/human/code/pithos/cmd/pithos/main.go) / [initiate.go](file:///Users/human/code/pithos/cmd/pithos/initiate.go) / [brew.go](file:///Users/human/code/pithos/cmd/pithos/brew.go)
+#### [MODIFY] [main.go](../../cmd/pithos/main.go) / [initiate.go](../../cmd/pithos/initiate.go) / [brew.go](../../cmd/pithos/brew.go)
 - [x] Wire up the command routing from Cobra subcommands to point to these new functions.
 
 ---
