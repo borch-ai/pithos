@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+
+	"github.com/borch-ai/powerword/pkg/telemetry"
 )
 
 func TestNewManifest(t *testing.T) {
@@ -306,5 +308,29 @@ func TestKDPLayoutHelpers(t *testing.T) {
 	wb, hb := CalculateTrimWithBleed(6.0, 9.0)
 	if !isNear(wb, 6.125) || !isNear(hb, 9.25) {
 		t.Errorf("expected 6.125 x 9.25, got %f x %f", wb, hb)
+	}
+}
+
+func TestUpdateTotalCost(t *testing.T) {
+	m := NewManifest("")
+
+	// Populate some usages
+	m.Telemetry.ModelUsages["model-1"] = &telemetry.ModelUsage{InputTokens: 1000, OutputTokens: 2000, CachedTokens: 0}
+	m.Telemetry.ImageGenerations = 2
+
+	pricing := map[string]telemetry.ModelPricing{
+		"model-1":  {Input: 1.0, Output: 2.0}, // $1 per 1M input, $2 per 1M output
+		"imagegen": {Input: 40000.0},          // $40000 per 1M "input" -> $0.04 per image
+	}
+
+	m.UpdateTotalCost(pricing)
+
+	// Cost of LLM: (1000*1.0 + 2000*2.0) / 1,000,000 = (1000 + 4000) / 1,000,000 = 0.005
+	// Cost of ImageGen: 2 * 0.04 = 0.08
+	// Total: 0.085
+
+	expectedCost := 0.085
+	if m.Telemetry.TotalCostUSD != expectedCost {
+		t.Errorf("expected TotalCostUSD %f, got %f", expectedCost, m.Telemetry.TotalCostUSD)
 	}
 }

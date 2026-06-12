@@ -18,42 +18,42 @@ Refactored the monolithic CLI scaffold in `cmd/pithos/main.go` into modular subc
 
 ### Command Scaffolding
 
-#### [DELETE] [main.go](file:///Users/human/code/pithos/cmd/pithos/main.go)
+#### [DELETE] [main.go](../../cmd/pithos/main.go)
 - [x] Remove the inline command stubs and handlers from the root main file, keeping only the initialization routines and CLI execution call.
 
-#### [NEW] [root.go](file:///Users/human/code/pithos/cmd/pithos/root.go)
+#### [NEW] [root.go](../../cmd/pithos/root.go)
 - [x] Define the root `pithos` command.
 - [x] Configure `PersistentPreRun` or `PreRun` hook to initialize Viper configuration from `.pithos.toml` or fallback locations (`~/.config/pithos/config.toml`).
 
-#### [NEW] [initiate.go](file:///Users/human/code/pithos/cmd/pithos/initiate.go)
+#### [NEW] [initiate.go](../../cmd/pithos/initiate.go)
 - [x] Define the `initiate` command.
 - [x] Implement flag options for `--output` directory.
 - [x] Wire up stub execution for pipeline workspace initialization.
 
-#### [NEW] [brew.go](file:///Users/human/code/pithos/cmd/pithos/brew.go)
+#### [NEW] [brew.go](../../cmd/pithos/brew.go)
 - [x] Define the `brew` command.
 - [x] Implement flags for `--theme`, `--style`, and `--output`.
 - [x] Wire up stub execution pointing to the brew engine.
 
-#### [NEW] [assemble.go](file:///Users/human/code/pithos/cmd/pithos/assemble.go)
+#### [NEW] [assemble.go](../../cmd/pithos/assemble.go)
 - [x] Define the `assemble` command.
 - [x] Implement flags for `--input`, `--format`, and `--bleed`.
 - [x] Wire up stub execution pointing to the assemble engine.
 
-#### [NEW] [deploy.go](file:///Users/human/code/pithos/cmd/pithos/deploy.go)
+#### [NEW] [deploy.go](../../cmd/pithos/deploy.go)
 - [x] Define the `deploy` command.
 - [x] Implement flag options (e.g. `--input`).
 - [x] Wire up stub execution pointing to the deploy engine.
 
-#### [NEW] [config.go](file:///Users/human/code/pithos/internal/config/config.go)
+#### [NEW] [config.go](../../internal/config/config.go)
 - [x] Define configuration structures representing `.pithos.toml` and `.env` credentials.
 - [x] Implement `LoadConfig()` using `spf13/viper` and custom `.env` loader.
 - [x] Add basic validation ensuring configured paths for MCP server binaries exist or default to system PATH.
 
-#### [NEW] [.env.example](file:///Users/human/code/pithos/.env.example)
+#### [NEW] [.env.example](../../.env.example)
 - [x] Document sensitive environment variable templates.
 
-#### [MODIFY] [.pithos.toml.example](file:///Users/human/code/pithos/.pithos.toml.example)
+#### [MODIFY] [.pithos.toml.example](../../.pithos.toml.example)
 - [x] Remove secret API keys block.
 
 ---

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/borch-ai/powerword/pkg/telemetry"
 	"github.com/spf13/viper"
 )
 
@@ -15,9 +16,10 @@ var Version = "dev"
 
 // Config represents the schema of the .pithos.toml file.
 type Config struct {
-	MCP       MCPConfig       `mapstructure:"mcp"`
-	API       APIConfig       `mapstructure:"api"`
-	Telemetry TelemetryConfig `mapstructure:"telemetry"`
+	MCP       MCPConfig                         `mapstructure:"mcp"`
+	API       APIConfig                         `mapstructure:"api"`
+	Telemetry TelemetryConfig                   `mapstructure:"telemetry"`
+	Pricing   map[string]telemetry.ModelPricing `mapstructure:"pricing"`
 }
 
 // MCPConfig holds paths to local Powerword MCP server binaries.
@@ -109,6 +111,14 @@ func finalizeLoad(v *viper.Viper) (*Config, error) {
 	var rawConfig Config
 	if err := v.Unmarshal(&rawConfig); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal configuration: %w", err)
+	}
+
+	if len(rawConfig.Pricing) == 0 {
+		rawConfig.Pricing = map[string]telemetry.ModelPricing{
+			"gemini-1.5-flash": {Input: 0.075, Output: 0.30, Cached: 0.01875},
+			"gpt-4o":           {Input: 5.00, Output: 15.00},
+			"imagegen":         {Input: 40000.00},
+		}
 	}
 
 	// Validate and assign fallback paths for MCP binaries

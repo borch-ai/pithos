@@ -5,7 +5,28 @@
 
 echo "Running pre-push quality and critic checks..."
 
-# Check if powerword is installed
+# 1. Verify CI configuration matches local replacement directives
+echo "Verifying CI configuration matches local replacement directives..."
+replaces=$(grep -E '^\s*replace\s+github.com/borch-ai/[a-zA-Z0-9_-]+\s+=>' go.mod | awk '{print $2}')
+
+for repl in $replaces; do
+  repo_name=$(echo "$repl" | sed 's|github.com/borch-ai/||')
+  echo "Checking dependency: $repo_name"
+  
+  # Check if ci.yml has a checkout step for this repo
+  if ! grep -q "repository: borch-ai/$repo_name" .github/workflows/ci.yml; then
+    echo "Error: go.mod replaces 'github.com/borch-ai/$repo_name' with a local sibling, but .github/workflows/ci.yml is missing a checkout step for 'borch-ai/$repo_name'."
+    exit 1
+  fi
+
+  # Check if the checkout step for this repo uses a token secret, github.token, or steps. outputs (to prevent permission errors in CI)
+  if ! grep -A 5 "repository: borch-ai/$repo_name" .github/workflows/ci.yml | grep -q -E 'token: \$\{\{\s*(secrets\.|github\.token|steps\.)'; then
+    echo "Error: .github/workflows/ci.yml checks out sibling repositories but does not configure a token (e.g. token: \${{ github.token }} or \${{ secrets.PAT_TOKEN }})."
+    exit 1
+  fi
+done
+
+# 2. Check if powerword is installed
 if ! command -v powerword >/dev/null 2>&1; then
   echo "Error: 'powerword' CLI tool is not installed or not in PATH."
   echo "Please install it or build it from the powerword repository."

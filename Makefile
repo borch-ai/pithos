@@ -1,4 +1,4 @@
-.PHONY: all build test clean lint fmt tidy check-coverage vuln install-hooks
+.PHONY: all build test test-integration clean lint fmt tidy check-coverage vuln install-hooks
 
 # Go parameters
 GOCMD=go
@@ -26,7 +26,9 @@ test:
 	@echo "Running tests..."
 	$(GOTEST) -v -race -coverprofile=coverage.out -coverpkg=./internal/... ./...
 
-
+test-integration:
+	@echo "Running integration tests..."
+	$(GOTEST) -v -run="Test.*Pricing" ./internal/pipeline/...
 
 check-coverage: test
 	@if command -v powerword >/dev/null 2>&1; then \

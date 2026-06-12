@@ -23,7 +23,7 @@ Leverage the generalized `powerword review --local` command directly in Pithos's
 
 ### Git Hooks & Makefile
 
-#### [MODIFY] [pre-push](../scripts/git-hooks/pre-push)
+#### [MODIFY] [pre-push](../../scripts/git-hooks/pre-push)
 - Update the script to check if the `powerword` CLI is installed.
 - Call `powerword review --local` directly instead of `./bin/pithos review --local`.
 
@@ -31,13 +31,13 @@ Leverage the generalized `powerword review --local` command directly in Pithos's
 
 ### Clean Up Redundant Review Subsystem
 
-#### [DELETE] [review.go](../cmd/pithos/review.go)
+#### [DELETE] [review.go](../../cmd/pithos/review.go)
 - Delete the file registering the `pithos review` Cobra subcommand.
 
-#### [DELETE] [critic.go](../internal/review/critic.go)
+#### [DELETE] [critic.go](../../internal/review/critic.go)
 - Delete the stub/implementation file for workspace verification.
 
-#### [DELETE] [critic_test.go](../internal/review/critic_test.go)
+#### [DELETE] [critic_test.go](../../internal/review/critic_test.go)
 - Delete the corresponding unit tests for the stub workspace verification.
 
 ---

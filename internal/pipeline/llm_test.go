@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/borch-ai/powerword/pkg/telemetry"
 )
 
 func TestGeminiClient_GenerateStanzas_Success(t *testing.T) {
@@ -32,6 +34,15 @@ func TestGeminiClient_GenerateStanzas_Success(t *testing.T) {
 			},
 		},
 	}
+	mockResponse.UsageMetadata = &struct {
+		PromptTokenCount        int `json:"promptTokenCount"`
+		CandidatesTokenCount    int `json:"candidatesTokenCount"`
+		CachedContentTokenCount int `json:"cachedContentTokenCount"`
+	}{
+		PromptTokenCount:        500,
+		CandidatesTokenCount:    300,
+		CachedContentTokenCount: 100,
+	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -46,7 +57,8 @@ func TestGeminiClient_GenerateStanzas_Success(t *testing.T) {
 		Client:  server.Client(),
 	}
 
-	stanzas, err := client.GenerateStanzas(context.Background(), "theme", 3)
+	var usage telemetry.TokenUsage
+	stanzas, usage, err := client.GenerateStanzas(context.Background(), "theme", 3)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -57,11 +69,14 @@ func TestGeminiClient_GenerateStanzas_Success(t *testing.T) {
 	if stanzas[0] != "Stanza 1" || stanzas[2] != "Stanza 3" {
 		t.Errorf("unexpected stanzas content: %v", stanzas)
 	}
+	if usage.InputTokens != 500 || usage.OutputTokens != 300 || usage.CachedTokens != 100 {
+		t.Errorf("unexpected usage parsing: %+v", usage)
+	}
 }
 
 func TestGeminiClient_GenerateStanzas_MissingAPIKey(t *testing.T) {
 	clientEmpty := &GeminiClient{}
-	_, err := clientEmpty.GenerateStanzas(context.Background(), "theme", 3)
+	_, _, err := clientEmpty.GenerateStanzas(context.Background(), "theme", 3)
 	if err == nil {
 		t.Error("expected error for empty API key, got nil")
 	}
@@ -79,7 +94,7 @@ func TestGeminiClient_GenerateStanzas_StatusError(t *testing.T) {
 		BaseURL: serverErr.URL,
 		Client:  serverErr.Client(),
 	}
-	_, err := clientErr.GenerateStanzas(context.Background(), "theme", 3)
+	_, _, err := clientErr.GenerateStanzas(context.Background(), "theme", 3)
 	if err == nil {
 		t.Error("expected error for bad status code, got nil")
 	}
@@ -97,7 +112,7 @@ func TestGeminiClient_GenerateStanzas_EmptyCandidates(t *testing.T) {
 		BaseURL: serverEmptyCandidates.URL,
 		Client:  serverEmptyCandidates.Client(),
 	}
-	_, err := clientEmptyCand.GenerateStanzas(context.Background(), "theme", 3)
+	_, _, err := clientEmptyCand.GenerateStanzas(context.Background(), "theme", 3)
 	if err == nil {
 		t.Error("expected error for empty candidates list, got nil")
 	}
@@ -138,7 +153,7 @@ func TestGeminiClient_GenerateStanzas_InvalidJSONText(t *testing.T) {
 		BaseURL: serverInvalidJSON.URL,
 		Client:  serverInvalidJSON.Client(),
 	}
-	_, err := clientInvalidJSON.GenerateStanzas(context.Background(), "theme", 3)
+	_, _, err := clientInvalidJSON.GenerateStanzas(context.Background(), "theme", 3)
 	if err == nil {
 		t.Error("expected error for invalid json text content, got nil")
 	}
@@ -179,7 +194,7 @@ func TestGeminiClient_GenerateStanzas_StanzasCountMismatch(t *testing.T) {
 		BaseURL: serverCountMismatch.URL,
 		Client:  serverCountMismatch.Client(),
 	}
-	_, err := clientCountMismatch.GenerateStanzas(context.Background(), "theme", 3)
+	_, _, err := clientCountMismatch.GenerateStanzas(context.Background(), "theme", 3)
 	if err == nil {
 		t.Error("expected error for stanzas count mismatch, got nil")
 	}
@@ -201,6 +216,21 @@ func TestOpenAIClient_GenerateStanzas_Success(t *testing.T) {
 			},
 		},
 	}
+	mockResponse.Usage = &struct {
+		PromptTokens        int `json:"prompt_tokens"`
+		CompletionTokens    int `json:"completion_tokens"`
+		PromptTokensDetails *struct {
+			CachedTokens int `json:"cached_tokens"`
+		} `json:"prompt_tokens_details"`
+	}{
+		PromptTokens:     1000,
+		CompletionTokens: 500,
+		PromptTokensDetails: &struct {
+			CachedTokens int `json:"cached_tokens"`
+		}{
+			CachedTokens: 200,
+		},
+	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -215,7 +245,8 @@ func TestOpenAIClient_GenerateStanzas_Success(t *testing.T) {
 		Client:  server.Client(),
 	}
 
-	stanzas, err := client.GenerateStanzas(context.Background(), "theme", 2)
+	var usage telemetry.TokenUsage
+	stanzas, usage, err := client.GenerateStanzas(context.Background(), "theme", 2)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -226,12 +257,15 @@ func TestOpenAIClient_GenerateStanzas_Success(t *testing.T) {
 	if stanzas[0] != "Stanza A" || stanzas[1] != "Stanza B" {
 		t.Errorf("unexpected stanzas content: %v", stanzas)
 	}
+	if usage.InputTokens != 1000 || usage.OutputTokens != 500 || usage.CachedTokens != 200 {
+		t.Errorf("unexpected usage parsing: %+v", usage)
+	}
 }
 
 func TestOpenAIClient_GenerateStanzas_Errors(t *testing.T) {
 	// 1. Missing API Key
 	clientEmpty := &OpenAIClient{}
-	_, err := clientEmpty.GenerateStanzas(context.Background(), "theme", 3)
+	_, _, err := clientEmpty.GenerateStanzas(context.Background(), "theme", 3)
 	if err == nil {
 		t.Error("expected error for empty API key, got nil")
 	}
@@ -248,7 +282,7 @@ func TestOpenAIClient_GenerateStanzas_Errors(t *testing.T) {
 		BaseURL: serverErr.URL,
 		Client:  serverErr.Client(),
 	}
-	_, err = clientErr.GenerateStanzas(context.Background(), "theme", 3)
+	_, _, err = clientErr.GenerateStanzas(context.Background(), "theme", 3)
 	if err == nil {
 		t.Error("expected error for bad status code, got nil")
 	}
@@ -265,7 +299,7 @@ func TestOpenAIClient_GenerateStanzas_Errors(t *testing.T) {
 		BaseURL: serverEmptyChoices.URL,
 		Client:  serverEmptyChoices.Client(),
 	}
-	_, err = clientEmptyChoices.GenerateStanzas(context.Background(), "theme", 3)
+	_, _, err = clientEmptyChoices.GenerateStanzas(context.Background(), "theme", 3)
 	if err == nil {
 		t.Error("expected error for empty choices list, got nil")
 	}
@@ -297,7 +331,7 @@ func TestOpenAIClient_GenerateStanzas_Errors(t *testing.T) {
 		BaseURL: serverInvalidJSON.URL,
 		Client:  serverInvalidJSON.Client(),
 	}
-	_, err = clientInvalidJSON.GenerateStanzas(context.Background(), "theme", 3)
+	_, _, err = clientInvalidJSON.GenerateStanzas(context.Background(), "theme", 3)
 	if err == nil {
 		t.Error("expected error for invalid json text content, got nil")
 	}
@@ -329,7 +363,7 @@ func TestOpenAIClient_GenerateStanzas_Errors(t *testing.T) {
 		BaseURL: serverCountMismatch.URL,
 		Client:  serverCountMismatch.Client(),
 	}
-	_, err = clientCountMismatch.GenerateStanzas(context.Background(), "theme", 3)
+	_, _, err = clientCountMismatch.GenerateStanzas(context.Background(), "theme", 3)
 	if err == nil {
 		t.Error("expected error for stanzas count mismatch, got nil")
 	}
@@ -340,7 +374,7 @@ func TestGeminiClient_GenerateStanzas_RequestError(t *testing.T) {
 		APIKey:  "key",
 		BaseURL: "%%invalid%%",
 	}
-	_, err := client.GenerateStanzas(context.Background(), "theme", 3)
+	_, _, err := client.GenerateStanzas(context.Background(), "theme", 3)
 	if err == nil {
 		t.Error("expected error for invalid URL character, got nil")
 	}
@@ -351,7 +385,7 @@ func TestGeminiClient_GenerateStanzas_DoError(t *testing.T) {
 		APIKey:  "key",
 		BaseURL: "http://localhost:54321", // unused port
 	}
-	_, err := client.GenerateStanzas(context.Background(), "theme", 3)
+	_, _, err := client.GenerateStanzas(context.Background(), "theme", 3)
 	if err == nil {
 		t.Error("expected error for connection refused, got nil")
 	}
@@ -360,7 +394,6 @@ func TestGeminiClient_GenerateStanzas_DoError(t *testing.T) {
 func TestGeminiClient_GenerateStanzas_ReadError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Length", "100") // promise bytes
-		// close connection immediately or write chunked error (we can just hijack or use close)
 	}))
 	defer server.Close()
 
@@ -369,7 +402,7 @@ func TestGeminiClient_GenerateStanzas_ReadError(t *testing.T) {
 		BaseURL: server.URL,
 		Client:  server.Client(),
 	}
-	_, err := client.GenerateStanzas(context.Background(), "theme", 3)
+	_, _, err := client.GenerateStanzas(context.Background(), "theme", 3)
 	if err == nil {
 		t.Error("expected error due to unexpected EOF on read, got nil")
 	}
@@ -388,7 +421,7 @@ func TestGeminiClient_GenerateStanzas_OuterJSONError(t *testing.T) {
 		BaseURL: server.URL,
 		Client:  server.Client(),
 	}
-	_, err := client.GenerateStanzas(context.Background(), "theme", 3)
+	_, _, err := client.GenerateStanzas(context.Background(), "theme", 3)
 	if err == nil {
 		t.Error("expected error for outer JSON parsing, got nil")
 	}
@@ -419,7 +452,7 @@ func TestGeminiClient_GenerateStanzas_EmptyParts(t *testing.T) {
 		BaseURL: server.URL,
 		Client:  server.Client(),
 	}
-	_, err := client.GenerateStanzas(context.Background(), "theme", 3)
+	_, _, err := client.GenerateStanzas(context.Background(), "theme", 3)
 	if err == nil {
 		t.Error("expected error for empty parts content, got nil")
 	}
@@ -430,7 +463,7 @@ func TestOpenAIClient_GenerateStanzas_RequestError(t *testing.T) {
 		APIKey:  "key",
 		BaseURL: "%%invalid%%",
 	}
-	_, err := client.GenerateStanzas(context.Background(), "theme", 3)
+	_, _, err := client.GenerateStanzas(context.Background(), "theme", 3)
 	if err == nil {
 		t.Error("expected error for invalid URL character, got nil")
 	}
@@ -441,7 +474,7 @@ func TestOpenAIClient_GenerateStanzas_DoError(t *testing.T) {
 		APIKey:  "key",
 		BaseURL: "http://localhost:54321", // unused port
 	}
-	_, err := client.GenerateStanzas(context.Background(), "theme", 3)
+	_, _, err := client.GenerateStanzas(context.Background(), "theme", 3)
 	if err == nil {
 		t.Error("expected error for connection refused, got nil")
 	}
@@ -458,7 +491,7 @@ func TestOpenAIClient_GenerateStanzas_ReadError(t *testing.T) {
 		BaseURL: server.URL,
 		Client:  server.Client(),
 	}
-	_, err := client.GenerateStanzas(context.Background(), "theme", 3)
+	_, _, err := client.GenerateStanzas(context.Background(), "theme", 3)
 	if err == nil {
 		t.Error("expected error due to unexpected EOF on read, got nil")
 	}
@@ -477,7 +510,7 @@ func TestOpenAIClient_GenerateStanzas_OuterJSONError(t *testing.T) {
 		BaseURL: server.URL,
 		Client:  server.Client(),
 	}
-	_, err := client.GenerateStanzas(context.Background(), "theme", 3)
+	_, _, err := client.GenerateStanzas(context.Background(), "theme", 3)
 	if err == nil {
 		t.Error("expected error for outer JSON parsing, got nil")
 	}

@@ -25,7 +25,7 @@ Implement the `assemble` command to calculate print constraints and generate a v
 
 ### Pipeline Core
 
-#### [NEW] [assemble.go](../internal/pipeline/assemble.go)
+#### [NEW] [assemble.go](../../internal/pipeline/assemble.go)
 - [x] Scan the book directory, load `manifest.json`, and count the total pages.
 - [x] Implement validation rules matching KDP specifications:
   - [x] If `--format hardcover` is requested, verify that the page count is at least 75 pages. If less, abort execution with a clear validation error.
@@ -35,7 +35,7 @@ Implement the `assemble` command to calculate print constraints and generate a v
 - [x] If a local rendering engine is configured, pass the updated manifest to compile the final PDF; otherwise, output the manifest layout parameters for external layout services (e.g. BookBolt, Inkfluence AI).
 
 
-#### [MODIFY] [main.go](../cmd/pithos/main.go)
+#### [MODIFY] [main.go](../../cmd/pithos/main.go)
 - [x] Wire up the `assemble` Cobra command execution to point to the new assemble function.
 
 ---

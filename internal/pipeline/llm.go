@@ -9,11 +9,13 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/borch-ai/powerword/pkg/telemetry"
 )
 
 // LLMClient defines the interface for generating stanzas using an LLM.
 type LLMClient interface {
-	GenerateStanzas(ctx context.Context, theme string, count int) ([]string, error)
+	GenerateStanzas(ctx context.Context, theme string, count int) ([]string, telemetry.TokenUsage, error)
 }
 
 // GeminiClient interacts with Google's Gemini API via REST.
@@ -60,6 +62,11 @@ type geminiResponse struct {
 			} `json:"parts"`
 		} `json:"content"`
 	} `json:"candidates"`
+	UsageMetadata *struct {
+		PromptTokenCount        int `json:"promptTokenCount"`
+		CandidatesTokenCount    int `json:"candidatesTokenCount"`
+		CachedContentTokenCount int `json:"cachedContentTokenCount"`
+	} `json:"usageMetadata"`
 }
 
 type openAIRequest struct {
@@ -83,12 +90,19 @@ type openAIResponse struct {
 			Content string `json:"content"`
 		} `json:"message"`
 	} `json:"choices"`
+	Usage *struct {
+		PromptTokens        int `json:"prompt_tokens"`
+		CompletionTokens    int `json:"completion_tokens"`
+		PromptTokensDetails *struct {
+			CachedTokens int `json:"cached_tokens"`
+		} `json:"prompt_tokens_details"`
+	} `json:"usage"`
 }
 
 // GenerateStanzas queries Gemini to generate parodic stanzas based on a theme.
-func (g *GeminiClient) GenerateStanzas(ctx context.Context, theme string, count int) ([]string, error) {
+func (g *GeminiClient) GenerateStanzas(ctx context.Context, theme string, count int) ([]string, telemetry.TokenUsage, error) {
 	if g.APIKey == "" {
-		return nil, errors.New("gemini api key is required")
+		return nil, telemetry.TokenUsage{}, errors.New("gemini api key is required")
 	}
 
 	httpClient := g.Client
@@ -126,59 +140,66 @@ func (g *GeminiClient) GenerateStanzas(ctx context.Context, theme string, count 
 
 	reqBytes, err := json.Marshal(reqPayload)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal gemini request: %w", err)
+		return nil, telemetry.TokenUsage{}, fmt.Errorf("failed to marshal gemini request: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(reqBytes))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create gemini request: %w", err)
+		return nil, telemetry.TokenUsage{}, fmt.Errorf("failed to create gemini request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("gemini api request failed: %w", err)
+		return nil, telemetry.TokenUsage{}, fmt.Errorf("gemini api request failed: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("gemini api returned status %d: %s", resp.StatusCode, string(bodyBytes))
+		return nil, telemetry.TokenUsage{}, fmt.Errorf("gemini api returned status %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read gemini response body: %w", err)
+		return nil, telemetry.TokenUsage{}, fmt.Errorf("failed to read gemini response body: %w", err)
 	}
 
 	var geminiResp geminiResponse
 	if err := json.Unmarshal(bodyBytes, &geminiResp); err != nil {
-		return nil, fmt.Errorf("failed to parse gemini response: %w", err)
+		return nil, telemetry.TokenUsage{}, fmt.Errorf("failed to parse gemini response: %w", err)
 	}
 
 	if len(geminiResp.Candidates) == 0 ||
 		len(geminiResp.Candidates[0].Content.Parts) == 0 {
-		return nil, errors.New("empty response content received from gemini")
+		return nil, telemetry.TokenUsage{}, errors.New("empty response content received from gemini")
 	}
 
 	rawJSONText := geminiResp.Candidates[0].Content.Parts[0].Text
 
 	var finalResp stanzasResponse
 	if err := json.Unmarshal([]byte(rawJSONText), &finalResp); err != nil {
-		return nil, fmt.Errorf("failed to parse stanzas json from gemini: %w (raw content: %s)", err, truncateString(rawJSONText, 200))
+		return nil, telemetry.TokenUsage{}, fmt.Errorf("failed to parse stanzas json from gemini: %w (raw content: %s)", err, truncateString(rawJSONText, 200))
 	}
 
 	if len(finalResp.Stanzas) != count {
-		return nil, fmt.Errorf("gemini generated %d stanzas, expected exactly %d", len(finalResp.Stanzas), count)
+		return nil, telemetry.TokenUsage{}, fmt.Errorf("gemini generated %d stanzas, expected exactly %d", len(finalResp.Stanzas), count)
 	}
 
-	return finalResp.Stanzas, nil
+	var usage telemetry.TokenUsage
+	if geminiResp.UsageMetadata != nil {
+		usage.InputTokens = geminiResp.UsageMetadata.PromptTokenCount
+		usage.OutputTokens = geminiResp.UsageMetadata.CandidatesTokenCount
+		usage.CachedTokens = geminiResp.UsageMetadata.CachedContentTokenCount
+	}
+
+	return finalResp.Stanzas, usage, nil
 }
 
 // GenerateStanzas queries OpenAI to generate parodic stanzas based on a theme.
-func (o *OpenAIClient) GenerateStanzas(ctx context.Context, theme string, count int) ([]string, error) {
+func (o *OpenAIClient) GenerateStanzas(ctx context.Context, theme string, count int) ([]string, telemetry.TokenUsage, error) {
 	if o.APIKey == "" {
-		return nil, errors.New("openai api key is required")
+		return nil, telemetry.TokenUsage{}, errors.New("openai api key is required")
 	}
 
 	httpClient := o.Client
@@ -216,53 +237,62 @@ func (o *OpenAIClient) GenerateStanzas(ctx context.Context, theme string, count 
 
 	reqBytes, err := json.Marshal(reqPayload)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal openai request: %w", err)
+		return nil, telemetry.TokenUsage{}, fmt.Errorf("failed to marshal openai request: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(reqBytes))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create openai request: %w", err)
+		return nil, telemetry.TokenUsage{}, fmt.Errorf("failed to create openai request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+o.APIKey)
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("openai api request failed: %w", err)
+		return nil, telemetry.TokenUsage{}, fmt.Errorf("openai api request failed: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("openai api returned status %d: %s", resp.StatusCode, string(bodyBytes))
+		return nil, telemetry.TokenUsage{}, fmt.Errorf("openai api returned status %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read openai response body: %w", err)
+		return nil, telemetry.TokenUsage{}, fmt.Errorf("failed to read openai response body: %w", err)
 	}
 
 	var openAIResp openAIResponse
 	if err := json.Unmarshal(bodyBytes, &openAIResp); err != nil {
-		return nil, fmt.Errorf("failed to parse openai response: %w", err)
+		return nil, telemetry.TokenUsage{}, fmt.Errorf("failed to parse openai response: %w", err)
 	}
 
 	if len(openAIResp.Choices) == 0 {
-		return nil, errors.New("empty response choices received from openai")
+		return nil, telemetry.TokenUsage{}, errors.New("empty response choices received from openai")
 	}
 
 	rawJSONText := openAIResp.Choices[0].Message.Content
 
 	var finalResp stanzasResponse
 	if err := json.Unmarshal([]byte(rawJSONText), &finalResp); err != nil {
-		return nil, fmt.Errorf("failed to parse stanzas json from openai: %w (raw content: %s)", err, truncateString(rawJSONText, 200))
+		return nil, telemetry.TokenUsage{}, fmt.Errorf("failed to parse stanzas json from openai: %w (raw content: %s)", err, truncateString(rawJSONText, 200))
 	}
 
 	if len(finalResp.Stanzas) != count {
-		return nil, fmt.Errorf("openai generated %d stanzas, expected exactly %d", len(finalResp.Stanzas), count)
+		return nil, telemetry.TokenUsage{}, fmt.Errorf("openai generated %d stanzas, expected exactly %d", len(finalResp.Stanzas), count)
 	}
 
-	return finalResp.Stanzas, nil
+	var usage telemetry.TokenUsage
+	if openAIResp.Usage != nil {
+		usage.InputTokens = openAIResp.Usage.PromptTokens
+		usage.OutputTokens = openAIResp.Usage.CompletionTokens
+		if openAIResp.Usage.PromptTokensDetails != nil {
+			usage.CachedTokens = openAIResp.Usage.PromptTokensDetails.CachedTokens
+		}
+	}
+
+	return finalResp.Stanzas, usage, nil
 }
 
 func truncateString(s string, maxLen int) string {
