@@ -19,24 +19,24 @@ Integrate Pithos with the new `pw-mcp-gdoc` Model Context Protocol (MCP) server.
 
 ### Configuration Layer
 
-#### [MODIFY] [config.go](file://../../internal/config/config.go)
+#### [MODIFY] [config.go](../../internal/config/config.go)
 - Add a new config property for the GDocs MCP plugin binary path, e.g. `config.Cfg.MCP.GDocPath`.
 
 ### State manifest
 
-#### [MODIFY] [manifest.go](file://../../internal/manifest/manifest.go)
-- Add ``GDocID string `json:"gdoc_id,omitempty"```` to the `Progress` struct in the manifest to persist the Google Doc reference between execution runs.
+#### [MODIFY] [manifest.go](../../internal/manifest/manifest.go)
+- Add `GDocID string` with json tag `json:"gdoc_id,omitempty"` to the `Progress` struct in the manifest to persist the Google Doc reference between execution runs.
 
 ### CLI Layer
 
-#### [MODIFY] [brew.go](file://../../cmd/pithos/brew.go)
+#### [MODIFY] [brew.go](../../cmd/pithos/brew.go)
 - Add the `--gdoc` boolean flag to the `brew` command.
 - Add an optional `--gdoc-id <id>` string flag to override or link to an existing document.
 - Pass `GDoc bool` and `GDocID string` to `pipeline.BrewOptions`.
 
 ### Pipeline Core
 
-#### [MODIFY] [brew.go](file://../../internal/pipeline/brew.go)
+#### [MODIFY] [brew.go](../../internal/pipeline/brew.go)
 - Add `GDoc bool` and `GDocID string` to `BrewOptions`.
 - Implement `exportManuscriptToGDoc(ctx context.Context, m *manifest.Manifest, opts BrewOptions) error`:
   - Connect to `pw-mcp-gdoc` client.

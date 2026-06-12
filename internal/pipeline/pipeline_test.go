@@ -1117,7 +1117,9 @@ func TestBrew_ReviewFlow_Export(t *testing.T) {
 
 	clientTransport, serverTransport := mcpsdk.NewInMemoryTransports()
 	dummySourceImage := filepath.Join(tmpDir, "source.png")
-	_ = os.WriteFile(dummySourceImage, []byte("fake"), 0600)
+	if writeErr := os.WriteFile(dummySourceImage, []byte("fake"), 0600); writeErr != nil {
+		t.Fatalf("failed to write dummy source image: %v", writeErr)
+	}
 	_, cleanupMCP := setupMockImageGenServer(t, ctx, serverTransport, dummySourceImage)
 	defer cleanupMCP()
 
@@ -1236,7 +1238,7 @@ func TestBrew_ReviewFlow_ImportAndSync(t *testing.T) {
 	}
 }
 
-func TestImportManuscriptFromMarkdown_Errors(t *testing.T) {
+func TestImportManuscriptFromMarkdown_Errors_Basic(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "pithos-import-errs-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
@@ -1259,7 +1261,9 @@ func TestImportManuscriptFromMarkdown_Errors(t *testing.T) {
 
 	// 2. Empty manuscript file
 	manuscriptPath := filepath.Join(tmpDir, "manuscript.md")
-	_ = os.WriteFile(manuscriptPath, []byte(""), 0600)
+	if writeErr := os.WriteFile(manuscriptPath, []byte(""), 0600); writeErr != nil {
+		t.Fatalf("failed to write empty manuscript: %v", writeErr)
+	}
 	_, err = importManuscriptFromMarkdown(tmpDir, m)
 	if err == nil {
 		t.Error("expected error for empty manuscript file, got nil")
@@ -1267,7 +1271,9 @@ func TestImportManuscriptFromMarkdown_Errors(t *testing.T) {
 
 	// 3. Invalid page header format
 	invalidHeaders := "<!-- review -->\n# Page A\nStanza A"
-	_ = os.WriteFile(manuscriptPath, []byte(invalidHeaders), 0600)
+	if writeErr := os.WriteFile(manuscriptPath, []byte(invalidHeaders), 0600); writeErr != nil {
+		t.Fatalf("failed to write invalid headers: %v", writeErr)
+	}
 	_, err = importManuscriptFromMarkdown(tmpDir, m)
 	if err == nil {
 		t.Error("expected error for invalid page index format, got nil")
@@ -1275,17 +1281,69 @@ func TestImportManuscriptFromMarkdown_Errors(t *testing.T) {
 
 	// 3b. Header with trailing extra text (e.g. # Page 1 (draft))
 	trailingHeaders := "<!-- review -->\n# Page 1 (draft)\nStanza 1"
-	_ = os.WriteFile(manuscriptPath, []byte(trailingHeaders), 0600)
+	if writeErr := os.WriteFile(manuscriptPath, []byte(trailingHeaders), 0600); writeErr != nil {
+		t.Fatalf("failed to write trailing headers: %v", writeErr)
+	}
 	_, err = importManuscriptFromMarkdown(tmpDir, m)
 	if err == nil {
 		t.Error("expected error for header with trailing text, got nil")
 	}
+}
+
+func TestImportManuscriptFromMarkdown_Errors_Validation(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos-import-errs-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	m := manifest.NewManifest(filepath.Join(tmpDir, "manifest.json"))
+	m.Progress.Pages = []manifest.PageState{
+		{PageIndex: 1, Text: "Stanza 1"},
+	}
+	manuscriptPath := filepath.Join(tmpDir, "manuscript.md")
 
 	// 4. Page index mismatch
 	mismatchPage := "# Page 5\nStanza 5"
-	_ = os.WriteFile(manuscriptPath, []byte(mismatchPage), 0600)
+	if writeErr := os.WriteFile(manuscriptPath, []byte(mismatchPage), 0600); writeErr != nil {
+		t.Fatalf("failed to write mismatch page: %v", writeErr)
+	}
 	_, err = importManuscriptFromMarkdown(tmpDir, m)
 	if err == nil {
 		t.Error("expected error for page index mismatch, got nil")
+	}
+
+	// 5. Non-positive page index
+	nonPositivePage := "<!-- review -->\n# Page 0\nStanza 0"
+	if writeErr := os.WriteFile(manuscriptPath, []byte(nonPositivePage), 0600); writeErr != nil {
+		t.Fatalf("failed to write non-positive page: %v", writeErr)
+	}
+	_, err = importManuscriptFromMarkdown(tmpDir, m)
+	if err == nil {
+		t.Error("expected error for non-positive page index, got nil")
+	}
+
+	// 6. Duplicate page index
+	m.Progress.Pages = []manifest.PageState{
+		{PageIndex: 1, Text: "Stanza 1"},
+		{PageIndex: 2, Text: "Stanza 2"},
+	}
+	duplicatePage := "<!-- review -->\n# Page 1\nStanza 1\n\n# Page 1\nStanza 1 copy"
+	if writeErr := os.WriteFile(manuscriptPath, []byte(duplicatePage), 0600); writeErr != nil {
+		t.Fatalf("failed to write duplicate page manuscript: %v", writeErr)
+	}
+	_, err = importManuscriptFromMarkdown(tmpDir, m)
+	if err == nil {
+		t.Error("expected error for duplicate page index, got nil")
+	}
+
+	// 7. Missing manifest page in manuscript (mismatch in stanza count)
+	missingPage := "<!-- review -->\n# Page 1\nStanza 1"
+	if writeErr := os.WriteFile(manuscriptPath, []byte(missingPage), 0600); writeErr != nil {
+		t.Fatalf("failed to write missing page manuscript: %v", writeErr)
+	}
+	_, err = importManuscriptFromMarkdown(tmpDir, m)
+	if err == nil {
+		t.Error("expected error for missing page stanza, got nil")
 	}
 }

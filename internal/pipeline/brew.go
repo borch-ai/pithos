@@ -412,7 +412,55 @@ func exportManuscriptToMarkdown(outputDir string, pages []manifest.PageState) er
 	return nil
 }
 
-//nolint:gocognit // import parsing loop requires checking multiple state variables (index, lines, headers)
+type parsedPage struct {
+	index int
+	text  string
+}
+
+func parseManuscriptLines(lines []string) ([]parsedPage, error) {
+	var parsedPages []parsedPage
+	var currentIdx int
+	var currentLines []string
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if !strings.HasPrefix(trimmed, "# Page ") {
+			if currentIdx > 0 {
+				currentLines = append(currentLines, line)
+			}
+			continue
+		}
+
+		if currentIdx > 0 {
+			parsedPages = append(parsedPages, parsedPage{
+				index: currentIdx,
+				text:  strings.TrimSpace(strings.Join(currentLines, "\n")),
+			})
+			currentLines = nil
+		}
+
+		header := strings.TrimPrefix(trimmed, "# Page ")
+		idx, err := strconv.Atoi(header)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse page header %q: %w", line, err)
+		}
+		if idx <= 0 {
+			return nil, fmt.Errorf("invalid page index %d in header %q: must be positive", idx, line)
+		}
+		currentIdx = idx
+	}
+
+	if currentIdx > 0 {
+		parsedPages = append(parsedPages, parsedPage{
+			index: currentIdx,
+			text:  strings.TrimSpace(strings.Join(currentLines, "\n")),
+		})
+	}
+
+	return parsedPages, nil
+}
+
+//nolint:gocognit // import verification requires matching multiple states (index, text modifications)
 func importManuscriptFromMarkdown(outputDir string, m *manifest.Manifest) (bool, error) {
 	manuscriptPath := filepath.Join(outputDir, "manuscript.md")
 	//nolint:gosec // manuscriptPath is constructed in local CLI environment
@@ -427,46 +475,25 @@ func importManuscriptFromMarkdown(outputDir string, m *manifest.Manifest) (bool,
 	content := strings.ReplaceAll(string(data), "\r\n", "\n")
 	lines := strings.Split(content, "\n")
 
-	type parsedPage struct {
-		index int
-		text  string
-	}
-	var parsedPages []parsedPage
-
-	var currentIdx int
-	var currentLines []string
-
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "# Page ") {
-			if currentIdx > 0 {
-				parsedPages = append(parsedPages, parsedPage{
-					index: currentIdx,
-					text:  strings.TrimSpace(strings.Join(currentLines, "\n")),
-				})
-				currentLines = nil
-			}
-
-			header := strings.TrimPrefix(trimmed, "# Page ")
-			idx, err := strconv.Atoi(header)
-			if err != nil {
-				return false, fmt.Errorf("failed to parse page header %q: %w", line, err)
-			}
-			currentIdx = idx
-		} else if currentIdx > 0 {
-			currentLines = append(currentLines, line)
-		}
-	}
-
-	if currentIdx > 0 {
-		parsedPages = append(parsedPages, parsedPage{
-			index: currentIdx,
-			text:  strings.TrimSpace(strings.Join(currentLines, "\n")),
-		})
+	parsedPages, err := parseManuscriptLines(lines)
+	if err != nil {
+		return false, err
 	}
 
 	if len(parsedPages) == 0 {
 		return false, fmt.Errorf("no stanzas parsed from manuscript.md")
+	}
+
+	seen := make(map[int]bool)
+	for _, pp := range parsedPages {
+		if seen[pp.index] {
+			return false, fmt.Errorf("duplicate page index %d in manuscript.md", pp.index)
+		}
+		seen[pp.index] = true
+	}
+
+	if len(seen) != len(m.Progress.Pages) {
+		return false, fmt.Errorf("manuscript.md contains %d stanzas, but manifest expects %d stanzas", len(seen), len(m.Progress.Pages))
 	}
 
 	changed := false
