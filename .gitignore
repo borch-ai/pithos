@@ -33,3 +33,5 @@ bin/
 # Secrets
 .env
 *.env
+
+SCRATCH
