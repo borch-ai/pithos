@@ -86,8 +86,8 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 	fmt.Print(tracker.FormatSummary(pricing))
 	if m.Telemetry.ImageGenerations > 0 {
 		fmt.Printf("- Image Generations: %d\n", m.Telemetry.ImageGenerations)
-		fmt.Printf("- Pipeline Total Cost: $%.5f\n", m.Telemetry.TotalCostUSD)
 	}
+	fmt.Printf("- Pipeline Total Cost: $%.5f\n", m.Telemetry.TotalCostUSD)
 	fmt.Println("----------------------------------------")
 
 	return nil

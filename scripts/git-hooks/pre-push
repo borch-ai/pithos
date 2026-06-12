@@ -20,7 +20,7 @@ for repl in $replaces; do
   fi
 
   # Check if the checkout step for this repo uses a token secret, github.token, or steps. outputs (to prevent permission errors in CI)
-  if ! grep -q -E 'token: \$\{\{\s*(secrets\.|github\.token|steps\.)' .github/workflows/ci.yml; then
+  if ! grep -A 5 "repository: borch-ai/$repo_name" .github/workflows/ci.yml | grep -q -E 'token: \$\{\{\s*(secrets\.|github\.token|steps\.)'; then
     echo "Error: .github/workflows/ci.yml checks out sibling repositories but does not configure a token (e.g. token: \${{ github.token }} or \${{ secrets.PAT_TOKEN }})."
     exit 1
   fi
