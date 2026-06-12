@@ -1,8 +1,7 @@
 package main
 
 import (
-	"fmt"
-
+	"github.com/borch-ai/pithos/internal/pipeline"
 	"github.com/spf13/cobra"
 )
 
@@ -13,8 +12,11 @@ var (
 var deployCmd = &cobra.Command{
 	Use:   "deploy",
 	Short: "Packages the final assets and metadata for KDP upload",
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Printf("deploy: Coming soon! (Input: %s)\n", deployInput)
+	RunE: func(cmd *cobra.Command, args []string) error {
+		opts := pipeline.DeployOptions{
+			InputDir: deployInput,
+		}
+		return pipeline.Deploy(cmd.Context(), opts)
 	},
 }
 
