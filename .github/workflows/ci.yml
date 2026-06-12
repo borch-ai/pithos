@@ -19,13 +19,20 @@ jobs:
         with:
           path: pithos
 
+      - name: Generate GitHub App Token
+        uses: actions/create-github-app-token@v1
+        id: app-token-lint
+        with:
+          app-id: ${{ secrets.CI_APP_ID }}
+          private-key: ${{ secrets.CI_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
       - name: Checkout Powerword
         uses: actions/checkout@v4
         with:
           repository: borch-ai/powerword
           path: powerword
-          token: ${{ github.token }}
-          ref: main
+          token: ${{ steps.app-token-lint.outputs.token }}
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -54,13 +61,20 @@ jobs:
         with:
           path: pithos
 
+      - name: Generate GitHub App Token
+        uses: actions/create-github-app-token@v1
+        id: app-token-test
+        with:
+          app-id: ${{ secrets.CI_APP_ID }}
+          private-key: ${{ secrets.CI_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
       - name: Checkout Powerword
         uses: actions/checkout@v4
         with:
           repository: borch-ai/powerword
           path: powerword
-          token: ${{ github.token }}
-          ref: main
+          token: ${{ steps.app-token-test.outputs.token }}
 
       - name: Set up Go
         uses: actions/setup-go@v5
