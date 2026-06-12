@@ -66,7 +66,7 @@ func setupMockImageGenServer(t *testing.T, ctx context.Context, serverTransport 
 		_ = json.Unmarshal(req.Params.Arguments, &args)
 
 		if strings.Contains(args.Prompt, "SLEEP") {
-			time.Sleep(50 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 		}
 
 		if strings.Contains(args.Prompt, "FAIL_GENERATION") {
@@ -1067,10 +1067,10 @@ func TestBrew_Concurrency(t *testing.T) {
 	}
 	elapsed := time.Since(start)
 
-	// Since we sleep for 50ms for each SLEEP prompt, if they run in parallel, it should take less than 150ms.
-	// If they ran sequentially, it would take at least 200ms.
-	if elapsed >= 150*time.Millisecond {
-		t.Errorf("expected parallel execution to take less than 150ms, took %v", elapsed)
+	// Since we sleep for 100ms for each SLEEP prompt, if they run in parallel, it should take less than 300ms.
+	// If they ran sequentially, it would take at least 400ms.
+	if elapsed >= 300*time.Millisecond {
+		t.Errorf("expected parallel execution to take less than 300ms, took %v", elapsed)
 	}
 
 	// Verify all pages completed

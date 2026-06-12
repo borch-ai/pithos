@@ -213,18 +213,20 @@ func generateIllustrations(ctx context.Context, m *manifest.Manifest, opts BrewO
 	var errsMu sync.Mutex
 	var workerErrors []error
 
+Loop:
 	for _, page := range pendingPages {
+		select {
+		case sem <- struct{}{}:
+		case <-ctx.Done():
+			errsMu.Lock()
+			workerErrors = append(workerErrors, ctx.Err())
+			errsMu.Unlock()
+			break Loop
+		}
+
 		wg.Add(1)
 		go func(p *manifest.PageState) {
 			defer wg.Done()
-			select {
-			case sem <- struct{}{}:
-			case <-ctx.Done():
-				errsMu.Lock()
-				workerErrors = append(workerErrors, ctx.Err())
-				errsMu.Unlock()
-				return
-			}
 			defer func() { <-sem }()
 
 			// 1. Update status to generating
