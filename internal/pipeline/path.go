@@ -6,6 +6,8 @@ import (
 )
 
 // resolveBookPath ensures that relative output/input directories are resolved under "books/".
+// It strips leading traversal components ("../", "..\\", etc.) using filepath.Separator so the
+// behaviour is correct on both Unix and Windows.
 func resolveBookPath(path string) string {
 	if path == "" {
 		return ""
@@ -13,16 +15,19 @@ func resolveBookPath(path string) string {
 	if filepath.IsAbs(path) {
 		return path
 	}
+	sep := string(filepath.Separator)
+	dotdotSep := ".." + sep
+	dotSep := "." + sep
 	cleaned := filepath.Clean(path)
 Loop:
 	for {
 		switch {
-		case strings.HasPrefix(cleaned, "../"):
-			cleaned = cleaned[3:]
+		case strings.HasPrefix(cleaned, dotdotSep):
+			cleaned = cleaned[len(dotdotSep):]
 		case cleaned == "..":
 			cleaned = "."
-		case strings.HasPrefix(cleaned, "./"):
-			cleaned = cleaned[2:]
+		case strings.HasPrefix(cleaned, dotSep):
+			cleaned = cleaned[len(dotSep):]
 		case cleaned == ".":
 			cleaned = ""
 			break Loop
@@ -34,7 +39,7 @@ Loop:
 	if cleaned == "" {
 		return "books"
 	}
-	parts := strings.Split(cleaned, string(filepath.Separator))
+	parts := strings.Split(cleaned, sep)
 	if len(parts) > 0 && parts[0] == "books" {
 		return cleaned
 	}

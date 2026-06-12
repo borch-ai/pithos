@@ -451,14 +451,19 @@ type parsedPage struct {
 }
 
 func parsePageBlock(index int, lines []string) (parsedPage, bool, error) {
-	hasSubheaders := false
+	textCount := 0
+	promptCount := 0
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		if trimmed == "## Text" || trimmed == "## Prompt" {
-			hasSubheaders = true
-			break
+		switch trimmed {
+		case "## Text":
+			textCount++
+		case "## Prompt":
+			promptCount++
 		}
 	}
+
+	hasSubheaders := textCount > 0 || promptCount > 0
 
 	if !hasSubheaders {
 		// Legacy format: everything under "# Page N" is the text
@@ -467,6 +472,15 @@ func parsePageBlock(index int, lines []string) (parsedPage, bool, error) {
 			text:          strings.TrimSpace(strings.Join(lines, "\n")),
 			hasSubheaders: false,
 		}, false, nil
+	}
+
+	// New format detected: validate that both headers are present exactly once to
+	// prevent silent data loss if the user accidentally deletes or duplicates a header.
+	if textCount != 1 || promptCount != 1 {
+		return parsedPage{}, false, fmt.Errorf(
+			"page %d: new-format page block must contain exactly one '## Text' and one '## Prompt' header, got %d and %d",
+			index, textCount, promptCount,
+		)
 	}
 
 	// New format: parse sections

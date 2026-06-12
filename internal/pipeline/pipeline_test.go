@@ -1354,6 +1354,19 @@ func TestImportManuscriptFromMarkdown_Errors_Validation(t *testing.T) {
 	if err == nil {
 		t.Error("expected error for missing page stanza, got nil")
 	}
+
+	// 8. Partial new-format subheaders (## Text present but ## Prompt missing)
+	m.Progress.Pages = []manifest.PageState{
+		{PageIndex: 1, Text: "Stanza 1"},
+	}
+	partialHeaders := "<!-- review -->\n# Page 1\n## Text\nSome text but no prompt header"
+	if writeErr := os.WriteFile(manuscriptPath, []byte(partialHeaders), 0600); writeErr != nil {
+		t.Fatalf("failed to write partial headers manuscript: %v", writeErr)
+	}
+	_, err = importManuscriptFromMarkdown(tmpDir, m)
+	if err == nil {
+		t.Error("expected error for page with ## Text but missing ## Prompt, got nil")
+	}
 }
 
 func TestImportManuscriptFromMarkdown_DoubleSubheaders(t *testing.T) {
