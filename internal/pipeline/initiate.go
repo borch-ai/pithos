@@ -23,6 +23,7 @@ func Initiate(opts InitiateOptions) (*manifest.Manifest, error) {
 	if opts.OutputDir == "" {
 		return nil, errors.New("output directory is required")
 	}
+	opts.OutputDir = resolveBookPath(opts.OutputDir)
 
 	// Default target page count to 15 if not specified or invalid
 	if opts.TargetPageCount <= 0 {

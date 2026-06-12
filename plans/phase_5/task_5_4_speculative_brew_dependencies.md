@@ -13,7 +13,7 @@ This plan outlines migrating dependency installation instructions from direct Go
 
 ### Setup and Documentation
 
-#### [MODIFY] [README.md](../../README.md)
+#### [MODIFY] [README.md](file://../../README.md)
 - Update "Getting Started" / "Prerequisites" section.
 - Replace Go installation commands with:
   ```bash
@@ -21,7 +21,7 @@ This plan outlines migrating dependency installation instructions from direct Go
   brew install pw-mcp-kdp-math pw-mcp-imagegen pw-mcp-seo pw-mcp-video
   ```
 
-#### [MODIFY] [Makefile](../../Makefile)
+#### [MODIFY] [Makefile](file://../../Makefile)
 - Add a setup check target `check-deps` that runs `command -v` on each of the required binaries and prints a helpful recommendation to run the `brew install` commands if any are missing.
 
 ---

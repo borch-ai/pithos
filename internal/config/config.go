@@ -117,7 +117,7 @@ func finalizeLoad(v *viper.Viper) (*Config, error) {
 
 	if len(rawConfig.Pricing) == 0 {
 		rawConfig.Pricing = map[string]telemetry.ModelPricing{
-			"gemini-1.5-flash": {Input: 0.075, Output: 0.30, Cached: 0.01875},
+			"gemini-2.5-flash": {Input: 0.075, Output: 0.30, Cached: 0.01875},
 			"gpt-4o":           {Input: 5.00, Output: 15.00},
 			"imagegen":         {Input: 40000.00},
 		}

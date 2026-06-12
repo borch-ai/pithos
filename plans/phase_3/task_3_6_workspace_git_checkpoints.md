@@ -16,14 +16,14 @@ Integrate a local, automated Git checkpoint system into Pithos workspace managem
 
 ### Pipeline Core
 
-#### [NEW] [git.go](../../internal/pipeline/git.go)
+#### [NEW] [git.go](file://../../internal/pipeline/git.go)
 - [ ] Implement utility helpers to run git commands (`git init`, `git add`, `git commit`) via `os/exec`.
 - [ ] Implement a `Checkpoint(dir string, message string)` function that automatically initializes a git repository if one doesn't exist, adds modified files, and commits them.
 
-#### [MODIFY] [manifest.go](../../internal/manifest/manifest.go)
+#### [MODIFY] [manifest.go](file://../../internal/manifest/manifest.go)
 - [ ] Trigger the Git checkpoint helper after successful manifest updates (such as saving new manuscript text or a new image asset).
 
-#### [NEW] [checkpoint.go](../../cmd/pithos/checkpoint.go)
+#### [NEW] [checkpoint.go](file://../../cmd/pithos/checkpoint.go)
 - [ ] Add a `pithos checkpoint` subcommand to show history and restore the directory to a previous git commit or step.
 
 ---

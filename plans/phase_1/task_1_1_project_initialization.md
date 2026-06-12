@@ -17,21 +17,21 @@ None. This was the foundational scaffolding phase.
 
 ### Repository Scaffolding
 
-#### [NEW] [Makefile](../../Makefile)
+#### [NEW] [Makefile](file://../../Makefile)
 - Define standard Go build targets, `test` execution with race detection, `lint` with golangci-lint, and `check-coverage` ensuring 91% coverage.
 
-#### [NEW] [go.mod](../../go.mod)
+#### [NEW] [go.mod](file://../../go.mod)
 - Initialize the Go module `github.com/borch-ai/pithos` targeting Go 1.26+.
 
 ### Foundational Documentation
 
-#### [NEW] [VISION.md](../../VISION.md)
+#### [NEW] [VISION.md](file://../../VISION.md)
 - Outline core philosophy, minimalist publishing pipeline architecture, integration boundaries with Powerword and Lamplighter.
 
-#### [NEW] [ROADMAP.md](../../ROADMAP.md)
+#### [NEW] [ROADMAP.md](file://../../ROADMAP.md)
 - Detail implementation phases, tasks, checklist items, and links to phase implementation plans.
 
-#### [NEW] [GEMINI.md](../../GEMINI.md)
+#### [NEW] [GEMINI.md](file://../../GEMINI.md)
 - Define the development guide, architectural principles, coding guidelines, and pull request/merge review workflows.
 
 ---
