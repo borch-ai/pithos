@@ -43,11 +43,29 @@ type Progress struct {
 	Pages               []PageState `json:"pages"`
 }
 
+// LayoutGuide represents a logical bounding box in the cover coordinate system.
+type LayoutGuide struct {
+	Label        string  `json:"label"`
+	XInches      float64 `json:"x_inches"`
+	YInches      float64 `json:"y_inches"`
+	WidthInches  float64 `json:"width_inches"`
+	HeightInches float64 `json:"height_inches"`
+}
+
 // KDPLayout defines the spacing and dimensional attributes for Amazon KDP.
 type KDPLayout struct {
-	SpineWidth float64 `json:"spine_width"`
-	MarginSize float64 `json:"margin_size"`
-	Bleed      float64 `json:"bleed"`
+	SpineWidth           float64       `json:"spine_width"`
+	MarginSize           float64       `json:"margin_size"`
+	Bleed                float64       `json:"bleed"`
+	CoverWidthInches     float64       `json:"cover_width_inches,omitempty"`
+	CoverHeightInches    float64       `json:"cover_height_inches,omitempty"`
+	CoverWidthPoints     float64       `json:"cover_width_points,omitempty"`
+	CoverHeightPoints    float64       `json:"cover_height_points,omitempty"`
+	HingeWidthInches     float64       `json:"hinge_width_inches,omitempty"`
+	WrapWidthInches      float64       `json:"wrap_width_inches,omitempty"`
+	OverhangHeightInches float64       `json:"overhang_height_inches,omitempty"`
+	SpineTextEligible    bool          `json:"spine_text_eligible"`
+	Guides               []LayoutGuide `json:"guides,omitempty"`
 }
 
 // Manifest is the root structure serving as the checkpoint state file.
