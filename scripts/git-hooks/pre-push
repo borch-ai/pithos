@@ -19,9 +19,9 @@ for repl in $replaces; do
     exit 1
   fi
 
-  # Check if the checkout step for this repo uses a token secret (to prevent permission errors in CI)
-  if ! grep -q "token: \${{ secrets\." .github/workflows/ci.yml; then
-    echo "Error: .github/workflows/ci.yml checks out sibling repositories but does not configure a token secret (e.g. token: \${{ secrets.PAT_TOKEN }})."
+  # Check if the checkout step for this repo uses a token secret or github.token (to prevent permission errors in CI)
+  if ! grep -q -E 'token: \$\{\{\s*(secrets\.|github\.token)' .github/workflows/ci.yml; then
+    echo "Error: .github/workflows/ci.yml checks out sibling repositories but does not configure a token (e.g. token: \${{ github.token }} or \${{ secrets.PAT_TOKEN }})."
     exit 1
   fi
 done
