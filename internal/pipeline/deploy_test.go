@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"errors"
 	"testing"
 )
 
@@ -10,10 +11,20 @@ func TestDeployStub(t *testing.T) {
 		InputDir: "test",
 	}
 	err := Deploy(context.Background(), opts)
-	if err == nil {
-		t.Fatal("expected error from Deploy stub, got nil")
+	if !errors.Is(err, ErrDeployNotImplemented) {
+		t.Fatalf("expected ErrDeployNotImplemented, got %v", err)
 	}
-	if err.Error() != "deploy engine is not implemented yet" {
-		t.Fatalf("expected 'deploy engine is not implemented yet', got %q", err.Error())
+}
+
+func TestDeployValidation(t *testing.T) {
+	opts := DeployOptions{
+		InputDir: "",
+	}
+	err := Deploy(context.Background(), opts)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if err.Error() != "input directory is required" {
+		t.Fatalf("expected 'input directory is required', got %q", err.Error())
 	}
 }

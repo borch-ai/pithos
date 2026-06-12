@@ -29,8 +29,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: borch-ai/powerword
-          path: ../powerword
+          path: powerword
           token: ${{ steps.app-token.outputs.token }}
+
+      - name: Create Powerword Sibling Symlink
+        run: ln -s "$GITHUB_WORKSPACE/powerword" "$GITHUB_WORKSPACE/../powerword"
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -39,7 +42,7 @@ jobs:
           cache: true
           cache-dependency-path: |
             go.sum
-            ../powerword/go.sum
+            powerword/go.sum
 
       - name: Run Linter
         uses: golangci/golangci-lint-action@v7
