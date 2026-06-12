@@ -1,6 +1,9 @@
 # plan: Task 3.3: Token Telemetry & Cost Accounting
 
-**Status:** Open (Issue #[TBD])
+**Status:** Completed
+**Go Version:** 1.26.4
+**Date Completed:** 2026-06-12
+**Unit Test Coverage:** 92.30% (meets strict >91% threshold requirement)
 
 Implement tracking and logging of token counts and API consumption costs across the Pithos generation pipeline. Metrics should be stored in the book manifest so developers and monitors can track usage and budget.
 
