@@ -12,7 +12,7 @@ None. This is a clean internal refactoring to unify the LLM layer using the shar
 
 ### Pipeline Abstraction
 
-#### [MODIFY] [llm.go](../../internal/pipeline/llm.go)
+#### [MODIFY] [llm.go](file://../../internal/pipeline/llm.go)
 - Import `github.com/borch-ai/powerword/pkg/llm`.
 - Define an adapter structure `PowerwordClientAdapter` that implements Pithos's local `LLMClient` interface:
   ```go
@@ -21,16 +21,20 @@ None. This is a clean internal refactoring to unify the LLM layer using the shar
       modelName string
   }
   ```
-- Implement `GenerateStanzas` on the adapter to:
-  * Build the user message with the parody generation prompt.
-  * Call `client.Generate(ctx, messages, nil, llm.WithResponseMIMEType("application/json"))`.
-  * Parse the returned JSON response text into stanzas.
-  * Extract and return `telemetry.TokenUsage` from the response `msg.Usage`.
+- Implement `GenerateVisualGuides` and `GenerateStanzas` (matching the new signatures from Task 5.11) on the adapter to:
+  * For `GenerateVisualGuides`:
+    * Query the Powerword client with structured output schema `visualGuidesResponse` containing `style_seed` and `character_profile`.
+    * Unmarshal the response, register token usage, and return `style_seed` and `character_profile` strings.
+  * For `GenerateStanzas`:
+    * Pass the theme, count, `style`, and `characterProfile` as prompt context.
+    * Enforce structured schema constraints output (`stanzasResponse` containing `stanzas` and `illustration_prompts`).
+    * Call `client.Generate(ctx, messages, nil, llm.WithResponseSchema(stanzasResponse{}))`.
+    * Return stanzas, prompts, token usage, and error.
 - Modify client factories to return the adapter wrapping either Gemini or OpenAI clients.
 
 ### Pipeline Runner
 
-#### [MODIFY] [brew.go](../../internal/pipeline/brew.go)
+#### [MODIFY] [brew.go](file://../../internal/pipeline/brew.go)
 - Remove manual type assertions of LLM client concrete types and use the model name returned by the client adapter or configuration directly.
 
 ---

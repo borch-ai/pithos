@@ -197,11 +197,17 @@ func buildImageGenBinary(t *testing.T, tempDir string) string {
 	t.Helper()
 	binaryPath := filepath.Join(tempDir, "pw-mcp-imagegen")
 
-	siblingPath := "../powerword/cmd/pw-mcp-imagegen"
+	siblingPath := "../../../powerword/cmd/pw-mcp-imagegen"
+	//nolint:nestif // test binary compilation logic can have nested setup branches
 	if _, statErr := os.Stat(siblingPath); statErr == nil {
 		t.Logf("Building pw-mcp-imagegen from sibling repository: %s", siblingPath)
+		absBinary, err := filepath.Abs(binaryPath)
+		if err != nil {
+			t.Fatalf("failed to get absolute binary path: %v", err)
+		}
 		//nolint:gosec // siblingPath and binaryPath are constructed inside test dir
-		cmd := exec.CommandContext(context.Background(), "go", "build", "-o", binaryPath, siblingPath)
+		cmd := exec.CommandContext(context.Background(), "go", "build", "-o", absBinary, ".")
+		cmd.Dir = siblingPath
 		if buildErr := cmd.Run(); buildErr != nil {
 			t.Fatalf("failed to build pw-mcp-imagegen: %v", buildErr)
 		}

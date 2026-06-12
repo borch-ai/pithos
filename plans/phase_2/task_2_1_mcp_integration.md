@@ -16,14 +16,14 @@ Integrate the `modelcontextprotocol/go-sdk` into Pithos to allow the pipeline to
 
 ### MCP Subsystem
 
-#### [NEW] [client.go](../../internal/mcp/client.go)
+#### [NEW] [client.go](file://../../internal/mcp/client.go)
 - [x] Implement a struct `PluginClient` that manages a child process (e.g., executing `pw-mcp-imagegen`).
 - [x] Implement lifecycle methods: `Start()`, `Stop()`.
 - [x] Implement a method `CallTool(toolName string, args map[string]interface{}) (string, error)` that wraps the SDK's internal JSON-RPC calls.
 
 ### Configuration Integration
 
-#### [MODIFY] [client.go](../../internal/mcp/client.go)
+#### [MODIFY] [client.go](file://../../internal/mcp/client.go)
 - [x] Connect the plugin process starter to read the binary paths configured in `viper` (e.g., `mcp.imagegen_path`, `mcp.kdp_math_path`).
 - [x] Fallback to searching the system PATH if no explicit configuration path is found in the `.pithos.toml` file.
 

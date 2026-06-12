@@ -15,13 +15,13 @@ Integrate with a standalone `pw-mcp-epub` Powerword MCP plugin to export the par
 
 ### Dependencies & Configuration
 
-#### [MODIFY] [config.go](../../internal/config/config.go)
+#### [MODIFY] [config.go](file://../../internal/config/config.go)
 - [ ] Add `EPUBPath` to `MCPConfig` structure to manage the location of the `pw-mcp-epub` binary.
 - [ ] Bind default path in Viper config initialization.
 
 ### Pipeline Integration
 
-#### [MODIFY] [deploy.go](../../internal/pipeline/deploy.go)
+#### [MODIFY] [deploy.go](file://../../internal/pipeline/deploy.go)
 - [ ] Update `Deploy` to launch the `pw-mcp-epub` MCP client.
 - [ ] Call the `epub_export` tool on the MCP client to package the stanzas and page illustrations into a valid EPUB document.
 - [ ] Register the EPUB path under the key `epub` in the manifest asset registry.

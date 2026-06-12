@@ -19,6 +19,9 @@ import (
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// ErrReviewPause is returned when the pipeline pauses for local manuscript review.
+var ErrReviewPause = errors.New("review mode active")
+
 // BrewOptions holds configuration parameters for the brew command.
 type BrewOptions struct {
 	OutputDir    string
@@ -38,6 +41,7 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 	if opts.OutputDir == "" {
 		return errors.New("output directory is required")
 	}
+	opts.OutputDir = resolveBookPath(opts.OutputDir)
 
 	manifestPath := filepath.Join(opts.OutputDir, "manifest.json")
 	m, err := manifest.LoadManifest(manifestPath)
@@ -134,7 +138,7 @@ func handleReviewCheckpoint(opts BrewOptions, m *manifest.Manifest, manuscriptPa
 			return exportErr
 		}
 	}
-	return fmt.Errorf("review mode active: manuscript is available at %s. Edit the file, then run brew without --review to generate illustrations", manuscriptPath)
+	return fmt.Errorf("%w: manuscript is available at %s. Edit the file, then run brew without --review to generate illustrations", ErrReviewPause, manuscriptPath)
 }
 
 //nolint:funlen // Manuscript generation pipeline step handles LLM client setup, text generation, and recording telemetry
@@ -166,7 +170,7 @@ func generateManuscript(ctx context.Context, m *manifest.Manifest, opts BrewOpti
 		return errors.New("neither Gemini nor OpenAI API key is configured")
 	}
 
-	stanzas, tokenUsage, err := llmClient.GenerateStanzas(ctx, theme, pageCount)
+	stanzas, prompts, tokenUsage, err := llmClient.GenerateStanzas(ctx, theme, pageCount)
 	if err != nil {
 		return fmt.Errorf("manuscript text generation failed: %w", err)
 	}
@@ -177,10 +181,15 @@ func generateManuscript(ctx context.Context, m *manifest.Manifest, opts BrewOpti
 
 	m.Progress.Pages = make([]manifest.PageState, len(stanzas))
 	for i, text := range stanzas {
+		promptVal := ""
+		if i < len(prompts) {
+			promptVal = prompts[i]
+		}
 		m.Progress.Pages[i] = manifest.PageState{
-			PageIndex: i + 1,
-			Status:    manifest.StatusPending,
-			Text:      text,
+			PageIndex:          i + 1,
+			Status:             manifest.StatusPending,
+			Text:               text,
+			IllustrationPrompt: promptVal,
 		}
 	}
 	m.Progress.ManuscriptGenerated = true
@@ -189,7 +198,7 @@ func generateManuscript(ctx context.Context, m *manifest.Manifest, opts BrewOpti
 	var modelName string
 	switch llmClient.(type) {
 	case *GeminiClient:
-		modelName = "gemini-1.5-flash"
+		modelName = "gemini-2.5-flash"
 	case *OpenAIClient:
 		modelName = "gpt-4o"
 	default:
@@ -279,7 +288,11 @@ Loop:
 				return
 			}
 
-			imgPath, err := generateSingleImage(ctx, mcpClient, p.PageIndex, p.Text, styleID, opts.OutputDir)
+			prompt := p.IllustrationPrompt
+			if prompt == "" {
+				prompt = p.Text
+			}
+			imgPath, err := generateSingleImage(ctx, mcpClient, p.PageIndex, prompt, styleID, opts.OutputDir)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error generating image for page %d: %v\n", p.PageIndex, err)
 				// Revert to pending
@@ -410,7 +423,10 @@ func exportManuscriptToMarkdown(outputDir string, pages []manifest.PageState) er
 
 	for _, p := range pages {
 		fmt.Fprintf(&sb, "# Page %d\n", p.PageIndex)
-		sb.WriteString(p.Text)
+		sb.WriteString("## Text\n")
+		sb.WriteString(strings.TrimSpace(p.Text))
+		sb.WriteString("\n\n## Prompt\n")
+		sb.WriteString(strings.TrimSpace(p.IllustrationPrompt))
 		sb.WriteString("\n\n")
 	}
 
@@ -426,14 +442,66 @@ func exportManuscriptToMarkdown(outputDir string, pages []manifest.PageState) er
 }
 
 type parsedPage struct {
-	index int
-	text  string
+	index  int
+	text   string
+	prompt string
 }
 
-func parseManuscriptLines(lines []string) ([]parsedPage, error) {
+func parsePageBlock(index int, lines []string) (parsedPage, bool, error) {
+	hasSubheaders := false
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "## Text" || trimmed == "## Prompt" {
+			hasSubheaders = true
+			break
+		}
+	}
+
+	if !hasSubheaders {
+		// Legacy format: everything under "# Page N" is the text
+		return parsedPage{
+			index: index,
+			text:  strings.TrimSpace(strings.Join(lines, "\n")),
+		}, false, nil
+	}
+
+	// New format: parse sections
+	var textLines []string
+	var promptLines []string
+	currentSection := 0 // 0 = none, 1 = text, 2 = prompt
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "## Text" {
+			currentSection = 1
+			continue
+		}
+		if trimmed == "## Prompt" {
+			currentSection = 2
+			continue
+		}
+
+		switch currentSection {
+		case 1:
+			textLines = append(textLines, line)
+		case 2:
+			promptLines = append(promptLines, line)
+		}
+	}
+
+	return parsedPage{
+		index:  index,
+		text:   strings.TrimSpace(strings.Join(textLines, "\n")),
+		prompt: strings.TrimSpace(strings.Join(promptLines, "\n")),
+	}, true, nil
+}
+
+//nolint:gocognit // parsing manuscript lines requires multi-pass state machine for blocks and subheaders
+func parseManuscriptLines(lines []string) ([]parsedPage, bool, error) {
 	var parsedPages []parsedPage
 	var currentIdx int
 	var currentLines []string
+	hasSubheadersAny := false
 
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
@@ -445,32 +513,40 @@ func parseManuscriptLines(lines []string) ([]parsedPage, error) {
 		}
 
 		if currentIdx > 0 {
-			parsedPages = append(parsedPages, parsedPage{
-				index: currentIdx,
-				text:  strings.TrimSpace(strings.Join(currentLines, "\n")),
-			})
+			pPage, hasSubs, err := parsePageBlock(currentIdx, currentLines)
+			if err != nil {
+				return nil, false, err
+			}
+			if hasSubs {
+				hasSubheadersAny = true
+			}
+			parsedPages = append(parsedPages, pPage)
 			currentLines = nil
 		}
 
 		header := strings.TrimPrefix(trimmed, "# Page ")
 		idx, err := strconv.Atoi(header)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse page header %q: %w", line, err)
+			return nil, false, fmt.Errorf("failed to parse page header %q: %w", line, err)
 		}
 		if idx <= 0 {
-			return nil, fmt.Errorf("invalid page index %d in header %q: must be positive", idx, line)
+			return nil, false, fmt.Errorf("invalid page index %d in header %q: must be positive", idx, line)
 		}
 		currentIdx = idx
 	}
 
 	if currentIdx > 0 {
-		parsedPages = append(parsedPages, parsedPage{
-			index: currentIdx,
-			text:  strings.TrimSpace(strings.Join(currentLines, "\n")),
-		})
+		pPage, hasSubs, err := parsePageBlock(currentIdx, currentLines)
+		if err != nil {
+			return nil, false, err
+		}
+		if hasSubs {
+			hasSubheadersAny = true
+		}
+		parsedPages = append(parsedPages, pPage)
 	}
 
-	return parsedPages, nil
+	return parsedPages, hasSubheadersAny, nil
 }
 
 //nolint:gocognit // import verification requires matching multiple states (index, text modifications)
@@ -488,7 +564,7 @@ func importManuscriptFromMarkdown(outputDir string, m *manifest.Manifest) (bool,
 	content := strings.ReplaceAll(string(data), "\r\n", "\n")
 	lines := strings.Split(content, "\n")
 
-	parsedPages, err := parseManuscriptLines(lines)
+	parsedPages, hasSubheaders, err := parseManuscriptLines(lines)
 	if err != nil {
 		return false, err
 	}
@@ -515,8 +591,14 @@ func importManuscriptFromMarkdown(outputDir string, m *manifest.Manifest) (bool,
 		for i, page := range m.Progress.Pages {
 			if page.PageIndex == pp.index {
 				found = true
-				if page.Text != pp.text {
+				textChanged := page.Text != pp.text
+				promptChanged := hasSubheaders && page.IllustrationPrompt != pp.prompt
+
+				if textChanged || promptChanged {
 					m.Progress.Pages[i].Text = pp.text
+					if hasSubheaders {
+						m.Progress.Pages[i].IllustrationPrompt = pp.prompt
+					}
 					m.Progress.Pages[i].ImagePath = ""
 					m.Progress.Pages[i].Status = manifest.StatusPending
 					changed = true

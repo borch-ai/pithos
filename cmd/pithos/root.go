@@ -8,9 +8,10 @@ import (
 var (
 	cfgFile string
 	rootCmd = &cobra.Command{
-		Use:   "pithos",
-		Short: "Pithos is a minimalist publishing pipeline",
-		Long:  `pithos is a Golang-powered automation pipeline designed for the rapid, low-lift production of niche-market "dark" children's book parodies.`,
+		Use:          "pithos",
+		Short:        "Pithos is a minimalist publishing pipeline",
+		Long:         `pithos is a Golang-powered automation pipeline designed for the rapid, low-lift production of niche-market "dark" children's book parodies.`,
+		SilenceUsage: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			_, err := config.LoadConfig(cfgFile)
 			return err

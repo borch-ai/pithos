@@ -41,6 +41,7 @@ func Assemble(ctx context.Context, opts AssembleOptions) (*manifest.Manifest, er
 	if opts.InputDir == "" {
 		return nil, errors.New("input directory is required")
 	}
+	opts.InputDir = resolveBookPath(opts.InputDir)
 
 	manifestPath := filepath.Join(opts.InputDir, "manifest.json")
 	m, err := manifest.LoadManifest(manifestPath)

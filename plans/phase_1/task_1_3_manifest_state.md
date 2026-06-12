@@ -16,7 +16,7 @@ Define the structured schema of `manifest.json` (or `state.json`) which serves a
 
 ### State Management Subsystem
 
-#### [NEW] [manifest.go](../../internal/manifest/manifest.go)
+#### [NEW] [manifest.go](file://../../internal/manifest/manifest.go)
 - [x] Define Go structures mirroring the `manifest.json` file structure:
   - [x] **Book Properties:** theme, style, format, target page count.
   - [x] **Generation Progress Checkpoints:** manuscript text generated, cover image generated, page-by-page progress status (`pending`, `generating_images`, `awaiting_approval`, `completed`).

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/borch-ai/pithos/internal/pipeline"
 	"github.com/spf13/cobra"
@@ -26,11 +27,11 @@ var initiateCmd = &cobra.Command{
 			Format:          initiateFormat,
 			TargetPageCount: initiatePages,
 		}
-		_, err := pipeline.Initiate(opts)
+		m, err := pipeline.Initiate(opts)
 		if err != nil {
 			return err
 		}
-		fmt.Printf("Successfully initiated book structure in %s\n", initiateOutput)
+		fmt.Printf("Successfully initiated book structure in %s\n", filepath.Dir(m.FilePath()))
 		return nil
 	},
 }

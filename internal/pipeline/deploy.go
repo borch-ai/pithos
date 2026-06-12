@@ -18,5 +18,6 @@ func Deploy(_ context.Context, opts DeployOptions) error {
 	if opts.InputDir == "" {
 		return errors.New("input directory is required")
 	}
+	opts.InputDir = resolveBookPath(opts.InputDir)
 	return ErrDeployNotImplemented
 }

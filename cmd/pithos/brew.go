@@ -1,6 +1,9 @@
 package main
 
 import (
+	"errors"
+	"fmt"
+
 	"github.com/borch-ai/pithos/internal/pipeline"
 	"github.com/spf13/cobra"
 )
@@ -24,7 +27,15 @@ var brewCmd = &cobra.Command{
 			Concurrency: brewConcurrency,
 			Review:      brewReview,
 		}
-		return pipeline.Brew(cmd.Context(), opts)
+		err := pipeline.Brew(cmd.Context(), opts)
+		if err != nil {
+			if errors.Is(err, pipeline.ErrReviewPause) {
+				fmt.Println(err.Error())
+				return nil
+			}
+			return err
+		}
+		return nil
 	},
 }
 

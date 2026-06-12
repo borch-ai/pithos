@@ -16,13 +16,13 @@ Integrate with a standalone `pw-mcp-typst` Powerword MCP plugin to compile the b
 
 ### Dependencies & Configuration
 
-#### [MODIFY] [config.go](../../internal/config/config.go)
+#### [MODIFY] [config.go](file://../../internal/config/config.go)
 - [ ] Add `TypstPath` to `MCPConfig` structure to manage the location of the `pw-mcp-typst` binary.
 - [ ] Bind default path in Viper config initialization.
 
 ### Pipeline Integration
 
-#### [MODIFY] [assemble.go](../../internal/pipeline/assemble.go)
+#### [MODIFY] [assemble.go](file://../../internal/pipeline/assemble.go)
 - [ ] Update `Assemble` to launch the `pw-mcp-typst` MCP client.
 - [ ] Compile the page illustrations and stanzas into a custom Typst layout template dynamically.
 - [ ] Call the `typst_compile` tool on the MCP client to generate the high-res print-ready PDF.

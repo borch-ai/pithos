@@ -15,12 +15,12 @@ Support selective regeneration of specific pages or stanzas in the `brew` comman
 
 ### Pipeline Core
 
-#### [MODIFY] [brew.go](../../internal/pipeline/brew.go)
+#### [MODIFY] [brew.go](file://../../internal/pipeline/brew.go)
 - [ ] Add support for target page filtering in `Brew` options.
 - [ ] Modify `generateIllustrations` and `generateManuscript` to accept a slice of page numbers to regenerate.
 - [ ] Reset the state of only the specified pages (marking them `pending` / empty image paths) and execute the generation loop specifically for those pages.
 
-#### [MODIFY] [brew.go](../../cmd/pithos/brew.go)
+#### [MODIFY] [brew.go](file://../../cmd/pithos/brew.go)
 - [ ] Add the `--pages` string flag (e.g. `--pages 4,7`) to the `brew` command to specify page overrides.
 
 ---

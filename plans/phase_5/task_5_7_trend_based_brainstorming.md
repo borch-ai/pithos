@@ -15,18 +15,18 @@ Implement the `brainstorm` command and connect to the external `pw-mcp-trends` P
 
 ### Dependencies & Configuration
 
-#### [MODIFY] [config.go](../../internal/config/config.go)
+#### [MODIFY] [config.go](file://../../internal/config/config.go)
 - [ ] Add `TrendsPath` to `MCPConfig` structure to manage the location of the `pw-mcp-trends` binary.
 - [ ] Bind default path in Viper config initialization.
 
 ### Pipeline Integration
 
-#### [NEW] [brainstorm.go](../../internal/pipeline/brainstorm.go)
+#### [NEW] [brainstorm.go](file://../../internal/pipeline/brainstorm.go)
 - [ ] Implement `Brainstorm` function that connects to the `pw-mcp-trends` MCP server.
 - [ ] Query the server for trending news parodies, returning a list of ideas (title, theme, style suggestion).
 - [ ] Render the output cleanly in the console.
 
-#### [NEW] [brainstorm.go](../../cmd/pithos/brainstorm.go)
+#### [NEW] [brainstorm.go](file://../../cmd/pithos/brainstorm.go)
 - [ ] Add the `brainstorm` CLI subcommand to Cobra.
 
 ---

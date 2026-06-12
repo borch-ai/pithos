@@ -23,10 +23,11 @@ const (
 
 // PageState holds the progress details of a single page/stanza.
 type PageState struct {
-	PageIndex int        `json:"page_index"`
-	Status    PageStatus `json:"status"`
-	ImagePath string     `json:"image_path,omitempty"`
-	Text      string     `json:"text,omitempty"`
+	PageIndex          int        `json:"page_index"`
+	Status             PageStatus `json:"status"`
+	ImagePath          string     `json:"image_path,omitempty"`
+	Text               string     `json:"text,omitempty"`
+	IllustrationPrompt string     `json:"illustration_prompt,omitempty"`
 }
 
 // BookProperties holds high-level configurations of the book.

@@ -19,14 +19,14 @@ Implement concurrent image generation workers in the Pithos brew engine, allowin
 
 ### Pipeline Core
 
-#### [MODIFY] [brew.go](../../internal/pipeline/brew.go)
+#### [MODIFY] [brew.go](file://../../internal/pipeline/brew.go)
 - [x] Introduce a concurrency worker pool in `generateIllustrations`.
 - [x] Add a new CLI flag/config parameter `Concurrency` (defaulting to `1` or `2`).
 - [x] Launch worker goroutines using a semaphore channel to process pending pages concurrently.
 - [x] Protect access to the MCP client (if stateful) or synchronize the `CallTool` calls if the server process handles concurrent RPC requests over a single stdio stream.
 - [x] Handle partial failures gracefully: if a worker fails to generate an image for a specific page, log the error but allow other workers to complete, updating the manifest file atomically for all successful pages.
 
-#### [MODIFY] [brew.go](../../cmd/pithos/brew.go)
+#### [MODIFY] [brew.go](file://../../cmd/pithos/brew.go)
 - [x] Add a `--concurrency` flag to the `brew` command.
 
 ---
