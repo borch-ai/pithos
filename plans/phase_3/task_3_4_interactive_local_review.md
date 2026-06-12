@@ -3,7 +3,7 @@
 **Status:** Completed
 **Go Version:** 1.26.4
 **Date Completed:** 2026-06-12
-**Unit Test Coverage:** 91.80% (meets strict >91% threshold requirement)
+**Unit Test Coverage:** 91.90% (meets strict >91% threshold requirement)
 
 Instead of a console/terminal input loop, implement a local Markdown-based review workflow. When running `pithos brew` with a `--review` flag, Pithos will export the generated manuscript to a local `manuscript.md` file in the workspace directory and pause execution. The user can then edit the stanzas at their own pace using any text editor, and run `pithos brew` again to import changes, reset modified page states, and proceed to illustration generation.
 
