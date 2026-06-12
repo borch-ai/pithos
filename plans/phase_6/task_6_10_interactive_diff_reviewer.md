@@ -34,7 +34,7 @@ Implement an interactive revision review loop for the terminal. When the Editori
 - Implement `ReviewDiffs(originalText, proposedText string) (acceptedText string, changed bool, err error)`:
   - Print the diff lines to the terminal:
     * Deletions: Red (`\033[31m- ...\033[0m`)
-    * Addions: Green (`\033[32m+ ...\033[0m`)
+    * Additions: Green (`\033[32m+ ...\033[0m`)
     * Unchanged: Normal (`  ...`)
   - Prompt the user:
     `[a] Accept this change, [r] Reject and keep original, [e] Open default terminal editor, [q] Quit and resume later: `

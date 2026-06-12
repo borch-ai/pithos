@@ -418,7 +418,7 @@ func copyFile(src, dst string) error {
 func exportManuscriptToMarkdown(outputDir string, pages []manifest.PageState) error {
 	var sb strings.Builder
 	sb.WriteString("<!-- PITHOS MANUSCRIPT REVIEW -->\n")
-	sb.WriteString("<!-- Edit the stanzas below. Do not change the '# Page N' headers. -->\n")
+	sb.WriteString("<!-- Edit the stanzas under '## Text' and the illustration prompts under '## Prompt'. Do not change the '# Page N' headers. -->\n")
 	sb.WriteString("<!-- When done, save this file and run 'pithos brew' again to import and continue. -->\n\n")
 
 	for _, p := range pages {
@@ -442,9 +442,10 @@ func exportManuscriptToMarkdown(outputDir string, pages []manifest.PageState) er
 }
 
 type parsedPage struct {
-	index  int
-	text   string
-	prompt string
+	index         int
+	text          string
+	prompt        string
+	hasSubheaders bool
 }
 
 func parsePageBlock(index int, lines []string) (parsedPage, bool, error) {
@@ -460,8 +461,9 @@ func parsePageBlock(index int, lines []string) (parsedPage, bool, error) {
 	if !hasSubheaders {
 		// Legacy format: everything under "# Page N" is the text
 		return parsedPage{
-			index: index,
-			text:  strings.TrimSpace(strings.Join(lines, "\n")),
+			index:         index,
+			text:          strings.TrimSpace(strings.Join(lines, "\n")),
+			hasSubheaders: false,
 		}, false, nil
 	}
 
@@ -490,9 +492,10 @@ func parsePageBlock(index int, lines []string) (parsedPage, bool, error) {
 	}
 
 	return parsedPage{
-		index:  index,
-		text:   strings.TrimSpace(strings.Join(textLines, "\n")),
-		prompt: strings.TrimSpace(strings.Join(promptLines, "\n")),
+		index:         index,
+		text:          strings.TrimSpace(strings.Join(textLines, "\n")),
+		prompt:        strings.TrimSpace(strings.Join(promptLines, "\n")),
+		hasSubheaders: true,
 	}, true, nil
 }
 
@@ -564,7 +567,7 @@ func importManuscriptFromMarkdown(outputDir string, m *manifest.Manifest) (bool,
 	content := strings.ReplaceAll(string(data), "\r\n", "\n")
 	lines := strings.Split(content, "\n")
 
-	parsedPages, hasSubheaders, err := parseManuscriptLines(lines)
+	parsedPages, _, err := parseManuscriptLines(lines)
 	if err != nil {
 		return false, err
 	}
@@ -592,11 +595,11 @@ func importManuscriptFromMarkdown(outputDir string, m *manifest.Manifest) (bool,
 			if page.PageIndex == pp.index {
 				found = true
 				textChanged := page.Text != pp.text
-				promptChanged := hasSubheaders && page.IllustrationPrompt != pp.prompt
+				promptChanged := pp.hasSubheaders && page.IllustrationPrompt != pp.prompt
 
 				if textChanged || promptChanged {
 					m.Progress.Pages[i].Text = pp.text
-					if hasSubheaders {
+					if pp.hasSubheaders {
 						m.Progress.Pages[i].IllustrationPrompt = pp.prompt
 					}
 					m.Progress.Pages[i].ImagePath = ""

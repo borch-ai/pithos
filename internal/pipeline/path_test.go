@@ -36,6 +36,26 @@ func TestResolveBookPath(t *testing.T) {
 			input:    filepath.Join("subdir", "nested-book"),
 			expected: filepath.Join("books", "subdir", "nested-book"),
 		},
+		{
+			name:     "relative traversal escape dot dot",
+			input:    "..",
+			expected: "books",
+		},
+		{
+			name:     "relative traversal escape dot dot slash x",
+			input:    "../x",
+			expected: filepath.Join("books", "x"),
+		},
+		{
+			name:     "relative traversal escape nested dot dot",
+			input:    "../../xyz",
+			expected: filepath.Join("books", "xyz"),
+		},
+		{
+			name:     "relative traversal nested books escape",
+			input:    "books/../../xyz",
+			expected: filepath.Join("books", "xyz"),
+		},
 	}
 
 	for _, tt := range tests {
