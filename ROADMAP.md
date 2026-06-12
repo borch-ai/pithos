@@ -10,6 +10,7 @@ Focus: Bootstrapping the CLI application, establishing the documentation, config
 *   [x] **Task 1.1: Project Initialization & Architecture**
     *   Set up the Go project structure (`cmd/pithos`), Makefile, and linters.
     *   Draft `VISION.md`, `ROADMAP.md`, and `GEMINI.md`.
+    *   [Implementation Plan](plans/phase_1/task_1_1_project_initialization.md)
 *   [x] **Task 1.2: Cobra & Viper CLI Scaffolding**
     *   Refactor monolithic `main.go` to split subcommands into separate files under `cmd/pithos/` (e.g. `initiate.go`, `brew.go`, `assemble.go`, `deploy.go`).
     *   Integrate `spf13/viper` to load configuration details (like server binary paths for Powerword MCP) from a local `.pithos.toml` or global file.
