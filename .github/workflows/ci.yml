@@ -24,7 +24,7 @@ jobs:
         with:
           repository: borch-ai/powerword
           path: powerword
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ github.token }}
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -58,7 +58,7 @@ jobs:
         with:
           repository: borch-ai/powerword
           path: powerword
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ github.token }}
 
       - name: Set up Go
         uses: actions/setup-go@v5
