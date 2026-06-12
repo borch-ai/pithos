@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Pithos
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: pithos
 
@@ -28,7 +28,7 @@ jobs:
           owner: ${{ github.repository_owner }}
 
       - name: Checkout Powerword
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: borch-ai/powerword
           path: powerword
@@ -57,7 +57,7 @@ jobs:
         working-directory: pithos
     steps:
       - name: Checkout Pithos
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: pithos
 
@@ -70,7 +70,7 @@ jobs:
           owner: ${{ github.repository_owner }}
 
       - name: Checkout Powerword
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: borch-ai/powerword
           path: powerword
