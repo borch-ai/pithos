@@ -16,10 +16,11 @@ var Version = "dev"
 
 // Config represents the schema of the .pithos.toml file.
 type Config struct {
-	MCP       MCPConfig                         `mapstructure:"mcp"`
-	API       APIConfig                         `mapstructure:"api"`
-	Telemetry TelemetryConfig                   `mapstructure:"telemetry"`
-	Pricing   map[string]telemetry.ModelPricing `mapstructure:"pricing"`
+	Concurrency int                               `mapstructure:"concurrency"`
+	MCP         MCPConfig                         `mapstructure:"mcp"`
+	API         APIConfig                         `mapstructure:"api"`
+	Telemetry   TelemetryConfig                   `mapstructure:"telemetry"`
+	Pricing     map[string]telemetry.ModelPricing `mapstructure:"pricing"`
 }
 
 // MCPConfig holds paths to local Powerword MCP server binaries.
@@ -51,6 +52,7 @@ func LoadConfig(cfgFile string) (*Config, error) {
 	v := viper.New()
 
 	// Set default values so environment variables can bind even if keys are missing from the config file.
+	v.SetDefault("concurrency", 1)
 	v.SetDefault("mcp.imagegen_path", "")
 	v.SetDefault("mcp.kdp_math_path", "")
 	v.SetDefault("mcp.seo_path", "")

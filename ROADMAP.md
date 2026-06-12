@@ -33,7 +33,7 @@ Focus: Integrating with the `pw-mcp-*` ecosystem to perform core content generat
     *   Implement `pithos brew` to incrementally write/generate thematic poetry using LLMs, and invoke `pw-mcp-imagegen` for page illustrations (supporting `--sref` parameters).
     *   Save generated stanzas and image references directly to the manifest to enable resumption after failure or human approval pauses.
     *   [Implementation Plan](plans/phase_2/task_2_2_brew_engine.md)
-*   [ ] **Task 2.3: Parallel Asset Generation**
+*   [x] **Task 2.3: Parallel Asset Generation**
     *   Implement concurrent image generation workers in the Pithos brew engine, allowing multiple page illustrations to be requested and downloaded in parallel.
     *   [Implementation Plan](plans/phase_2/task_2_3_parallel_asset_generation.md)
 
