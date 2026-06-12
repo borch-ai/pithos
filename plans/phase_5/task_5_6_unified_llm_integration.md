@@ -40,3 +40,4 @@ None. This is a clean internal refactoring to unify the LLM layer using the shar
 ### Automated Tests
 - Run `go test ./internal/pipeline/...`
 - Update pipeline tests to verify that the adapter correctly passes formatting requirements and captures token metrics from the underlying Powerword LLM client.
+
