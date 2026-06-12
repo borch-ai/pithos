@@ -66,6 +66,8 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 	var hasManuscript bool
 	if _, statErr := os.Stat(manuscriptPath); statErr == nil {
 		hasManuscript = true
+	} else if !os.IsNotExist(statErr) {
+		return fmt.Errorf("failed to check manuscript.md status: %w", statErr)
 	}
 	if m.Progress.ManuscriptGenerated && hasManuscript {
 		changed, importErr := importManuscriptFromMarkdown(opts.OutputDir, m)
@@ -82,13 +84,8 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 		return err
 	}
 
-	if opts.Review {
-		if _, statErr := os.Stat(manuscriptPath); os.IsNotExist(statErr) {
-			if exportErr := exportManuscriptToMarkdown(opts.OutputDir, m.Progress.Pages); exportErr != nil {
-				return exportErr
-			}
-		}
-		return fmt.Errorf("review mode active: manuscript is available at %s. Edit the file, then run brew without --review to generate illustrations", manuscriptPath)
+	if err := handleReviewCheckpoint(opts, m, manuscriptPath); err != nil {
+		return err
 	}
 
 	// 2. Generate illustrations via MCP ImageGen server
@@ -122,6 +119,22 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 	fmt.Println("----------------------------------------")
 
 	return nil
+}
+
+func handleReviewCheckpoint(opts BrewOptions, m *manifest.Manifest, manuscriptPath string) error {
+	if !opts.Review {
+		return nil
+	}
+	_, statErr := os.Stat(manuscriptPath)
+	if statErr != nil && !os.IsNotExist(statErr) {
+		return fmt.Errorf("failed to check manuscript.md status for review: %w", statErr)
+	}
+	if os.IsNotExist(statErr) {
+		if exportErr := exportManuscriptToMarkdown(opts.OutputDir, m.Progress.Pages); exportErr != nil {
+			return exportErr
+		}
+	}
+	return fmt.Errorf("review mode active: manuscript is available at %s. Edit the file, then run brew without --review to generate illustrations", manuscriptPath)
 }
 
 //nolint:funlen // Manuscript generation pipeline step handles LLM client setup, text generation, and recording telemetry
