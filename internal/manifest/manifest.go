@@ -301,11 +301,48 @@ func CalculateTrimWithBleed(trimWidth, trimHeight float64) (float64, float64) {
 	return trimWidth + 0.125, trimHeight + 0.25
 }
 
+// RecordLLMUsage accumulates LLM token usage and updates total cost under a single lock.
+func (m *Manifest) RecordLLMUsage(model string, usage telemetry.TokenUsage, pricing map[string]telemetry.ModelPricing) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.Telemetry.ModelUsages == nil {
+		m.Telemetry.ModelUsages = make(map[string]*telemetry.ModelUsage)
+	}
+
+	mu, exists := m.Telemetry.ModelUsages[model]
+	if !exists || mu == nil {
+		mu = &telemetry.ModelUsage{}
+		m.Telemetry.ModelUsages[model] = mu
+	}
+
+	mu.InputTokens += usage.InputTokens
+	mu.OutputTokens += usage.OutputTokens
+	mu.CachedTokens += usage.CachedTokens
+
+	m.updateTotalCostLocked(pricing)
+}
+
+// RecordImageGeneration increments the image generation counter and updates total cost under a single lock.
+func (m *Manifest) RecordImageGeneration(pricing map[string]telemetry.ModelPricing) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.Telemetry.ImageGenerations++
+
+	m.updateTotalCostLocked(pricing)
+}
+
 // UpdateTotalCost computes the total cost USD based on model usage and image generations.
 func (m *Manifest) UpdateTotalCost(pricing map[string]telemetry.ModelPricing) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	m.updateTotalCostLocked(pricing)
+}
+
+// updateTotalCostLocked computes the total cost USD without acquiring the lock (expects lock to be held).
+func (m *Manifest) updateTotalCostLocked(pricing map[string]telemetry.ModelPricing) {
 	tracker := telemetry.NewUsageTracker()
 	for model, usage := range m.Telemetry.ModelUsages {
 		if usage != nil {

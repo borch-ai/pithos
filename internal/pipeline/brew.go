@@ -152,32 +152,11 @@ func generateManuscript(ctx context.Context, m *manifest.Manifest, opts BrewOpti
 		modelName = "unknown"
 	}
 
-	tracker := telemetry.NewUsageTracker()
-	for model, usage := range m.Telemetry.ModelUsages {
-		if usage != nil {
-			tracker.RecordUsage(model, telemetry.TokenUsage{
-				InputTokens:  usage.InputTokens,
-				OutputTokens: usage.OutputTokens,
-				CachedTokens: usage.CachedTokens,
-			})
-		}
-	}
-	tracker.RecordUsage(modelName, tokenUsage)
-
-	m.Telemetry.ModelUsages = make(map[string]*telemetry.ModelUsage)
-	for model, usage := range tracker.ModelUsages {
-		m.Telemetry.ModelUsages[model] = &telemetry.ModelUsage{
-			InputTokens:  usage.InputTokens,
-			OutputTokens: usage.OutputTokens,
-			CachedTokens: usage.CachedTokens,
-		}
-	}
-
 	var pricing map[string]telemetry.ModelPricing
 	if config.Cfg != nil {
 		pricing = config.Cfg.Pricing
 	}
-	m.UpdateTotalCost(pricing)
+	m.RecordLLMUsage(modelName, tokenUsage, pricing)
 
 	if err := m.Save(); err != nil {
 		return fmt.Errorf("failed to save manifest after manuscript generation: %w", err)
@@ -237,12 +216,11 @@ func generateIllustrations(ctx context.Context, m *manifest.Manifest, opts BrewO
 			return err
 		}
 
-		m.Telemetry.ImageGenerations++
 		var pricing map[string]telemetry.ModelPricing
 		if config.Cfg != nil {
 			pricing = config.Cfg.Pricing
 		}
-		m.UpdateTotalCost(pricing)
+		m.RecordImageGeneration(pricing)
 
 		if err := m.Save(); err != nil {
 			return fmt.Errorf("failed to save manifest after page %d image generation: %w", page.PageIndex, err)
