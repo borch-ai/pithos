@@ -109,3 +109,7 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Amazon KDP uploads.
 *   [ ] **Task 5.8: EPUB / Digital Publication Export**
     *   Integrate with a standalone `pw-mcp-epub` MCP plugin to export the parodic manuscript and generated illustration assets into a valid EPUB file.
     *   [Implementation Plan](plans/phase_5/task_5_8_epub_digital_export.md)
+*   [ ] **Task 5.9: Google Doc MCP Integration**
+    *   Integrate with the `pw-mcp-gdoc` MCP plugin to export manuscripts to Google Docs for editing and import them back on resume.
+    *   [Implementation Plan](plans/phase_5/task_5_9_gdoc_mcp_integration.md)
+

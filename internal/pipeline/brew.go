@@ -24,12 +24,15 @@ type BrewOptions struct {
 	Theme        string
 	Style        string
 	Concurrency  int
+	Review       bool
 	MCPTransport mcpsdk.Transport // For testing
 	LLM          LLMClient        // For testing
 	HTTPClient   *http.Client     // For testing
 }
 
 // Brew executes the manuscript generation and page-by-page illustration generation.
+//
+//nolint:gocognit // Brew function integrates manifest loading, overrides, manuscript generation, review loop, and illustration generation
 func Brew(ctx context.Context, opts BrewOptions) error {
 	if opts.OutputDir == "" {
 		return errors.New("output directory is required")
@@ -57,9 +60,30 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 		}
 	}
 
+	// Import edits from manuscript.md if it exists
+	manuscriptPath := filepath.Join(opts.OutputDir, "manuscript.md")
+	if _, statErr := os.Stat(manuscriptPath); statErr == nil {
+		changed, importErr := importManuscriptFromMarkdown(opts.OutputDir, m)
+		if importErr != nil {
+			return importErr
+		}
+		if changed {
+			fmt.Println("Successfully imported edits from manuscript.md.")
+		}
+	}
+
 	// 1. Generate manuscript text if not yet generated
 	if err := generateManuscript(ctx, m, opts); err != nil {
 		return err
+	}
+
+	if opts.Review {
+		if _, statErr := os.Stat(manuscriptPath); os.IsNotExist(statErr) {
+			if exportErr := exportManuscriptToMarkdown(opts.OutputDir, m.Progress.Pages); exportErr != nil {
+				return exportErr
+			}
+		}
+		return fmt.Errorf("review mode active: manuscript is available at %s. Edit the file, then run brew without --review to generate illustrations", manuscriptPath)
 	}
 
 	// 2. Generate illustrations via MCP ImageGen server
@@ -358,4 +382,113 @@ func copyFile(src, dst string) error {
 		return err
 	}
 	return out.Sync()
+}
+
+func exportManuscriptToMarkdown(outputDir string, pages []manifest.PageState) error {
+	var sb strings.Builder
+	sb.WriteString("<!-- PITHOS MANUSCRIPT REVIEW -->\n")
+	sb.WriteString("<!-- Edit the stanzas below. Do not change the '# Page N' headers. -->\n")
+	sb.WriteString("<!-- When done, save this file and run 'pithos brew' again to import and continue. -->\n\n")
+
+	for _, p := range pages {
+		fmt.Fprintf(&sb, "# Page %d\n", p.PageIndex)
+		sb.WriteString(p.Text)
+		sb.WriteString("\n\n")
+	}
+
+	manuscriptPath := filepath.Join(outputDir, "manuscript.md")
+	if err := os.MkdirAll(outputDir, 0750); err != nil {
+		return fmt.Errorf("failed to create directory for manuscript export: %w", err)
+	}
+
+	if err := os.WriteFile(manuscriptPath, []byte(sb.String()), 0600); err != nil {
+		return fmt.Errorf("failed to write manuscript.md: %w", err)
+	}
+	return nil
+}
+
+//nolint:gocognit // import parsing loop requires checking multiple state variables (index, lines, headers)
+func importManuscriptFromMarkdown(outputDir string, m *manifest.Manifest) (bool, error) {
+	manuscriptPath := filepath.Join(outputDir, "manuscript.md")
+	//nolint:gosec // manuscriptPath is constructed in local CLI environment
+	data, err := os.ReadFile(manuscriptPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to read manuscript.md: %w", err)
+	}
+
+	content := strings.ReplaceAll(string(data), "\r\n", "\n")
+	lines := strings.Split(content, "\n")
+
+	type parsedPage struct {
+		index int
+		text  string
+	}
+	var parsedPages []parsedPage
+
+	var currentIdx int
+	var currentLines []string
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "# Page ") {
+			if currentIdx > 0 {
+				parsedPages = append(parsedPages, parsedPage{
+					index: currentIdx,
+					text:  strings.TrimSpace(strings.Join(currentLines, "\n")),
+				})
+				currentLines = nil
+			}
+
+			header := strings.TrimPrefix(trimmed, "# Page ")
+			var idx int
+			if _, err := fmt.Sscanf(header, "%d", &idx); err != nil {
+				return false, fmt.Errorf("failed to parse page header %q: %w", line, err)
+			}
+			currentIdx = idx
+		} else if currentIdx > 0 {
+			currentLines = append(currentLines, line)
+		}
+	}
+
+	if currentIdx > 0 {
+		parsedPages = append(parsedPages, parsedPage{
+			index: currentIdx,
+			text:  strings.TrimSpace(strings.Join(currentLines, "\n")),
+		})
+	}
+
+	if len(parsedPages) == 0 {
+		return false, fmt.Errorf("no stanzas parsed from manuscript.md")
+	}
+
+	changed := false
+	for _, pp := range parsedPages {
+		found := false
+		for i, page := range m.Progress.Pages {
+			if page.PageIndex == pp.index {
+				found = true
+				if page.Text != pp.text {
+					m.Progress.Pages[i].Text = pp.text
+					m.Progress.Pages[i].ImagePath = ""
+					m.Progress.Pages[i].Status = manifest.StatusPending
+					changed = true
+				}
+				break
+			}
+		}
+		if !found {
+			return false, fmt.Errorf("parsed page index %d does not exist in manifest", pp.index)
+		}
+	}
+
+	if changed {
+		if err := m.Save(); err != nil {
+			return false, fmt.Errorf("failed to save manifest after importing edits: %w", err)
+		}
+	}
+
+	return changed, nil
 }

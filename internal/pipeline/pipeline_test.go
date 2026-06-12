@@ -1084,3 +1084,200 @@ func TestBrew_Concurrency(t *testing.T) {
 		}
 	}
 }
+
+func TestBrew_ReviewFlow_Export(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos-brew-review-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	// 1. Initialize Pithos Workspace
+	optsInit := InitiateOptions{
+		OutputDir:       tmpDir,
+		Theme:           "Review Flow Theme",
+		TargetPageCount: 3,
+	}
+	_, err = Initiate(optsInit)
+	if err != nil {
+		t.Fatalf("failed to initiate book: %v", err)
+	}
+
+	mockStanzas := []string{
+		"Stanza 1 original",
+		"Stanza 2 original",
+		"Stanza 3 original",
+	}
+	mockLLMClient := &mockLLM{
+		stanzas: mockStanzas,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	clientTransport, serverTransport := mcpsdk.NewInMemoryTransports()
+	dummySourceImage := filepath.Join(tmpDir, "source.png")
+	_ = os.WriteFile(dummySourceImage, []byte("fake"), 0600)
+	_, cleanupMCP := setupMockImageGenServer(t, ctx, serverTransport, dummySourceImage)
+	defer cleanupMCP()
+
+	// 2. Run Brew with Review = true (first run, should export and exit with error)
+	optsBrewReview := BrewOptions{
+		OutputDir:    tmpDir,
+		Review:       true,
+		MCPTransport: clientTransport,
+		LLM:          mockLLMClient,
+	}
+
+	err = Brew(ctx, optsBrewReview)
+	if err == nil {
+		t.Fatal("expected Brew to return review pause error, got nil")
+	}
+	if !strings.Contains(err.Error(), "review mode active") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+
+	// Verify manuscript.md exists
+	manuscriptPath := filepath.Join(tmpDir, "manuscript.md")
+	if _, statErr := os.Stat(manuscriptPath); os.IsNotExist(statErr) {
+		t.Fatal("expected manuscript.md to be exported, but it does not exist")
+	}
+
+	//nolint:gosec // manuscriptPath is constructed in temp test directory
+	data, readErr := os.ReadFile(manuscriptPath)
+	if readErr != nil {
+		t.Fatalf("failed to read manuscript.md: %v", readErr)
+	}
+	content := string(data)
+	if !strings.Contains(content, "# Page 1\nStanza 1 original") ||
+		!strings.Contains(content, "# Page 2\nStanza 2 original") ||
+		!strings.Contains(content, "# Page 3\nStanza 3 original") {
+		t.Errorf("manuscript.md has incorrect format: %s", content)
+	}
+}
+
+func TestBrew_ReviewFlow_ImportAndSync(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos-brew-resume-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	// Write source image to be copied by mock MCP
+	dummySourceImage := filepath.Join(tmpDir, "source.png")
+	if writeErr := os.WriteFile(dummySourceImage, []byte("fake-image-bytes"), 0600); writeErr != nil {
+		t.Fatalf("failed to write source image: %v", writeErr)
+	}
+
+	// 1. Initialize Pithos Workspace
+	optsInit := InitiateOptions{
+		OutputDir:       tmpDir,
+		Theme:           "Review Flow Theme",
+		TargetPageCount: 3,
+	}
+	m, err := Initiate(optsInit)
+	if err != nil {
+		t.Fatalf("failed to initiate book: %v", err)
+	}
+
+	// Pre-populate generated manuscript and images
+	m.Progress.ManuscriptGenerated = true
+	m.Progress.Pages = []manifest.PageState{
+		{PageIndex: 1, Status: manifest.StatusCompleted, ImagePath: "images/page_1.png", Text: "Stanza 1 original"},
+		{PageIndex: 2, Status: manifest.StatusCompleted, ImagePath: "images/page_2.png", Text: "Stanza 2 original"},
+		{PageIndex: 3, Status: manifest.StatusCompleted, ImagePath: "images/page_3.png", Text: "Stanza 3 original"},
+	}
+	if saveErr := m.Save(); saveErr != nil {
+		t.Fatalf("failed to save manifest: %v", saveErr)
+	}
+
+	// Write manuscript.md with modified page 2 text
+	manuscriptPath := filepath.Join(tmpDir, "manuscript.md")
+	content := "<!-- PITHOS REVIEW -->\n# Page 1\nStanza 1 original\n\n# Page 2\nStanza 2 edited text\n\n# Page 3\nStanza 3 original\n"
+	if writeErr := os.WriteFile(manuscriptPath, []byte(content), 0600); writeErr != nil {
+		t.Fatalf("failed to edit manuscript.md: %v", writeErr)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	clientTransport, serverTransport := mcpsdk.NewInMemoryTransports()
+	_, cleanupMCP := setupMockImageGenServer(t, ctx, serverTransport, dummySourceImage)
+	defer cleanupMCP()
+
+	// 2. Run Brew with Review = false (should import edits, reset page 2 status to pending, and regenerate images)
+	optsBrewResume := BrewOptions{
+		OutputDir:    tmpDir,
+		Review:       false,
+		MCPTransport: clientTransport,
+	}
+
+	err = Brew(ctx, optsBrewResume)
+	if err != nil {
+		t.Fatalf("expected Brew to succeed on resume/import run, got %v", err)
+	}
+
+	// 3. Verify final manifest state
+	m2, err := manifest.LoadManifest(filepath.Join(tmpDir, "manifest.json"))
+	if err != nil {
+		t.Fatalf("failed to reload manifest: %v", err)
+	}
+
+	if m2.Progress.Pages[1].Text != "Stanza 2 edited text" {
+		t.Errorf("expected page 2 text to be imported, got %q", m2.Progress.Pages[1].Text)
+	}
+	for _, p := range m2.Progress.Pages {
+		if p.Status != manifest.StatusCompleted {
+			t.Errorf("expected page %d status to be Completed, got %q", p.PageIndex, p.Status)
+		}
+		if p.ImagePath == "" {
+			t.Errorf("expected page %d to have image path set", p.PageIndex)
+		}
+	}
+}
+
+func TestImportManuscriptFromMarkdown_Errors(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos-import-errs-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	m := manifest.NewManifest(filepath.Join(tmpDir, "manifest.json"))
+	m.Progress.Pages = []manifest.PageState{
+		{PageIndex: 1, Text: "Stanza 1"},
+	}
+
+	// 1. manuscript.md does not exist
+	changed, err := importManuscriptFromMarkdown(tmpDir, m)
+	if err != nil {
+		t.Fatalf("expected no error for non-existent manuscript, got %v", err)
+	}
+	if changed {
+		t.Error("expected changed to be false for non-existent file")
+	}
+
+	// 2. Empty manuscript file
+	manuscriptPath := filepath.Join(tmpDir, "manuscript.md")
+	_ = os.WriteFile(manuscriptPath, []byte(""), 0600)
+	_, err = importManuscriptFromMarkdown(tmpDir, m)
+	if err == nil {
+		t.Error("expected error for empty manuscript file, got nil")
+	}
+
+	// 3. Invalid page header format
+	invalidHeaders := "<!-- review -->\n# Page A\nStanza A"
+	_ = os.WriteFile(manuscriptPath, []byte(invalidHeaders), 0600)
+	_, err = importManuscriptFromMarkdown(tmpDir, m)
+	if err == nil {
+		t.Error("expected error for invalid page index format, got nil")
+	}
+
+	// 4. Page index mismatch
+	mismatchPage := "# Page 5\nStanza 5"
+	_ = os.WriteFile(manuscriptPath, []byte(mismatchPage), 0600)
+	_, err = importManuscriptFromMarkdown(tmpDir, m)
+	if err == nil {
+		t.Error("expected error for page index mismatch, got nil")
+	}
+}
