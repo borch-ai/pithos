@@ -24,20 +24,20 @@ linters:
     errcheck:
       check-blank: true
       exclude-functions:
-        - (io.Closer).Close
+        - (io.Closer).Close # Candidate for eventual enforcement: closing files/responses can fail on flushing; checking ensures data integrity.
         - os.RemoveAll
         - os.Remove
         - (io.Writer).Write
         - (*encoding/json.Encoder).Encode
         - io.ReadAll
-        - os.WriteFile
-        - os.Setenv
+        - os.WriteFile # Candidate for eventual enforcement: file writes can fail due to disk space or permissions.
+        - os.Setenv # Candidate for eventual enforcement: failing to set environment variables can break downstream configs.
         - os.Unsetenv
-        - (*os.File).Close
-        - encoding/json.Marshal
-        - encoding/json.Unmarshal
+        - (*os.File).Close # Candidate for eventual enforcement: same as (io.Closer).Close; flushing to disk should be verified.
+        - encoding/json.Marshal # Candidate for eventual enforcement: marshalling errors can output malformed payloads.
+        - encoding/json.Unmarshal # Candidate for eventual enforcement: unmarshalling errors must be verified to prevent invalid/zeroed structures.
         - (net/http.ResponseWriter).Write
-        - (*github.com/borch-ai/pithos/internal/mcp.PluginClient).Stop
+        - (*github.com/borch-ai/pithos/internal/mcp.PluginClient).Stop # Candidate for eventual enforcement: checking helps debug client cleanup leaks.
         - (*github.com/modelcontextprotocol/go-sdk/mcp.ServerSession).Close
         - (*github.com/modelcontextprotocol/go-sdk/mcp.ClientSession).Close
     nestif:
