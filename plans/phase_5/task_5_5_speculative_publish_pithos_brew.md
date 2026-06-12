@@ -14,7 +14,7 @@ This plan outlines packaging and publishing Pithos as a Homebrew package (`brew 
 
 ### Release Workflow
 
-#### [NEW] [release.yml](../.github/workflows/release.yml)
+#### [NEW] [release.yml](../../.github/workflows/release.yml)
 - Create a post-merge release workflow in Pithos.
 - Use `go-semantic-release/action` to version the code, tag it, and create GitHub Releases.
 - Cross-compile Pithos binaries for macOS (amd64, arm64), Linux (amd64, arm64), and Windows (amd64).
@@ -22,7 +22,7 @@ This plan outlines packaging and publishing Pithos as a Homebrew package (`brew 
 
 ### Homebrew Tap Integration
 
-#### [NEW] [pithos.rb](../Formula/pithos.rb)
+#### [NEW] [pithos.rb](../../Formula/pithos.rb)
 - Define the Homebrew formula in a new `Formula/pithos.rb` (or inside a shared `borch-ai/homebrew-tap` repo).
 - Point the URL to the published GitHub release tarball.
 - Define dependency declarations:

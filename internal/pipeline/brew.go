@@ -13,6 +13,7 @@ import (
 	"github.com/borch-ai/pithos/internal/config"
 	"github.com/borch-ai/pithos/internal/manifest"
 	"github.com/borch-ai/pithos/internal/mcp"
+	"github.com/borch-ai/powerword/pkg/telemetry"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -60,9 +61,39 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 	}
 
 	// 2. Generate illustrations via MCP ImageGen server
-	return generateIllustrations(ctx, m, opts)
+	if err := generateIllustrations(ctx, m, opts); err != nil {
+		return err
+	}
+
+	// Log telemetry summary
+	tracker := telemetry.NewUsageTracker()
+	for model, usage := range m.Telemetry.ModelUsages {
+		if usage != nil {
+			tracker.RecordUsage(model, telemetry.TokenUsage{
+				InputTokens:  usage.InputTokens,
+				OutputTokens: usage.OutputTokens,
+				CachedTokens: usage.CachedTokens,
+			})
+		}
+	}
+
+	var pricing map[string]telemetry.ModelPricing
+	if config.Cfg != nil {
+		pricing = config.Cfg.Pricing
+	}
+
+	fmt.Println("----------------------------------------")
+	fmt.Print(tracker.FormatSummary(pricing))
+	if m.Telemetry.ImageGenerations > 0 {
+		fmt.Printf("- Image Generations: %d\n", m.Telemetry.ImageGenerations)
+		fmt.Printf("- Pipeline Total Cost: $%.5f\n", m.Telemetry.TotalCostUSD)
+	}
+	fmt.Println("----------------------------------------")
+
+	return nil
 }
 
+//nolint:funlen // Manuscript generation pipeline step handles LLM client setup, text generation, and recording telemetry
 func generateManuscript(ctx context.Context, m *manifest.Manifest, opts BrewOptions) error {
 	if m.Progress.ManuscriptGenerated {
 		return nil
@@ -91,7 +122,7 @@ func generateManuscript(ctx context.Context, m *manifest.Manifest, opts BrewOpti
 		return errors.New("neither Gemini nor OpenAI API key is configured")
 	}
 
-	stanzas, err := llmClient.GenerateStanzas(ctx, theme, pageCount)
+	stanzas, tokenUsage, err := llmClient.GenerateStanzas(ctx, theme, pageCount)
 	if err != nil {
 		return fmt.Errorf("manuscript text generation failed: %w", err)
 	}
@@ -110,6 +141,44 @@ func generateManuscript(ctx context.Context, m *manifest.Manifest, opts BrewOpti
 	}
 	m.Progress.ManuscriptGenerated = true
 
+	// Record token usage
+	var modelName string
+	switch llmClient.(type) {
+	case *GeminiClient:
+		modelName = "gemini-1.5-flash"
+	case *OpenAIClient:
+		modelName = "gpt-4o"
+	default:
+		modelName = "unknown"
+	}
+
+	tracker := telemetry.NewUsageTracker()
+	for model, usage := range m.Telemetry.ModelUsages {
+		if usage != nil {
+			tracker.RecordUsage(model, telemetry.TokenUsage{
+				InputTokens:  usage.InputTokens,
+				OutputTokens: usage.OutputTokens,
+				CachedTokens: usage.CachedTokens,
+			})
+		}
+	}
+	tracker.RecordUsage(modelName, tokenUsage)
+
+	m.Telemetry.ModelUsages = make(map[string]*telemetry.ModelUsage)
+	for model, usage := range tracker.ModelUsages {
+		m.Telemetry.ModelUsages[model] = &telemetry.ModelUsage{
+			InputTokens:  usage.InputTokens,
+			OutputTokens: usage.OutputTokens,
+			CachedTokens: usage.CachedTokens,
+		}
+	}
+
+	var pricing map[string]telemetry.ModelPricing
+	if config.Cfg != nil {
+		pricing = config.Cfg.Pricing
+	}
+	m.UpdateTotalCost(pricing)
+
 	if err := m.Save(); err != nil {
 		return fmt.Errorf("failed to save manifest after manuscript generation: %w", err)
 	}
@@ -125,6 +194,7 @@ func needsIllustrationGen(m *manifest.Manifest) bool {
 	return false
 }
 
+//nolint:gocognit // Illustration loop handles MCP client lifecycle, style registration, and page checkpoint updates
 func generateIllustrations(ctx context.Context, m *manifest.Manifest, opts BrewOptions) error {
 	if !needsIllustrationGen(m) {
 		return nil
@@ -166,6 +236,14 @@ func generateIllustrations(ctx context.Context, m *manifest.Manifest, opts BrewO
 			}
 			return err
 		}
+
+		m.Telemetry.ImageGenerations++
+		var pricing map[string]telemetry.ModelPricing
+		if config.Cfg != nil {
+			pricing = config.Cfg.Pricing
+		}
+		m.UpdateTotalCost(pricing)
+
 		if err := m.Save(); err != nil {
 			return fmt.Errorf("failed to save manifest after page %d image generation: %w", page.PageIndex, err)
 		}

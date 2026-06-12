@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,19 +16,21 @@ import (
 
 	"github.com/borch-ai/pithos/internal/config"
 	"github.com/borch-ai/pithos/internal/manifest"
+	"github.com/borch-ai/powerword/pkg/telemetry"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 type mockLLM struct {
 	stanzas []string
+	usage   telemetry.TokenUsage
 	err     error
 }
 
-func (m *mockLLM) GenerateStanzas(ctx context.Context, theme string, count int) ([]string, error) {
+func (m *mockLLM) GenerateStanzas(ctx context.Context, theme string, count int) ([]string, telemetry.TokenUsage, error) {
 	if m.err != nil {
-		return nil, m.err
+		return nil, telemetry.TokenUsage{}, m.err
 	}
-	return m.stanzas, nil
+	return m.stanzas, m.usage, nil
 }
 
 func setupMockImageGenServer(t *testing.T, ctx context.Context, serverTransport mcpsdk.Transport, generatedImagePath string) (*mcpsdk.ServerSession, func()) {
@@ -205,7 +208,14 @@ func TestBrew_EndToEnd_Mocked(t *testing.T) {
 	defer cleanupMCP()
 
 	mockStanzas := []string{"Stanza 1 text", "Stanza 2 text"}
-	mockLLMClient := &mockLLM{stanzas: mockStanzas}
+	mockLLMClient := &mockLLM{
+		stanzas: mockStanzas,
+		usage: telemetry.TokenUsage{
+			InputTokens:  1000,
+			OutputTokens: 2000,
+			CachedTokens: 500,
+		},
+	}
 
 	// Run Brew
 	optsBrew := BrewOptions{
@@ -247,6 +257,17 @@ func TestBrew_EndToEnd_Mocked(t *testing.T) {
 	}
 	if page1.ImagePath != "images/page_1.png" {
 		t.Errorf("expected page 1 ImagePath 'images/page_1.png', got %q", page1.ImagePath)
+	}
+
+	// Verify telemetry updates
+	if m.Telemetry.ImageGenerations != 2 {
+		t.Errorf("expected 2 image generations, got %d", m.Telemetry.ImageGenerations)
+	}
+	mu := m.Telemetry.ModelUsages["unknown"]
+	if mu == nil {
+		t.Error("expected unknown model usages telemetry to exist")
+	} else if mu.InputTokens != 1000 || mu.OutputTokens != 2000 || mu.CachedTokens != 500 {
+		t.Errorf("unexpected token usage: %+v", mu)
 	}
 
 	// Verify that files were copied
@@ -500,6 +521,7 @@ func TestBrew_CopyFileError(t *testing.T) {
 	}
 }
 
+//nolint:funlen // Gemini client setup and payload parsing test is inherently long
 func TestLLMProviderSelection_Gemini(t *testing.T) {
 	origCfg := config.Cfg
 	defer func() { config.Cfg = origCfg }()
@@ -553,6 +575,15 @@ func TestLLMProviderSelection_Gemini(t *testing.T) {
 			},
 		},
 	}
+	geminiMockResp.UsageMetadata = &struct {
+		PromptTokenCount        int `json:"promptTokenCount"`
+		CandidatesTokenCount    int `json:"candidatesTokenCount"`
+		CachedContentTokenCount int `json:"cachedContentTokenCount"`
+	}{
+		PromptTokenCount:        100,
+		CandidatesTokenCount:    200,
+		CachedContentTokenCount: 50,
+	}
 
 	mockHttpClient := &http.Client{
 		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
@@ -583,8 +614,20 @@ func TestLLMProviderSelection_Gemini(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected Gemini-based Brew to succeed, got %v", err)
 	}
+
+	m, err := manifest.LoadManifest(filepath.Join(tmpDir, "manifest.json"))
+	if err != nil {
+		t.Fatalf("failed to load manifest: %v", err)
+	}
+	mu := m.Telemetry.ModelUsages["gemini-1.5-flash"]
+	if mu == nil {
+		t.Error("expected gemini-1.5-flash model usages telemetry to exist")
+	} else if mu.InputTokens != 100 || mu.OutputTokens != 200 || mu.CachedTokens != 50 {
+		t.Errorf("unexpected gemini token usage: %+v", mu)
+	}
 }
 
+//nolint:funlen // OpenAI client setup and payload parsing test is inherently long
 func TestLLMProviderSelection_OpenAI(t *testing.T) {
 	origCfg := config.Cfg
 	defer func() { config.Cfg = origCfg }()
@@ -630,6 +673,21 @@ func TestLLMProviderSelection_OpenAI(t *testing.T) {
 			},
 		},
 	}
+	openAIMockResp.Usage = &struct {
+		PromptTokens        int `json:"prompt_tokens"`
+		CompletionTokens    int `json:"completion_tokens"`
+		PromptTokensDetails *struct {
+			CachedTokens int `json:"cached_tokens"`
+		} `json:"prompt_tokens_details"`
+	}{
+		PromptTokens:     150,
+		CompletionTokens: 250,
+		PromptTokensDetails: &struct {
+			CachedTokens int `json:"cached_tokens"`
+		}{
+			CachedTokens: 75,
+		},
+	}
 
 	mockHttpClient := &http.Client{
 		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
@@ -659,6 +717,17 @@ func TestLLMProviderSelection_OpenAI(t *testing.T) {
 	err = Brew(ctx, optsBrew)
 	if err != nil {
 		t.Fatalf("expected OpenAI-based Brew to succeed, got %v", err)
+	}
+
+	m, err := manifest.LoadManifest(filepath.Join(tmpDir, "manifest.json"))
+	if err != nil {
+		t.Fatalf("failed to load manifest: %v", err)
+	}
+	mu := m.Telemetry.ModelUsages["gpt-4o"]
+	if mu == nil {
+		t.Error("expected gpt-4o model usages telemetry to exist")
+	} else if mu.InputTokens != 150 || mu.OutputTokens != 250 || mu.CachedTokens != 75 {
+		t.Errorf("unexpected openai token usage: %+v", mu)
 	}
 }
 
@@ -843,5 +912,103 @@ func TestBrew_NoIllustrationsNeeded(t *testing.T) {
 	err = Brew(ctx, optsBrew)
 	if err != nil {
 		t.Fatalf("expected Brew to short-circuit and succeed, got %v", err)
+	}
+}
+
+func TestBrew_TelemetryCustomPricing(t *testing.T) {
+	origCfg := config.Cfg
+	defer func() { config.Cfg = origCfg }()
+
+	tmpDir, err := os.MkdirTemp("", "pithos-telemetry-pricing-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	// Write dummy image to be copied
+	dummySourceImage := filepath.Join(tmpDir, "source.png")
+	if writeErr := os.WriteFile(dummySourceImage, []byte("fake-image-bytes"), 0600); writeErr != nil {
+		t.Fatalf("failed to write source image: %v", writeErr)
+	}
+
+	// Setup pipeline initiate
+	optsInit := InitiateOptions{
+		OutputDir:       tmpDir,
+		Theme:           "Telemetry Custom Pricing",
+		TargetPageCount: 2,
+	}
+	_, err = Initiate(optsInit)
+	if err != nil {
+		t.Fatalf("failed to initiate book: %v", err)
+	}
+
+	// Configure custom pricing
+	config.Cfg = &config.Config{
+		MCP: config.MCPConfig{
+			ImageGenPath: "pw-mcp-imagegen",
+		},
+		Pricing: map[string]telemetry.ModelPricing{
+			"unknown":  {Input: 1.00, Output: 2.00, Cached: 0.50},
+			"imagegen": {Input: 100000.00}, // $0.10 per image
+		},
+	}
+
+	// Mock LLM & MCP Transport
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	clientTransport, serverTransport := mcpsdk.NewInMemoryTransports()
+	_, cleanupMCP := setupMockImageGenServer(t, ctx, serverTransport, dummySourceImage)
+	defer cleanupMCP()
+
+	mockStanzas := []string{"Stanza 1 text", "Stanza 2 text"}
+	mockLLMClient := &mockLLM{
+		stanzas: mockStanzas,
+		usage: telemetry.TokenUsage{
+			InputTokens:  1000,
+			OutputTokens: 2000,
+			CachedTokens: 500,
+		},
+	}
+
+	optsBrew := BrewOptions{
+		OutputDir:    tmpDir,
+		MCPTransport: clientTransport,
+		LLM:          mockLLMClient,
+	}
+
+	err = Brew(ctx, optsBrew)
+	if err != nil {
+		t.Fatalf("Brew failed: %v", err)
+	}
+
+	// Verify manifest updates
+	m, err := manifest.LoadManifest(filepath.Join(tmpDir, "manifest.json"))
+	if err != nil {
+		t.Fatalf("failed to load manifest: %v", err)
+	}
+
+	if m.Telemetry.ImageGenerations != 2 {
+		t.Errorf("expected 2 image generations, got %d", m.Telemetry.ImageGenerations)
+	}
+
+	mu := m.Telemetry.ModelUsages["unknown"]
+	if mu == nil {
+		t.Error("expected unknown model usages telemetry to exist")
+	} else if mu.InputTokens != 1000 || mu.OutputTokens != 2000 || mu.CachedTokens != 500 {
+		t.Errorf("unexpected token usage: %+v", mu)
+	}
+
+	// Expected total cost calculation:
+	// LLM cost for unknown model:
+	// input billed = (1000 - 500) = 500 tokens * $1.00 / 1M = $0.00050
+	// output = 2000 tokens * $2.00 / 1M = $0.00400
+	// cached = 500 tokens * $0.50 / 1M = $0.00025
+	// total LLM = $0.00475
+	// Imagegen cost: 2 images * $0.10 = $0.20
+	// Total cost expected = $0.20475
+	expectedCost := 0.20475
+	if math.Abs(m.Telemetry.TotalCostUSD-expectedCost) > 1e-6 {
+		t.Errorf("expected TotalCostUSD %f, got %f", expectedCost, m.Telemetry.TotalCostUSD)
 	}
 }

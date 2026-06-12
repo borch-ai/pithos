@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+
+	"github.com/borch-ai/powerword/pkg/telemetry"
 )
 
 // PageStatus represents the processing state of a page.
@@ -68,6 +70,13 @@ type KDPLayout struct {
 	Guides               []LayoutGuide `json:"guides,omitempty"`
 }
 
+// TelemetryMetrics tracks token usage and book generation costs.
+type TelemetryMetrics struct {
+	ModelUsages      map[string]*telemetry.ModelUsage `json:"model_usages"`
+	ImageGenerations int64                            `json:"image_generations"`
+	TotalCostUSD     float64                          `json:"total_cost_usd"`
+}
+
 // Manifest is the root structure serving as the checkpoint state file.
 type Manifest struct {
 	mu sync.RWMutex
@@ -78,6 +87,7 @@ type Manifest struct {
 	Progress       Progress          `json:"progress"`
 	AssetRegistry  map[string]string `json:"asset_registry"`
 	KDPLayout      KDPLayout         `json:"kdp_layout"`
+	Telemetry      TelemetryMetrics  `json:"telemetry"`
 }
 
 // NewManifest instantiates a new Manifest with initialized fields.
@@ -87,6 +97,9 @@ func NewManifest(path string) *Manifest {
 		AssetRegistry: make(map[string]string),
 		Progress: Progress{
 			Pages: make([]PageState, 0),
+		},
+		Telemetry: TelemetryMetrics{
+			ModelUsages: make(map[string]*telemetry.ModelUsage),
 		},
 	}
 }
@@ -110,6 +123,9 @@ func LoadManifest(path string) (*Manifest, error) {
 	}
 	if m.Progress.Pages == nil {
 		m.Progress.Pages = make([]PageState, 0)
+	}
+	if m.Telemetry.ModelUsages == nil {
+		m.Telemetry.ModelUsages = make(map[string]*telemetry.ModelUsage)
 	}
 
 	return &m, nil
@@ -283,4 +299,33 @@ func CalculateSpineWidth(pageCount int, paperType PaperType) float64 {
 // Returns (widthWithBleed, heightWithBleed) in inches.
 func CalculateTrimWithBleed(trimWidth, trimHeight float64) (float64, float64) {
 	return trimWidth + 0.125, trimHeight + 0.25
+}
+
+// UpdateTotalCost computes the total cost USD based on model usage and image generations.
+func (m *Manifest) UpdateTotalCost(pricing map[string]telemetry.ModelPricing) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	tracker := telemetry.NewUsageTracker()
+	for model, usage := range m.Telemetry.ModelUsages {
+		if usage != nil {
+			tracker.RecordUsage(model, telemetry.TokenUsage{
+				InputTokens:  usage.InputTokens,
+				OutputTokens: usage.OutputTokens,
+				CachedTokens: usage.CachedTokens,
+			})
+		}
+	}
+
+	llmCost := tracker.EstimatedCost(pricing)
+
+	// Default image generation cost is $0.04 unless defined in pricing
+	imageCost := 0.04
+	if pricing != nil {
+		if p, ok := pricing["imagegen"]; ok {
+			imageCost = p.Input / 1_000_000.0
+		}
+	}
+
+	m.Telemetry.TotalCostUSD = llmCost + float64(m.Telemetry.ImageGenerations)*imageCost
 }

@@ -14,32 +14,58 @@ jobs:
     name: Code Linting
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
+      - name: Checkout Pithos
         uses: actions/checkout@v4
+        with:
+          path: pithos
+
+      - name: Checkout Powerword
+        uses: actions/checkout@v4
+        with:
+          repository: borch-ai/powerword
+          path: powerword
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: pithos/go.mod
           cache: true
+          cache-dependency-path: |
+            pithos/go.sum
+            powerword/go.sum
 
       - name: Run Linter
         uses: golangci/golangci-lint-action@v7
         with:
           version: v2.12.2
+          working-directory: pithos
 
   security-and-test:
     name: Security & Tests
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pithos
     steps:
-      - name: Checkout Code
+      - name: Checkout Pithos
         uses: actions/checkout@v4
+        with:
+          path: pithos
+
+      - name: Checkout Powerword
+        uses: actions/checkout@v4
+        with:
+          repository: borch-ai/powerword
+          path: powerword
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: pithos/go.mod
           cache: true
+          cache-dependency-path: |
+            pithos/go.sum
+            powerword/go.sum
 
       - name: Check Dependency Tidy Hygiene
         run: |
@@ -54,3 +80,4 @@ jobs:
 
       - name: Compile Binaries
         run: make build
+
