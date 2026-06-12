@@ -418,7 +418,9 @@ func copyFile(src, dst string) error {
 func exportManuscriptToMarkdown(outputDir string, pages []manifest.PageState) error {
 	var sb strings.Builder
 	sb.WriteString("<!-- PITHOS MANUSCRIPT REVIEW -->\n")
-	sb.WriteString("<!-- Edit the stanzas under '## Text' and the illustration prompts under '## Prompt'. Do not change the '# Page N' headers. -->\n")
+	sb.WriteString("<!-- Each page block begins with a '# Page N' header, followed by two subsections: -->\n")
+	sb.WriteString("<!-- '## Text' — the stanza/prose to edit, and '## Prompt' — the illustration prompt to edit. -->\n")
+	sb.WriteString("<!-- Do not change any '# Page N' or '## Text'/'## Prompt' headers themselves. -->\n")
 	sb.WriteString("<!-- When done, save this file and run 'pithos brew' again to import and continue. -->\n\n")
 
 	for _, p := range pages {
@@ -595,6 +597,8 @@ func importManuscriptFromMarkdown(outputDir string, m *manifest.Manifest) (bool,
 			if page.PageIndex == pp.index {
 				found = true
 				textChanged := page.Text != pp.text
+				// pp.hasSubheaders is tracked per-page by parsePageBlock, so legacy-format pages in
+				// a mixed-format file will have hasSubheaders==false and safely skip prompt updates.
 				promptChanged := pp.hasSubheaders && page.IllustrationPrompt != pp.prompt
 
 				if textChanged || promptChanged {
