@@ -1273,6 +1273,14 @@ func TestImportManuscriptFromMarkdown_Errors(t *testing.T) {
 		t.Error("expected error for invalid page index format, got nil")
 	}
 
+	// 3b. Header with trailing extra text (e.g. # Page 1 (draft))
+	trailingHeaders := "<!-- review -->\n# Page 1 (draft)\nStanza 1"
+	_ = os.WriteFile(manuscriptPath, []byte(trailingHeaders), 0600)
+	_, err = importManuscriptFromMarkdown(tmpDir, m)
+	if err == nil {
+		t.Error("expected error for header with trailing text, got nil")
+	}
+
 	// 4. Page index mismatch
 	mismatchPage := "# Page 5\nStanza 5"
 	_ = os.WriteFile(manuscriptPath, []byte(mismatchPage), 0600)

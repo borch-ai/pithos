@@ -19,24 +19,24 @@ Integrate Pithos with the new `pw-mcp-gdoc` Model Context Protocol (MCP) server.
 
 ### Configuration Layer
 
-#### [MODIFY] [config.go](file:///Users/human/code/pithos/internal/config/config.go)
+#### [MODIFY] [config.go](file://../../internal/config/config.go)
 - Add a new config property for the GDocs MCP plugin binary path, e.g. `config.Cfg.MCP.GDocPath`.
 
 ### State manifest
 
-#### [MODIFY] [manifest.go](file:///Users/human/code/pithos/internal/manifest/manifest.go)
-- Add `GDocID string `json:"gdoc_id,omitempty"`` to the `Progress` struct in the manifest to persist the Google Doc reference between execution runs.
+#### [MODIFY] [manifest.go](file://../../internal/manifest/manifest.go)
+- Add ``GDocID string `json:"gdoc_id,omitempty"```` to the `Progress` struct in the manifest to persist the Google Doc reference between execution runs.
 
 ### CLI Layer
 
-#### [MODIFY] [brew.go](file:///Users/human/code/pithos/cmd/pithos/brew.go)
+#### [MODIFY] [brew.go](file://../../cmd/pithos/brew.go)
 - Add the `--gdoc` boolean flag to the `brew` command.
 - Add an optional `--gdoc-id <id>` string flag to override or link to an existing document.
 - Pass `GDoc bool` and `GDocID string` to `pipeline.BrewOptions`.
 
 ### Pipeline Core
 
-#### [MODIFY] [brew.go](file:///Users/human/code/pithos/internal/pipeline/brew.go)
+#### [MODIFY] [brew.go](file://../../internal/pipeline/brew.go)
 - Add `GDoc bool` and `GDocID string` to `BrewOptions`.
 - Implement `exportManuscriptToGDoc(ctx context.Context, m *manifest.Manifest, opts BrewOptions) error`:
   - Connect to `pw-mcp-gdoc` client.
@@ -67,4 +67,4 @@ Integrate Pithos with the new `pw-mcp-gdoc` Model Context Protocol (MCP) server.
 - Configure `pw-mcp-gdoc` path in `.pithos.toml`.
 - Run `pithos brew --gdoc` on a new book theme. Verify a Google Doc is created, its URL is printed to the terminal, and Pithos exits.
 - Open the Google Doc in your browser, modify a page stanza.
-- Run `pithos brew --resume`. Verify the revised stanza is downloaded, page status updates in `manifest.json`, and its image is regenerated.
+- Run `pithos brew` again. Verify the revised stanza is downloaded, page status updates in `manifest.json`, and its image is regenerated.

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -60,9 +61,13 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 		}
 	}
 
-	// Import edits from manuscript.md if it exists
+	// Import edits from manuscript.md if it exists and manuscript is generated
 	manuscriptPath := filepath.Join(opts.OutputDir, "manuscript.md")
+	var hasManuscript bool
 	if _, statErr := os.Stat(manuscriptPath); statErr == nil {
+		hasManuscript = true
+	}
+	if m.Progress.ManuscriptGenerated && hasManuscript {
 		changed, importErr := importManuscriptFromMarkdown(opts.OutputDir, m)
 		if importErr != nil {
 			return importErr
@@ -443,8 +448,8 @@ func importManuscriptFromMarkdown(outputDir string, m *manifest.Manifest) (bool,
 			}
 
 			header := strings.TrimPrefix(trimmed, "# Page ")
-			var idx int
-			if _, err := fmt.Sscanf(header, "%d", &idx); err != nil {
+			idx, err := strconv.Atoi(header)
+			if err != nil {
 				return false, fmt.Errorf("failed to parse page header %q: %w", line, err)
 			}
 			currentIdx = idx

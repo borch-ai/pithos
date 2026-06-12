@@ -22,13 +22,13 @@ Instead of a console/terminal input loop, implement a local Markdown-based revie
 
 ### CLI Layer
 
-#### [MODIFY] [brew.go](file:///Users/human/code/pithos/cmd/pithos/brew.go)
+#### [MODIFY] [brew.go](file://../../cmd/pithos/brew.go)
 - Add the `--review` boolean flag to the `brew` command.
 - Pass `Review: brewReview` in `pipeline.BrewOptions`.
 
 ### Pipeline Core
 
-#### [MODIFY] [brew.go](file:///Users/human/code/pithos/internal/pipeline/brew.go)
+#### [MODIFY] [brew.go](file://../../internal/pipeline/brew.go)
 - Add `Review bool` to `BrewOptions`.
 - Implement `exportManuscriptToMarkdown(outputDir string, pages []manifest.PageState) error`:
   - Formats stanzas into a clean Markdown structure with page headers (e.g. `# Page 1`, `# Page 2`).
