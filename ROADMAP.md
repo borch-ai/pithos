@@ -149,7 +149,7 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
 *   [ ] **Task 5.5: Speculative: Publish Pithos as Homebrew Package with Dependencies**
     *   Publish pre-compiled Pithos binaries via Homebrew and list Powerword MCP plugins as package dependencies.
     *   [Implementation Plan](plans/phase_5/task_5_5_speculative_publish_pithos_brew.md)
-*   [ ] **Task 5.6: Unified LLM Integration**
+*   [x] **Task 5.6: Unified LLM Integration**
     *   Refactor Pithos's LLM client layer to consume the unified powerword LLM client package, eliminating the local raw HTTP REST implementations.
     *   [Implementation Plan](plans/phase_5/task_5_6_unified_llm_integration.md)
 *   [ ] **Task 5.7: Trend-Based Brainstorming**

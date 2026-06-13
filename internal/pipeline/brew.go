@@ -163,9 +163,17 @@ func generateManuscript(ctx context.Context, m *manifest.Manifest, opts BrewOpti
 	case opts.LLM != nil:
 		llmClient = opts.LLM
 	case config.Cfg != nil && config.Cfg.API.GeminiKey != "":
-		llmClient = &GeminiClient{APIKey: config.Cfg.API.GeminiKey, Client: opts.HTTPClient}
+		pwClient, err := newPowerwordLLMClient("gemini-2.5-flash", config.Cfg.API.GeminiKey, "", opts.HTTPClient)
+		if err != nil {
+			return fmt.Errorf("failed to create gemini client: %w", err)
+		}
+		llmClient = &PowerwordClientAdapter{client: pwClient, modelName: "gemini-2.5-flash"}
 	case config.Cfg != nil && config.Cfg.API.OpenAIKey != "":
-		llmClient = &OpenAIClient{APIKey: config.Cfg.API.OpenAIKey, Client: opts.HTTPClient}
+		pwClient, err := newPowerwordLLMClient("gpt-4o", "", config.Cfg.API.OpenAIKey, opts.HTTPClient)
+		if err != nil {
+			return fmt.Errorf("failed to create openai client: %w", err)
+		}
+		llmClient = &PowerwordClientAdapter{client: pwClient, modelName: "gpt-4o"}
 	default:
 		return errors.New("neither Gemini nor OpenAI API key is configured")
 	}
@@ -196,11 +204,9 @@ func generateManuscript(ctx context.Context, m *manifest.Manifest, opts BrewOpti
 
 	// Record token usage
 	var modelName string
-	switch llmClient.(type) {
-	case *GeminiClient:
-		modelName = "gemini-2.5-flash"
-	case *OpenAIClient:
-		modelName = "gpt-4o"
+	switch client := llmClient.(type) {
+	case *PowerwordClientAdapter:
+		modelName = client.modelName
 	default:
 		modelName = "unknown"
 	}

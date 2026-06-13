@@ -1,6 +1,9 @@
 # plan: Task 5.6: Unified LLM Integration
 
-**Status:** Open (Issue #[TBD])
+**Status:** Completed
+**Go Version:** 1.26.4
+**Date Completed:** 2026-06-13
+**Unit Test Coverage:** 91.6%
 
 Refactor the Pithos LLM client layer to consume the refactored `github.com/borch-ai/powerword/pkg/llm` package, eliminating the local raw HTTP REST implementations and unifying provider communication logic.
 

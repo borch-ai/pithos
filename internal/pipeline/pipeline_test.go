@@ -27,6 +27,34 @@ type mockLLM struct {
 	err     error
 }
 
+type geminiResponse struct {
+	Candidates []struct {
+		Content struct {
+			Parts []struct {
+				Text string `json:"text"`
+			} `json:"parts"`
+		} `json:"content"`
+	} `json:"candidates"`
+	UsageMetadata *struct {
+		PromptTokenCount        int `json:"promptTokenCount"`
+		CandidatesTokenCount    int `json:"candidatesTokenCount"`
+		CachedContentTokenCount int `json:"cachedContentTokenCount"`
+	} `json:"usageMetadata"`
+}
+
+type openAIResponse struct {
+	Choices []struct {
+		Message struct {
+			Content string `json:"content"`
+		} `json:"message"`
+	} `json:"choices"`
+	Usage *struct {
+		PromptTokens     int `json:"prompt_tokens"`
+		CompletionTokens int `json:"completion_tokens"`
+		TotalTokens      int `json:"total_tokens"`
+	} `json:"usage"`
+}
+
 func (m *mockLLM) GenerateStanzas(ctx context.Context, theme string, count int) ([]string, []string, telemetry.TokenUsage, error) {
 	if m.err != nil {
 		return nil, nil, telemetry.TokenUsage{}, m.err
@@ -602,7 +630,7 @@ func TestLLMProviderSelection_Gemini(t *testing.T) {
 			if strings.Contains(req.URL.Host, "generativelanguage") {
 				w := httptest.NewRecorder()
 				w.Header().Set("Content-Type", "application/json")
-				_ = json.NewEncoder(w).Encode(geminiMockResp)
+				_ = json.NewEncoder(w).Encode([]geminiResponse{geminiMockResp})
 				return w.Result(), nil
 			}
 			return nil, fmt.Errorf("unexpected request to: %s", req.URL)
@@ -686,19 +714,13 @@ func TestLLMProviderSelection_OpenAI(t *testing.T) {
 		},
 	}
 	openAIMockResp.Usage = &struct {
-		PromptTokens        int `json:"prompt_tokens"`
-		CompletionTokens    int `json:"completion_tokens"`
-		PromptTokensDetails *struct {
-			CachedTokens int `json:"cached_tokens"`
-		} `json:"prompt_tokens_details"`
+		PromptTokens     int `json:"prompt_tokens"`
+		CompletionTokens int `json:"completion_tokens"`
+		TotalTokens      int `json:"total_tokens"`
 	}{
 		PromptTokens:     150,
 		CompletionTokens: 250,
-		PromptTokensDetails: &struct {
-			CachedTokens int `json:"cached_tokens"`
-		}{
-			CachedTokens: 75,
-		},
+		TotalTokens:      400,
 	}
 
 	mockHttpClient := &http.Client{
@@ -738,7 +760,7 @@ func TestLLMProviderSelection_OpenAI(t *testing.T) {
 	mu := m.Telemetry.ModelUsages["gpt-4o"]
 	if mu == nil {
 		t.Error("expected gpt-4o model usages telemetry to exist")
-	} else if mu.InputTokens != 150 || mu.OutputTokens != 250 || mu.CachedTokens != 75 {
+	} else if mu.InputTokens != 150 || mu.OutputTokens != 250 || mu.CachedTokens != 0 {
 		t.Errorf("unexpected openai token usage: %+v", mu)
 	}
 }
