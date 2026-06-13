@@ -27,6 +27,34 @@ type mockLLM struct {
 	err     error
 }
 
+type geminiResponse struct {
+	Candidates []struct {
+		Content struct {
+			Parts []struct {
+				Text string `json:"text"`
+			} `json:"parts"`
+		} `json:"content"`
+	} `json:"candidates"`
+	UsageMetadata *struct {
+		PromptTokenCount        int `json:"promptTokenCount"`
+		CandidatesTokenCount    int `json:"candidatesTokenCount"`
+		CachedContentTokenCount int `json:"cachedContentTokenCount"`
+	} `json:"usageMetadata"`
+}
+
+type openAIResponse struct {
+	Choices []struct {
+		Message struct {
+			Content string `json:"content"`
+		} `json:"message"`
+	} `json:"choices"`
+	Usage *struct {
+		PromptTokens     int `json:"prompt_tokens"`
+		CompletionTokens int `json:"completion_tokens"`
+		TotalTokens      int `json:"total_tokens"`
+	} `json:"usage"`
+}
+
 func (m *mockLLM) GenerateStanzas(ctx context.Context, theme string, count int) ([]string, []string, telemetry.TokenUsage, error) {
 	if m.err != nil {
 		return nil, nil, telemetry.TokenUsage{}, m.err
@@ -602,7 +630,13 @@ func TestLLMProviderSelection_Gemini(t *testing.T) {
 			if strings.Contains(req.URL.Host, "generativelanguage") {
 				w := httptest.NewRecorder()
 				w.Header().Set("Content-Type", "application/json")
-				_ = json.NewEncoder(w).Encode(geminiMockResp)
+				// Note: The official google/generative-ai-go/genai SDK's chat.SendMessage method
+				// internally calls the streaming endpoint (:streamGenerateContent), which expects
+				// the response to be wrapped in a JSON array of response chunks. Therefore, we
+				// must encode it as a slice here to match the SDK's transport expectations.
+				if encErr := json.NewEncoder(w).Encode([]geminiResponse{geminiMockResp}); encErr != nil {
+					return nil, encErr
+				}
 				return w.Result(), nil
 			}
 			return nil, fmt.Errorf("unexpected request to: %s", req.URL)
@@ -633,14 +667,24 @@ func TestLLMProviderSelection_Gemini(t *testing.T) {
 	}
 	mu := m.Telemetry.ModelUsages["gemini-2.5-flash"]
 	if mu == nil {
-		t.Error("expected gemini-2.5-flash model usages telemetry to exist")
-	} else if mu.InputTokens != 100 || mu.OutputTokens != 200 || mu.CachedTokens != 50 {
-		t.Errorf("unexpected gemini token usage: %+v", mu)
+		t.Fatal("expected gemini-2.5-flash model usages telemetry to exist")
+	}
+	if mu.InputTokens != 100 {
+		t.Errorf("expected InputTokens 100, got %d", mu.InputTokens)
+	}
+	if mu.OutputTokens != 200 {
+		t.Errorf("expected OutputTokens 200, got %d", mu.OutputTokens)
+	}
+	expectedCached := 50
+	if mu.CachedTokens != expectedCached {
+		t.Errorf("expected CachedTokens %d, got %d", expectedCached, mu.CachedTokens)
 	}
 }
 
 //nolint:funlen // OpenAI client setup and payload parsing test is inherently long
 func TestLLMProviderSelection_OpenAI(t *testing.T) {
+	t.Setenv("OPENAI_BASE_URL", "")
+
 	origCfg := config.Cfg
 	defer func() { config.Cfg = origCfg }()
 
@@ -686,19 +730,13 @@ func TestLLMProviderSelection_OpenAI(t *testing.T) {
 		},
 	}
 	openAIMockResp.Usage = &struct {
-		PromptTokens        int `json:"prompt_tokens"`
-		CompletionTokens    int `json:"completion_tokens"`
-		PromptTokensDetails *struct {
-			CachedTokens int `json:"cached_tokens"`
-		} `json:"prompt_tokens_details"`
+		PromptTokens     int `json:"prompt_tokens"`
+		CompletionTokens int `json:"completion_tokens"`
+		TotalTokens      int `json:"total_tokens"`
 	}{
 		PromptTokens:     150,
 		CompletionTokens: 250,
-		PromptTokensDetails: &struct {
-			CachedTokens int `json:"cached_tokens"`
-		}{
-			CachedTokens: 75,
-		},
+		TotalTokens:      400,
 	}
 
 	mockHttpClient := &http.Client{
@@ -706,7 +744,9 @@ func TestLLMProviderSelection_OpenAI(t *testing.T) {
 			if strings.Contains(req.URL.Host, "api.openai.com") {
 				w := httptest.NewRecorder()
 				w.Header().Set("Content-Type", "application/json")
-				_ = json.NewEncoder(w).Encode(openAIMockResp)
+				if encErr := json.NewEncoder(w).Encode(openAIMockResp); encErr != nil {
+					return nil, encErr
+				}
 				return w.Result(), nil
 			}
 			return nil, fmt.Errorf("unexpected request to: %s", req.URL)
@@ -737,9 +777,18 @@ func TestLLMProviderSelection_OpenAI(t *testing.T) {
 	}
 	mu := m.Telemetry.ModelUsages["gpt-4o"]
 	if mu == nil {
-		t.Error("expected gpt-4o model usages telemetry to exist")
-	} else if mu.InputTokens != 150 || mu.OutputTokens != 250 || mu.CachedTokens != 75 {
-		t.Errorf("unexpected openai token usage: %+v", mu)
+		t.Fatal("expected gpt-4o model usages telemetry to exist")
+	}
+	if mu.InputTokens != 150 {
+		t.Errorf("expected InputTokens 150, got %d", mu.InputTokens)
+	}
+	if mu.OutputTokens != 250 {
+		t.Errorf("expected OutputTokens 250, got %d", mu.OutputTokens)
+	}
+	// The powerword OpenAI client does not populate cached tokens, so we explicitly expect 0.
+	expectedCached := 0
+	if mu.CachedTokens != expectedCached {
+		t.Errorf("expected CachedTokens %d, got %d", expectedCached, mu.CachedTokens)
 	}
 }
 

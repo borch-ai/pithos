@@ -1,6 +1,9 @@
 # plan: Task 5.6: Unified LLM Integration
 
-**Status:** Open (Issue #[TBD])
+**Status:** Completed
+**Go Version:** 1.26.4
+**Date Completed:** 2026-06-13
+**Unit Test Coverage:** 92.0%
 
 Refactor the Pithos LLM client layer to consume the refactored `github.com/borch-ai/powerword/pkg/llm` package, eliminating the local raw HTTP REST implementations and unifying provider communication logic.
 
@@ -31,6 +34,7 @@ None. This is a clean internal refactoring to unify the LLM layer using the shar
     * Call `client.Generate(ctx, messages, nil, llm.WithResponseSchema(stanzasResponse{}))`.
     * Return stanzas, prompts, token usage, and error.
 - Modify client factories to return the adapter wrapping either Gemini or OpenAI clients.
+- Add safety checks to `GenerateStanzas` in the adapter to fail-fast with a clear error if the adapter or underlying client interface is nil.
 
 ### Pipeline Runner
 
