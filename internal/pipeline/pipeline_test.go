@@ -630,6 +630,10 @@ func TestLLMProviderSelection_Gemini(t *testing.T) {
 			if strings.Contains(req.URL.Host, "generativelanguage") {
 				w := httptest.NewRecorder()
 				w.Header().Set("Content-Type", "application/json")
+				// Note: The official google/generative-ai-go/genai SDK's chat.SendMessage method
+				// internally calls the streaming endpoint (:streamGenerateContent), which expects
+				// the response to be wrapped in a JSON array of response chunks. Therefore, we
+				// must encode it as a slice here to match the SDK's transport expectations.
 				_ = json.NewEncoder(w).Encode([]geminiResponse{geminiMockResp})
 				return w.Result(), nil
 			}
@@ -661,9 +665,16 @@ func TestLLMProviderSelection_Gemini(t *testing.T) {
 	}
 	mu := m.Telemetry.ModelUsages["gemini-2.5-flash"]
 	if mu == nil {
-		t.Error("expected gemini-2.5-flash model usages telemetry to exist")
-	} else if mu.InputTokens != 100 || mu.OutputTokens != 200 || mu.CachedTokens != 50 {
-		t.Errorf("unexpected gemini token usage: %+v", mu)
+		t.Fatal("expected gemini-2.5-flash model usages telemetry to exist")
+	}
+	if mu.InputTokens != 100 {
+		t.Errorf("expected InputTokens 100, got %d", mu.InputTokens)
+	}
+	if mu.OutputTokens != 200 {
+		t.Errorf("expected OutputTokens 200, got %d", mu.OutputTokens)
+	}
+	if mu.CachedTokens != 50 {
+		t.Errorf("expected CachedTokens 50, got %d", mu.CachedTokens)
 	}
 }
 
@@ -759,9 +770,17 @@ func TestLLMProviderSelection_OpenAI(t *testing.T) {
 	}
 	mu := m.Telemetry.ModelUsages["gpt-4o"]
 	if mu == nil {
-		t.Error("expected gpt-4o model usages telemetry to exist")
-	} else if mu.InputTokens != 150 || mu.OutputTokens != 250 || mu.CachedTokens != 0 {
-		t.Errorf("unexpected openai token usage: %+v", mu)
+		t.Fatal("expected gpt-4o model usages telemetry to exist")
+	}
+	if mu.InputTokens != 150 {
+		t.Errorf("expected InputTokens 150, got %d", mu.InputTokens)
+	}
+	if mu.OutputTokens != 250 {
+		t.Errorf("expected OutputTokens 250, got %d", mu.OutputTokens)
+	}
+	// The powerword OpenAI client does not populate cached tokens, so we expect 0.
+	if mu.CachedTokens != 0 {
+		t.Errorf("expected CachedTokens 0, got %d", mu.CachedTokens)
 	}
 }
 
