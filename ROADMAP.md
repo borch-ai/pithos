@@ -4,6 +4,19 @@ This roadmap defines the engineering journey to build **Pithos**, the automated 
 
 ---
 
+## Ecosystem Context
+
+Pithos is the **book factory** of the Borch-AI publishing stack. It is a deterministic pipeline, not a free-form agent.
+
+- **Upstream**: **Kiln** orchestrates Pithos as a subprocess (`kiln forge`). Kiln supplies the validated niche concept; Pithos executes production.
+- **Downstream**: Pithos invokes `pw-mcp-imagegen`, `pw-mcp-kdp-math`, `pw-mcp-typst` (pending) from the Powerword MCP plugin network.
+- **Monitoring**: **Lamplighter** (Pithos Phase 5.1) provides mobile approval checkpoints during long brew/assemble runs.
+
+> [!IMPORTANT]
+> **The core functional deliverable of this tool is Task 4.2 (Typst PDF Layout Assembly) and Task 5.20 (Kiln Foundry State Integration)**. All Phase 6 work is frozen until Tasks 4.2 and 5.20 ship.
+
+---
+
 ## Phase 1: Foundation
 Focus: Bootstrapping the CLI application, establishing the documentation, configuration layer, command structure, and state management.
 
@@ -79,39 +92,19 @@ Focus: Turning raw text and image assets into valid, print-ready files.
 
 ---
 
-## Phase 5: Telemetry & Deployment
+## Phase 5: Telemetry, Deployment & Integration
 Focus: Remote monitoring, human-in-the-loop approvals, and Amazon KDP uploads.
 
+### Core Pipeline & Ecosystem Integration
 *   [ ] **Task 5.1: Lamplighter Integration**
     *   Integrate Firebase/WebRTC signaling to connect the Pithos process to the Lamplighter Android app.
     *   Implement interactive approval checkpoints (e.g., pausing the pipeline to wait for a human to approve the cover art on their phone) backed by state manifest updates.
     *   [Implementation Plan](plans/phase_5/task_5_1_lamplighter_integration.md)
-*   [ ] **Task 5.2: The `deploy` Engine**
-    *   Connect to `pw-mcp-seo` for keyword/metadata generation (no direct API scraping inside Pithos).
-    *   Connect to `pw-mcp-video` for generating promotional assets.
-    *   Package all assets, metadata, and generated files into a unified release zip file for KDP submission.
-    *   [Implementation Plan](plans/phase_5/task_5_2_deploy_engine.md)
-*   [ ] **Task 5.3: Speculative: MCP Telemetry Migration**
-    *   Migrate token telemetry and billing calculations from the imported module to a decoupled, external `pw-mcp-telemetry` MCP server.
-    *   [Implementation Plan](plans/phase_5/task_5_3_mcp_telemetry_migration.md)
-*   [ ] **Task 5.4: Speculative: Homebrew Formula for Dependency Management**
-    *   Migrate dependency installation instructions to rely on Homebrew (`brew`) for installing required MCP plugin servers.
-    *   [Implementation Plan](plans/phase_5/task_5_4_speculative_brew_dependencies.md)
-*   [ ] **Task 5.5: Speculative: Publish Pithos as Homebrew Package with Dependencies**
-    *   Publish pre-compiled Pithos binaries via Homebrew and list Powerword MCP plugins as package dependencies.
-    *   [Implementation Plan](plans/phase_5/task_5_5_speculative_publish_pithos_brew.md)
-*   [ ] **Task 5.6: Unified LLM Integration**
-    *   Refactor Pithos's LLM client layer to consume the unified powerword LLM client package, eliminating the local raw HTTP REST implementations.
-    *   [Implementation Plan](plans/phase_5/task_5_6_unified_llm_integration.md)
-*   [ ] **Task 5.7: Trend-Based Brainstorming**
-    *   Implement the `brainstorm` command and connect to the external `pw-mcp-trends` MCP plugin to generate parodic themes, titles, and illustration styles.
-    *   [Implementation Plan](plans/phase_5/task_5_7_trend_based_brainstorming.md)
-*   [ ] **Task 5.8: EPUB / Digital Publication Export**
-    *   Integrate with a standalone `pw-mcp-epub` MCP plugin to export the parodic manuscript and generated illustration assets into a valid EPUB file.
-    *   [Implementation Plan](plans/phase_5/task_5_8_epub_digital_export.md)
-*   [ ] **Task 5.9: Google Doc MCP Integration**
-    *   Integrate with the `pw-mcp-gdoc` MCP plugin to export manuscripts to Google Docs for editing and import them back on resume.
-    *   [Implementation Plan](plans/phase_5/task_5_9_gdoc_mcp_integration.md)
+*   [ ] **Task 5.20: Kiln Foundry State Integration**
+    *   Implement the state contract by writing pipeline milestone updates (`initiate_complete`, `brew_complete`, `assemble_complete`) and accumulated costs to the Pithos workspace manifest (`manifest.json`), which Kiln reads to sync book status.
+    *   [Implementation Plan](plans/phase_5/task_5_20_kiln_integration.md)
+
+### Interactive UI & Quality Enhancements
 *   [x] **Task 5.10: Visual Prompt Expansion for Character Consistency**
     *   Modify stanzas generation to produce parodic poems alongside character-consistent illustration prompts. Integrate prompts in the manifest and the markdown review loop.
     *   [Implementation Plan](plans/phase_5/task_5_10_visual_prompt_expansion.md)
@@ -146,9 +139,36 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Amazon KDP uploads.
     *   Generate a static web-based preview folder containing an interactive flipbook player to visually review books locally in any browser.
     *   [Implementation Plan](plans/phase_5/task_5_19_web_book_preview.md)
 
+### Speculative & Dependency Management
+*   [ ] **Task 5.3: Speculative: MCP Telemetry Migration**
+    *   Migrate token telemetry and billing calculations from the imported module to a decoupled, external `pw-mcp-telemetry` MCP server.
+    *   [Implementation Plan](plans/phase_5/task_5_3_mcp_telemetry_migration.md)
+*   [ ] **Task 5.4: Speculative: Homebrew Formula for Dependency Management**
+    *   Migrate dependency installation instructions to rely on Homebrew (`brew`) for installing required MCP plugin servers.
+    *   [Implementation Plan](plans/phase_5/task_5_4_speculative_brew_dependencies.md)
+*   [ ] **Task 5.5: Speculative: Publish Pithos as Homebrew Package with Dependencies**
+    *   Publish pre-compiled Pithos binaries via Homebrew and list Powerword MCP plugins as package dependencies.
+    *   [Implementation Plan](plans/phase_5/task_5_5_speculative_publish_pithos_brew.md)
+*   [ ] **Task 5.6: Unified LLM Integration**
+    *   Refactor Pithos's LLM client layer to consume the unified powerword LLM client package, eliminating the local raw HTTP REST implementations.
+    *   [Implementation Plan](plans/phase_5/task_5_6_unified_llm_integration.md)
+*   [ ] **Task 5.7: Trend-Based Brainstorming**
+    *   Implement the `brainstorm` command and connect to the external `pw-mcp-trends` MCP plugin to generate parodic themes, titles, and illustration styles.
+    *   [Implementation Plan](plans/phase_5/task_5_7_trend_based_brainstorming.md)
+*   [ ] **Task 5.8: EPUB / Digital Publication Export**
+    *   Integrate with a standalone `pw-mcp-epub` MCP plugin to export the parodic manuscript and generated illustration assets into a valid EPUB file.
+    *   [Implementation Plan](plans/phase_5/task_5_8_epub_digital_export.md)
+*   [ ] **Task 5.9: Google Doc MCP Integration**
+    *   Integrate with the `pw-mcp-gdoc` MCP plugin to export manuscripts to Google Docs for editing and import them back on resume.
+    *   [Implementation Plan](plans/phase_5/task_5_9_gdoc_mcp_integration.md)
+
 ---
 
-## Phase 6: Long-Form & Serious Publishing
+## Phase 6: Speculative — Long-Form & Serious Publishing
+
+> [!WARNING]
+> **This entire phase is frozen until Pithos Tasks 4.2 (Typst PDF Layout Assembly) and 5.20 (Kiln Foundry State Integration) are complete.** The scope below represents a potential future direction — evolving Pithos from a children's book factory into a general-purpose publishing pipeline. This is a distinct product pivot, not a natural extension of the current mission. Do not begin any Phase 6 task without an explicit product decision to expand scope.
+
 Focus: Evolving Pithos into a modular, outline-driven book generation tool for technical writing, self-help, and novels.
 
 *   [ ] **Task 6.1: Virtual Author Profiles & Persona Manager**
