@@ -26,7 +26,7 @@ Define and implement a stable state contract between the Pithos `manifest.json` 
 
 ### `manifest.json` Schema Extension
 
-#### [MODIFY] [internal/manifest/manifest.go](file://../../internal/manifest/manifest.go)
+#### [MODIFY] [manifest.go](file://../../internal/manifest/manifest.go)
 Add the following fields to the Pithos `Manifest` struct:
 
 ```go
@@ -59,16 +59,16 @@ type Manifest struct {
 
 ### Milestone Writing
 
-#### [MODIFY] [internal/pipeline/brew.go](file://../../internal/pipeline/brew.go)
+#### [MODIFY] [brew.go](file://../../internal/pipeline/brew.go)
 After brew completes successfully, append `"brew_complete"` to `manifest.Kiln.Milestones` and call `manifest.Save()`.
 
-#### [MODIFY] [internal/pipeline/assemble.go](file://../../internal/pipeline/assemble.go)
+#### [MODIFY] [assemble.go](file://../../internal/pipeline/assemble.go)
 After assemble completes:
 - Set `manifest.Kiln.InteriorPDFPath` and `manifest.Kiln.CoverPDFPath`.
 - Append `"assemble_complete"` to `manifest.Kiln.Milestones`.
 - Call `manifest.Save()`.
 
-#### [MODIFY] [internal/pipeline/initiate.go](file://../../internal/pipeline/initiate.go)
+#### [MODIFY] [initiate.go](file://../../internal/pipeline/initiate.go)
 On initiate:
 - Set `manifest.Kiln.Version = 1`.
 - Initialize `manifest.Kiln.Milestones = []`.
@@ -76,7 +76,7 @@ On initiate:
 
 ### Tests
 
-#### [MODIFY] [internal/manifest/manifest_test.go](file://../../internal/manifest/manifest_test.go)
+#### [MODIFY] [manifest_test.go](file://../../internal/manifest/manifest_test.go)
 - Verify `KilnSync` serializes and deserializes correctly.
 - Verify `Version` is set to `1` on initiate.
 - Verify milestones are appended in order.
