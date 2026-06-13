@@ -681,6 +681,10 @@ func TestLLMProviderSelection_Gemini(t *testing.T) {
 
 //nolint:funlen // OpenAI client setup and payload parsing test is inherently long
 func TestLLMProviderSelection_OpenAI(t *testing.T) {
+	origBaseURL := os.Getenv("OPENAI_BASE_URL")
+	os.Setenv("OPENAI_BASE_URL", "")
+	defer os.Setenv("OPENAI_BASE_URL", origBaseURL)
+
 	origCfg := config.Cfg
 	defer func() { config.Cfg = origCfg }()
 

@@ -22,7 +22,9 @@ func (m *mockPWClient) Generate(ctx context.Context, messages []llm.Message, too
 }
 
 func (m *mockPWClient) Stream(ctx context.Context, messages []llm.Message, tools []llm.ToolDefinition) (<-chan llm.StreamChunk, error) {
-	return nil, nil
+	ch := make(chan llm.StreamChunk)
+	close(ch)
+	return ch, nil
 }
 
 func (m *mockPWClient) ListModels(ctx context.Context) ([]string, error) {
