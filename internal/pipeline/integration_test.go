@@ -88,7 +88,7 @@ func TestBrew_Integration_RealSubprocess(t *testing.T) {
 		}
 		if string(data) != "integration-test-image-data" {
 			if string(data) == "" {
-				t.Logf("Warning: generated image is empty. This can happen in restricted sandboxed environments. Skipping content verification.")
+				t.Skip("skipping content verification: generated image is empty (restricted sandboxed environment)")
 			} else {
 				t.Errorf("expected image content 'integration-test-image-data', got %q", string(data))
 			}
@@ -193,7 +193,7 @@ func TestBrew_Integration_ReviewFlow(t *testing.T) {
 		}
 		if string(data) != "real-subprocess-image-data" {
 			if string(data) == "" {
-				t.Logf("Warning: generated image is empty. This can happen in restricted sandboxed environments. Skipping content verification.")
+				t.Skip("skipping content verification: generated image is empty (restricted sandboxed environment)")
 			} else {
 				t.Errorf("expected image content 'real-subprocess-image-data', got %q", string(data))
 			}

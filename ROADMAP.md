@@ -92,8 +92,8 @@ Focus: Turning raw text and image assets into valid, print-ready files.
 
 ---
 
-## Phase 5: Telemetry, Deployment & Integration
-Focus: Remote monitoring, human-in-the-loop approvals, and Amazon KDP uploads.
+## Phase 5: Telemetry & Kiln Integration
+Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest integration.
 
 ### Core Pipeline & Ecosystem Integration
 *   [ ] **Task 5.1: Lamplighter Integration**
