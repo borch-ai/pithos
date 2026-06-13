@@ -634,7 +634,9 @@ func TestLLMProviderSelection_Gemini(t *testing.T) {
 				// internally calls the streaming endpoint (:streamGenerateContent), which expects
 				// the response to be wrapped in a JSON array of response chunks. Therefore, we
 				// must encode it as a slice here to match the SDK's transport expectations.
-				_ = json.NewEncoder(w).Encode([]geminiResponse{geminiMockResp})
+				if encErr := json.NewEncoder(w).Encode([]geminiResponse{geminiMockResp}); encErr != nil {
+					return nil, encErr
+				}
 				return w.Result(), nil
 			}
 			return nil, fmt.Errorf("unexpected request to: %s", req.URL)
@@ -750,7 +752,9 @@ func TestLLMProviderSelection_OpenAI(t *testing.T) {
 			if strings.Contains(req.URL.Host, "api.openai.com") {
 				w := httptest.NewRecorder()
 				w.Header().Set("Content-Type", "application/json")
-				_ = json.NewEncoder(w).Encode(openAIMockResp)
+				if encErr := json.NewEncoder(w).Encode(openAIMockResp); encErr != nil {
+					return nil, encErr
+				}
 				return w.Result(), nil
 			}
 			return nil, fmt.Errorf("unexpected request to: %s", req.URL)
