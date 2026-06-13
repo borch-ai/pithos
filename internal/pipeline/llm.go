@@ -84,7 +84,7 @@ func (a *PowerwordClientAdapter) GenerateStanzas(ctx context.Context, theme stri
 	return finalResp.Stanzas, finalResp.IllustrationPrompts, usage, nil
 }
 
-// newPowerwordLLMClient creates a powerword LLMClient configured for either Gemini or OpenAI/Anthropic
+// newPowerwordLLMClient creates a powerword LLMClient configured for either Gemini or OpenAI
 // with optional HTTP client override (primarily for test mocking).
 func newPowerwordLLMClient(modelName string, geminiKey, openaiKey string, httpClient *http.Client) (llm.LLMClient, error) {
 	if strings.Contains(strings.ToLower(modelName), "gemini") {
