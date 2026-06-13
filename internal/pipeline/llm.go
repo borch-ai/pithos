@@ -34,6 +34,9 @@ type stanzasResponse struct {
 
 // GenerateStanzas queries the powerword LLMClient to generate parodic stanzas based on a theme.
 func (a *PowerwordClientAdapter) GenerateStanzas(ctx context.Context, theme string, count int) ([]string, []string, telemetry.TokenUsage, error) {
+	if a == nil || a.client == nil {
+		return nil, nil, telemetry.TokenUsage{}, errors.New("underlying powerword client is nil")
+	}
 	prompt := fmt.Sprintf(
 		"Write a parodic children's book poem in strict rhythmic meter about the theme: %q. "+
 			"The poem must have exactly %d stanzas. "+
@@ -109,8 +112,9 @@ func newPowerwordLLMClient(modelName string, geminiKey, openaiKey string, httpCl
 	}
 	baseURL := os.Getenv("OPENAI_BASE_URL")
 	if baseURL != "" {
+		baseURL = strings.TrimRight(baseURL, "/")
 		if !strings.HasSuffix(baseURL, "/v1") {
-			baseURL = strings.TrimRight(baseURL, "/") + "/v1"
+			baseURL += "/v1"
 		}
 		cfg.BaseURL = baseURL
 	}

@@ -149,3 +149,38 @@ func TestNewPowerwordLLMClient_Errors(t *testing.T) {
 		t.Error("expected error for missing openai key, got nil")
 	}
 }
+
+func TestNewPowerwordLLMClient_BaseURLNormalization(t *testing.T) {
+	tests := []struct {
+		envVal string
+	}{
+		{"https://api.openai.com"},
+		{"https://api.openai.com/"},
+		{"https://api.openai.com/v1"},
+		{"https://api.openai.com/v1/"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.envVal, func(t *testing.T) {
+			t.Setenv("OPENAI_BASE_URL", tc.envVal)
+			_, err := newPowerwordLLMClient("gpt-4o", "", "test-key", nil)
+			if err != nil {
+				t.Fatalf("failed to create client: %v", err)
+			}
+		})
+	}
+}
+
+func TestPowerwordClientAdapter_GenerateStanzas_NilClient(t *testing.T) {
+	var adapter *PowerwordClientAdapter
+	_, _, _, err := adapter.GenerateStanzas(context.Background(), "theme", 3)
+	if err == nil {
+		t.Error("expected error for nil adapter, got nil")
+	}
+
+	adapter2 := &PowerwordClientAdapter{client: nil, modelName: "test-model"}
+	_, _, _, err = adapter2.GenerateStanzas(context.Background(), "theme", 3)
+	if err == nil {
+		t.Error("expected error for nil underlying client, got nil")
+	}
+}

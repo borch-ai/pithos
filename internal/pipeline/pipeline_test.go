@@ -683,15 +683,7 @@ func TestLLMProviderSelection_Gemini(t *testing.T) {
 
 //nolint:funlen // OpenAI client setup and payload parsing test is inherently long
 func TestLLMProviderSelection_OpenAI(t *testing.T) {
-	origBaseURL := os.Getenv("OPENAI_BASE_URL")
-	if err := os.Setenv("OPENAI_BASE_URL", ""); err != nil {
-		t.Fatalf("failed to set env: %v", err)
-	}
-	defer func() {
-		if err := os.Setenv("OPENAI_BASE_URL", origBaseURL); err != nil {
-			t.Errorf("failed to restore env: %v", err)
-		}
-	}()
+	t.Setenv("OPENAI_BASE_URL", "")
 
 	origCfg := config.Cfg
 	defer func() { config.Cfg = origCfg }()
