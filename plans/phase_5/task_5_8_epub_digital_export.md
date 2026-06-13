@@ -21,8 +21,8 @@ Integrate with a standalone `pw-mcp-epub` Powerword MCP plugin to export the par
 
 ### Pipeline Integration
 
-#### [MODIFY] [deploy.go](file://../../internal/pipeline/deploy.go)
-- [ ] Update `Deploy` to launch the `pw-mcp-epub` MCP client.
+#### [MODIFY] [assemble.go](file://../../internal/pipeline/assemble.go)
+- [ ] Update `Assemble` to launch the `pw-mcp-epub` MCP client.
 - [ ] Call the `epub_export` tool on the MCP client to package the stanzas and page illustrations into a valid EPUB document.
 - [ ] Register the EPUB path under the key `epub` in the manifest asset registry.
 
@@ -35,4 +35,4 @@ Integrate with a standalone `pw-mcp-epub` Powerword MCP plugin to export the par
 - [ ] Unit tests verifying EPUB MCP server communication using a mock client.
 
 ### Manual Verification
-- [ ] Run `pithos deploy` on a completed book directory, and verify that the output ZIP contains both the print PDF and the EPUB digital release.
+- [ ] Run `pithos assemble` on a completed book directory, and verify that the output workspace contains both the print PDF and the EPUB digital release.

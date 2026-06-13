@@ -40,7 +40,7 @@ Refactored the monolithic CLI scaffold in `cmd/pithos/main.go` into modular subc
 - [x] Implement flags for `--input`, `--format`, and `--bleed`.
 - [x] Wire up stub execution pointing to the assemble engine.
 
-#### [NEW] [deploy.go](file://../../cmd/pithos/deploy.go)
+#### [DELETE] [deploy.go](file://../../cmd/pithos/deploy.go)
 - [x] Define the `deploy` command.
 - [x] Implement flag options (e.g. `--input`).
 - [x] Wire up stub execution pointing to the deploy engine.
