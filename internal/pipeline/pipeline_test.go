@@ -673,8 +673,9 @@ func TestLLMProviderSelection_Gemini(t *testing.T) {
 	if mu.OutputTokens != 200 {
 		t.Errorf("expected OutputTokens 200, got %d", mu.OutputTokens)
 	}
-	if mu.CachedTokens != 50 {
-		t.Errorf("expected CachedTokens 50, got %d", mu.CachedTokens)
+	expectedCached := 50
+	if mu.CachedTokens != expectedCached {
+		t.Errorf("expected CachedTokens %d, got %d", expectedCached, mu.CachedTokens)
 	}
 }
 
@@ -778,9 +779,10 @@ func TestLLMProviderSelection_OpenAI(t *testing.T) {
 	if mu.OutputTokens != 250 {
 		t.Errorf("expected OutputTokens 250, got %d", mu.OutputTokens)
 	}
-	// The powerword OpenAI client does not populate cached tokens, so we expect 0.
-	if mu.CachedTokens != 0 {
-		t.Errorf("expected CachedTokens 0, got %d", mu.CachedTokens)
+	// The powerword OpenAI client does not populate cached tokens, so we explicitly expect 0.
+	expectedCached := 0
+	if mu.CachedTokens != expectedCached {
+		t.Errorf("expected CachedTokens %d, got %d", expectedCached, mu.CachedTokens)
 	}
 }
 
