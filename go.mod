@@ -4,7 +4,6 @@ go 1.26.4
 
 require (
 	github.com/borch-ai/powerword v0.0.0-00010101000000-000000000000
-	github.com/google/generative-ai-go v0.20.1
 	github.com/modelcontextprotocol/go-sdk v1.6.1
 	github.com/sashabaranov/go-openai v1.41.2
 	github.com/spf13/cobra v1.10.2
@@ -28,6 +27,7 @@ require (
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
+	github.com/google/generative-ai-go v0.20.1 // indirect
 	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/google/uuid v1.6.0 // indirect
