@@ -86,9 +86,15 @@ Focus: Turning raw text and image assets into valid, print-ready files.
     *   Connect to `pw-mcp-kdp-math` to calculate exact PDF geometries (margins, bleed, spine) and record calculations in the manifest.
     *   Generate layout instructions and compile final PDFs locally or prepare manifest for external layout engine consumption.
     *   [Implementation Plan](plans/phase_4/task_4_1_assemble_engine.md)
-*   [ ] **Task 4.2: Typst PDF Layout Assembly**
+*   [x] **Task 4.2: Typst PDF Layout Assembly**
     *   Integrate with a standalone `pw-mcp-typst` MCP plugin to compile the book manuscript stanzas and generated page illustrations into a print-ready PDF file.
     *   [Implementation Plan](plans/phase_4/task_4_2_typst_pdf_assembly.md)
+*   [ ] **Task 4.3: Verse Layout Formatting**
+    *   Format stanza line breaks in Typst layouts instead of collapsing them into paragraphs.
+    *   [Implementation Plan](plans/phase_4/task_4_3_verse_layout_formatting.md)
+*   [ ] **Task 4.4: Mixed Layout Templates**
+    *   Support left-page text / right-page image mixed layouts per page in the layout engine.
+    *   [Implementation Plan](plans/phase_4/task_4_4_mixed_layout_templates.md)
 
 ---
 
@@ -103,6 +109,9 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
 *   [ ] **Task 5.20: Kiln Foundry State Integration**
     *   Implement the state contract by writing pipeline milestone updates (`initiate_complete`, `brew_complete`, `assemble_complete`) and accumulated costs to the Pithos workspace manifest (`manifest.json`), which Kiln reads to sync book status.
     *   [Implementation Plan](plans/phase_5/task_5_20_kiln_integration.md)
+*   [ ] **Task 5.21: Character Invariant Injection**
+    *   Inject visual invariant descriptors to preserve character consistency in generated illustration prompts.
+    *   [Implementation Plan](plans/phase_5/task_5_21_character_invariant_injection.md)
 
 ### Interactive UI & Quality Enhancements
 *   [x] **Task 5.10: Visual Prompt Expansion for Character Consistency**

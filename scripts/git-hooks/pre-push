@@ -12,17 +12,24 @@ replaces=$(grep -E '^\s*replace\s+github.com/borch-ai/[a-zA-Z0-9_-]+\s+=>' go.mo
 for repl in $replaces; do
   repo_name=$(echo "$repl" | sed 's|github.com/borch-ai/||')
   echo "Checking dependency: $repo_name"
-  
-  # Check if ci.yml has a checkout step for this repo
-  if ! grep -q "repository: borch-ai/$repo_name" .github/workflows/ci.yml; then
-    echo "Error: go.mod replaces 'github.com/borch-ai/$repo_name' with a local sibling, but .github/workflows/ci.yml is missing a checkout step for 'borch-ai/$repo_name'."
+
+  # Accept either:
+  #   (a) an inline checkout step:       repository: borch-ai/<repo>
+  #   (b) a reusable workflow input:     sibling-repo: borch-ai/<repo>
+  if ! grep -qE "(repository:|sibling-repo:)\s+borch-ai/$repo_name" .github/workflows/ci.yml; then
+    echo "Error: go.mod replaces 'github.com/borch-ai/$repo_name' with a local sibling, but .github/workflows/ci.yml is missing a checkout step or sibling-repo input for 'borch-ai/$repo_name'."
     exit 1
   fi
 
-  # Check if the checkout step for this repo uses a token secret, github.token, or steps. outputs (to prevent permission errors in CI)
-  if ! grep -A 5 "repository: borch-ai/$repo_name" .github/workflows/ci.yml | grep -q -E 'token: \$\{\{\s*(secrets\.|github\.token|steps\.)'; then
-    echo "Error: .github/workflows/ci.yml checks out sibling repositories but does not configure a token (e.g. token: \${{ github.token }} or \${{ secrets.PAT_TOKEN }})."
-    exit 1
+  # Accept either:
+  #   (a) an explicit token on the checkout step
+  #   (b) secrets: inherit (reusable workflow delegates auth to the shared workflow)
+  uses_reusable=$(grep -c "uses: borch-ai/.github/" .github/workflows/ci.yml || true)
+  if [ "$uses_reusable" -eq 0 ]; then
+    if ! grep -A 5 "repository: borch-ai/$repo_name" .github/workflows/ci.yml | grep -q -E 'token: \$\{\{\s*(secrets\.|github\.token|steps\.)'; then
+      echo "Error: .github/workflows/ci.yml checks out sibling repositories but does not configure a token (e.g. token: \${{ github.token }} or \${{ secrets.PAT_TOKEN }})."
+      exit 1
+    fi
   fi
 done
 

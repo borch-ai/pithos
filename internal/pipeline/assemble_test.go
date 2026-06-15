@@ -91,6 +91,55 @@ func setupMockKDPMathServer(t *testing.T, ctx context.Context, serverTransport m
 	}
 }
 
+func setupMockTypstServer(t *testing.T, ctx context.Context, serverTransport mcpsdk.Transport) (*mcpsdk.ServerSession, func()) {
+	t.Helper()
+	server := mcpsdk.NewServer(&mcpsdk.Implementation{
+		Name:    "mock-typst-server",
+		Version: "1.0.0",
+	}, nil)
+
+	server.AddTool(&mcpsdk.Tool{
+		Name: "compile_interior",
+		InputSchema: map[string]any{
+			"type": "object",
+		},
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		var args struct {
+			ManuscriptPath string `json:"manuscript_path"`
+			ImagesDir      string `json:"images_dir"`
+			OutputPath     string `json:"output_path"`
+			PageSize       string `json:"page_size"`
+			Bleed          string `json:"bleed"`
+			MarginInside   string `json:"margin_inside"`
+			MarginOutside  string `json:"margin_outside"`
+		}
+		if err := json.Unmarshal(req.Params.Arguments, &args); err != nil {
+			return nil, err
+		}
+
+		resMap := map[string]interface{}{
+			"output_pdf": args.OutputPath,
+			"page_count": 80,
+		}
+
+		resBytes, _ := json.Marshal(resMap)
+		return &mcpsdk.CallToolResult{
+			Content: []mcpsdk.Content{
+				&mcpsdk.TextContent{Text: string(resBytes)},
+			},
+		}, nil
+	})
+
+	serverSession, err := server.Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return serverSession, func() {
+		_ = serverSession.Close()
+	}
+}
+
 func TestAssemble_Success(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "pithos-assemble-*")
 	if err != nil {
@@ -124,15 +173,20 @@ func TestAssemble_Success(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	clientTransport, serverTransport := mcpsdk.NewInMemoryTransports()
-	_, cleanupMCP := setupMockKDPMathServer(t, ctx, serverTransport)
-	defer cleanupMCP()
+	clientKDP, serverKDP := mcpsdk.NewInMemoryTransports()
+	_, cleanupKDP := setupMockKDPMathServer(t, ctx, serverKDP)
+	defer cleanupKDP()
+
+	clientTypst, serverTypst := mcpsdk.NewInMemoryTransports()
+	_, cleanupTypst := setupMockTypstServer(t, ctx, serverTypst)
+	defer cleanupTypst()
 
 	optsAssemble := AssembleOptions{
-		InputDir:     tmpDir,
-		Format:       "paperback",
-		Bleed:        true,
-		MCPTransport: clientTransport,
+		InputDir:         tmpDir,
+		Format:           "paperback",
+		Bleed:            true,
+		KDPMathTransport: clientKDP,
+		TypstTransport:   clientTypst,
 	}
 
 	_, err = Assemble(ctx, optsAssemble)
@@ -154,6 +208,9 @@ func TestAssemble_Success(t *testing.T) {
 	}
 	if len(m2.KDPLayout.Guides) != 1 || m2.KDPLayout.Guides[0].Label != "Spine" {
 		t.Errorf("expected 1 Guide labelled 'Spine', got: %v", m2.KDPLayout.Guides)
+	}
+	if m2.AssetRegistry["interior_pdf"] == "" {
+		t.Error("expected interior_pdf asset to be registered, got empty")
 	}
 }
 
@@ -328,14 +385,19 @@ func TestAssemble_FormatDefaulting(t *testing.T) {
 		t.Fatalf("failed to save manifest: %v", saveErr)
 	}
 
-	clientTransport, serverTransport := mcpsdk.NewInMemoryTransports()
-	_, cleanupMCP := setupMockKDPMathServer(t, ctx, serverTransport)
-	defer cleanupMCP()
+	clientKDP, serverKDP := mcpsdk.NewInMemoryTransports()
+	_, cleanupKDP := setupMockKDPMathServer(t, ctx, serverKDP)
+	defer cleanupKDP()
+
+	clientTypst, serverTypst := mcpsdk.NewInMemoryTransports()
+	_, cleanupTypst := setupMockTypstServer(t, ctx, serverTypst)
+	defer cleanupTypst()
 
 	optsAssemble := AssembleOptions{
-		InputDir:     tmpDir,
-		Format:       "", // empty to trigger defaulting to manifest
-		MCPTransport: clientTransport,
+		InputDir:         tmpDir,
+		Format:           "", // empty to trigger defaulting to manifest
+		KDPMathTransport: clientKDP,
+		TypstTransport:   clientTypst,
 	}
 
 	mRes, err := Assemble(ctx, optsAssemble)
@@ -367,14 +429,19 @@ func TestAssemble_FormatDefaulting(t *testing.T) {
 		t.Fatalf("failed to save manifest: %v", saveErr)
 	}
 
-	clientTransport2, serverTransport2 := mcpsdk.NewInMemoryTransports()
-	_, cleanupMCP2 := setupMockKDPMathServer(t, ctx, serverTransport2)
-	defer cleanupMCP2()
+	clientKDP2, serverKDP2 := mcpsdk.NewInMemoryTransports()
+	_, cleanupKDP2 := setupMockKDPMathServer(t, ctx, serverKDP2)
+	defer cleanupKDP2()
+
+	clientTypst2, serverTypst2 := mcpsdk.NewInMemoryTransports()
+	_, cleanupTypst2 := setupMockTypstServer(t, ctx, serverTypst2)
+	defer cleanupTypst2()
 
 	optsAssemble2 := AssembleOptions{
-		InputDir:     tmpDir2,
-		Format:       "", // empty
-		MCPTransport: clientTransport2,
+		InputDir:         tmpDir2,
+		Format:           "", // empty
+		KDPMathTransport: clientKDP2,
+		TypstTransport:   clientTypst2,
 	}
 
 	mRes2, err := Assemble(ctx, optsAssemble2)
@@ -383,5 +450,71 @@ func TestAssemble_FormatDefaulting(t *testing.T) {
 	}
 	if mRes2.BookProperties.Format != "paperback" {
 		t.Errorf("expected format to default to 'paperback', got %q", mRes2.BookProperties.Format)
+	}
+}
+
+func TestAssemble_TypstError(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos-assemble-typst-err-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	optsInit := InitiateOptions{
+		OutputDir:       tmpDir,
+		Theme:           "Parody Theme",
+		TargetPageCount: 80,
+	}
+	m, err := Initiate(optsInit)
+	if err != nil {
+		t.Fatalf("Initiate failed: %v", err)
+	}
+	m.Progress.Pages = make([]manifest.PageState, 80)
+	if saveErr := m.Save(); saveErr != nil {
+		t.Fatalf("failed to save manifest: %v", saveErr)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	clientKDP, serverKDP := mcpsdk.NewInMemoryTransports()
+	_, cleanupKDP := setupMockKDPMathServer(t, ctx, serverKDP)
+	defer cleanupKDP()
+
+	clientTypst, serverTypst := mcpsdk.NewInMemoryTransports()
+	server := mcpsdk.NewServer(&mcpsdk.Implementation{
+		Name:    "mock-typst-server-error",
+		Version: "1.0.0",
+	}, nil)
+	server.AddTool(&mcpsdk.Tool{
+		Name: "compile_interior",
+		InputSchema: map[string]any{
+			"type": "object",
+		},
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		return &mcpsdk.CallToolResult{
+			IsError: true,
+			Content: []mcpsdk.Content{
+				&mcpsdk.TextContent{Text: "failed to compile interior: typst mock error"},
+			},
+		}, nil
+	})
+	serverSession, err := server.Connect(ctx, serverTypst, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = serverSession.Close() }()
+
+	optsAssemble := AssembleOptions{
+		InputDir:         tmpDir,
+		KDPMathTransport: clientKDP,
+		TypstTransport:   clientTypst,
+	}
+
+	_, err = Assemble(ctx, optsAssemble)
+	if err == nil {
+		t.Error("expected error when Typst compilation fails, got nil")
+	} else if !strings.Contains(err.Error(), "interior compilation failed") {
+		t.Errorf("unexpected error: %v", err)
 	}
 }
