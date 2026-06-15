@@ -14,7 +14,8 @@ import (
 )
 
 var (
-	checkpointBook string
+	checkpointBook  string
+	checkpointForce bool
 )
 
 var checkpointCmd = &cobra.Command{
@@ -61,6 +62,10 @@ var checkpointRestoreCmd = &cobra.Command{
 		commitHash := args[0]
 		dir := pipeline.ResolveBookPath(checkpointBook)
 
+		if !checkpointForce {
+			return errors.New("restoring a checkpoint is destructive and will discard all uncommitted changes. Use --force to proceed")
+		}
+
 		if _, err := exec.LookPath("git"); err != nil {
 			return errors.New("git command not found in PATH")
 		}
@@ -92,6 +97,7 @@ var checkpointRestoreCmd = &cobra.Command{
 
 func init() {
 	checkpointCmd.PersistentFlags().StringVar(&checkpointBook, "book", "book", "Book workspace directory path")
+	checkpointRestoreCmd.Flags().BoolVar(&checkpointForce, "force", false, "Force restore and discard local uncommitted changes")
 	checkpointCmd.AddCommand(checkpointListCmd)
 	checkpointCmd.AddCommand(checkpointRestoreCmd)
 	rootCmd.AddCommand(checkpointCmd)

@@ -45,7 +45,11 @@ lint:
 	else \
 		echo "Warning: 'powerword' CLI not found. Falling back to local golangci-lint..."; \
 		if command -v golangci-lint >/dev/null 2>&1; then \
-			golangci-lint run; \
+			if [ -f "../powerword/.golangci.yml" ]; then \
+				golangci-lint run --config=../powerword/.golangci.yml; \
+			else \
+				golangci-lint run; \
+			fi; \
 		else \
 			echo "Warning: golangci-lint not installed, running basic go vet..."; \
 			$(GOCMD) vet ./...; \

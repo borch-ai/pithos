@@ -24,7 +24,7 @@ Integrate a local, automated Git checkpoint system into Pithos workspace managem
 * Implement a `Checkpoint(ctx context.Context, dir string, message string) error` function that:
   1. Checks if the system has git in PATH. If not, outputs a warning and returns `nil`.
   2. Resolves the directory path.
-  3. Checks if the directory is inside a git repository via `gitutil.IsInsideWorkTree`.
+  3. Checks if the directory has its own git repository via checking for a `.git` folder.
   4. If not, initializes a git repository using `gitutil.Init`.
   5. Adds modified/untracked files using `gitutil.AddAll`.
   6. Commits changes using `gitutil.Commit` with the milestone message.
@@ -45,7 +45,7 @@ Integrate a local, automated Git checkpoint system into Pithos workspace managem
 #### [NEW] [checkpoint.go](file://../../cmd/pithos/checkpoint.go)
 * Add a `pithos checkpoint` CLI command hierarchy:
   * `pithos checkpoint list`: Runs git log inside the workspace directory to list past checkpoint milestones.
-  * `pithos checkpoint restore <commit-hash>`: Performs a hard reset (`gitutil.ResetHard` and `gitutil.Clean`) on the workspace back to the specified checkpoint.
+  * `pithos checkpoint restore <commit-hash>`: Performs a hard reset (`gitutil.ResetHard` and `gitutil.Clean`) on the workspace back to the specified checkpoint. Requires the `--force` flag to proceed.
 
 ### Tests
 
@@ -65,4 +65,4 @@ Integrate a local, automated Git checkpoint system into Pithos workspace managem
 1. Run `pithos initiate books/manual-test-book`.
 2. Inspect `books/manual-test-book/.git` and verify initial commit was made.
 3. Run `pithos checkpoint list --book books/manual-test-book` to check output format.
-4. Run `pithos checkpoint restore <hash> --book books/manual-test-book` to verify rollbacks.
+4. Run `pithos checkpoint restore <hash> --force --book books/manual-test-book` to verify rollbacks.
