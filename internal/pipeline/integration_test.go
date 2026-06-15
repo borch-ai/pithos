@@ -64,22 +64,24 @@ func TestBrew_Integration_RealSubprocess(t *testing.T) {
 	}
 
 	// Verify Git Checkpoints were generated during integration pipeline run
-	gitDir := filepath.Join(tempDir, ".git")
-	if _, statErr := os.Stat(gitDir); os.IsNotExist(statErr) {
-		t.Error("expected .git directory to exist in the workspace")
-	} else {
-		logOut, logErr := gitutil.RunGitCommand(ctx, tempDir, "log", "--oneline")
-		if logErr != nil {
-			t.Errorf("failed to read git log: %v", logErr)
+	if _, lookErr := exec.LookPath("git"); lookErr == nil {
+		gitDir := filepath.Join(tempDir, ".git")
+		if _, statErr := os.Stat(gitDir); os.IsNotExist(statErr) {
+			t.Error("expected .git directory to exist in the workspace")
 		} else {
-			expectedMilestones := []string{
-				"Initial workspace setup",
-				"Generated stanzas and prompts",
-				"Completed illustration generation",
-			}
-			for _, milestone := range expectedMilestones {
-				if !strings.Contains(logOut, milestone) {
-					t.Errorf("expected git log to contain milestone %q, got log:\n%s", milestone, logOut)
+			logOut, logErr := gitutil.RunGitCommand(ctx, tempDir, "log", "--oneline")
+			if logErr != nil {
+				t.Errorf("failed to read git log: %v", logErr)
+			} else {
+				expectedMilestones := []string{
+					"Initial workspace setup",
+					"Generated stanzas and prompts",
+					"Completed illustration generation",
+				}
+				for _, milestone := range expectedMilestones {
+					if !strings.Contains(logOut, milestone) {
+						t.Errorf("expected git log to contain milestone %q, got log:\n%s", milestone, logOut)
+					}
 				}
 			}
 		}
@@ -199,23 +201,25 @@ func TestBrew_Integration_ReviewFlow(t *testing.T) {
 	}
 
 	// Verify Git Checkpoints were generated during review flow resume/import run
-	gitDir2 := filepath.Join(tempDir, ".git")
-	if _, statErr := os.Stat(gitDir2); os.IsNotExist(statErr) {
-		t.Error("expected .git directory to exist in the workspace")
-	} else {
-		logOut, logErr := gitutil.RunGitCommand(ctx2, tempDir, "log", "--oneline")
-		if logErr != nil {
-			t.Errorf("failed to read git log: %v", logErr)
+	if _, lookErr := exec.LookPath("git"); lookErr == nil {
+		gitDir2 := filepath.Join(tempDir, ".git")
+		if _, statErr := os.Stat(gitDir2); os.IsNotExist(statErr) {
+			t.Error("expected .git directory to exist in the workspace")
 		} else {
-			expectedMilestones := []string{
-				"Initial workspace setup",
-				"Generated stanzas and prompts",
-				"Imported manuscript edits from review",
-				"Completed illustration generation",
-			}
-			for _, milestone := range expectedMilestones {
-				if !strings.Contains(logOut, milestone) {
-					t.Errorf("expected git log to contain milestone %q, got log:\n%s", milestone, logOut)
+			logOut, logErr := gitutil.RunGitCommand(ctx2, tempDir, "log", "--oneline")
+			if logErr != nil {
+				t.Errorf("failed to read git log: %v", logErr)
+			} else {
+				expectedMilestones := []string{
+					"Initial workspace setup",
+					"Generated stanzas and prompts",
+					"Imported manuscript edits from review",
+					"Completed illustration generation",
+				}
+				for _, milestone := range expectedMilestones {
+					if !strings.Contains(logOut, milestone) {
+						t.Errorf("expected git log to contain milestone %q, got log:\n%s", milestone, logOut)
+					}
 				}
 			}
 		}

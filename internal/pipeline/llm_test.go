@@ -3,6 +3,7 @@ package pipeline
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/borch-ai/powerword/pkg/llm"
@@ -182,5 +183,35 @@ func TestPowerwordClientAdapter_GenerateStanzas_NilClient(t *testing.T) {
 	_, _, _, err = adapter2.GenerateStanzas(context.Background(), "theme", 3)
 	if err == nil {
 		t.Error("expected error for nil underlying client, got nil")
+	}
+}
+
+func TestTruncateString(t *testing.T) {
+	s1 := "short"
+	if res := truncateString(s1, 10); res != "short" {
+		t.Errorf("expected %q, got %q", "short", res)
+	}
+
+	s2 := "longer-than-max"
+	if res := truncateString(s2, 5); res != "longe..." {
+		t.Errorf("expected %q, got %q", "longe...", res)
+	}
+}
+
+func TestPowerwordClientAdapter_GenerateStanzas_InvalidJSON_Truncation(t *testing.T) {
+	// Construct a long invalid JSON string
+	longInvalidContent := "invalid json" + string(make([]byte, 300))
+	mockMsg := &llm.Message{
+		Role:    llm.RoleAssistant,
+		Content: longInvalidContent,
+	}
+	mockClient := &mockPWClient{response: mockMsg}
+	adapter := &PowerwordClientAdapter{client: mockClient, modelName: "test-model"}
+
+	_, _, _, err := adapter.GenerateStanzas(context.Background(), "theme", 3)
+	if err == nil {
+		t.Error("expected error for long invalid JSON, got nil")
+	} else if !strings.Contains(err.Error(), "...") {
+		t.Errorf("expected error message to contain truncated text (with ellipsis), got: %v", err)
 	}
 }

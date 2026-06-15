@@ -17,7 +17,6 @@ func resolveBookPath(path string) string {
 	}
 	sep := string(filepath.Separator)
 	dotdotSep := ".." + sep
-	dotSep := "." + sep
 	cleaned := filepath.Clean(path)
 Loop:
 	for {
@@ -26,8 +25,6 @@ Loop:
 			cleaned = cleaned[len(dotdotSep):]
 		case cleaned == "..":
 			cleaned = "."
-		case strings.HasPrefix(cleaned, dotSep):
-			cleaned = cleaned[len(dotSep):]
 		case cleaned == ".":
 			cleaned = ""
 			break Loop

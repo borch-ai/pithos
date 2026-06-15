@@ -13,6 +13,10 @@ import (
 )
 
 func TestCheckpoint_RealRepo(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("skipping test: git executable not found in PATH")
+	}
+
 	// 1. Create a temp directory
 	tmpDir := t.TempDir()
 
@@ -76,6 +80,12 @@ func TestCheckpoint_RealRepo(t *testing.T) {
 	if !strings.Contains(logOut2, "Second checkpoint") || !strings.Contains(logOut2, "Initial checkpoint") {
 		t.Errorf("expected log output to contain both checkpoints, got: %q", logOut2)
 	}
+
+	// 8. Call checkpoint again with no changes (should ignore "nothing to commit" and succeed)
+	err = Checkpoint(ctx, tmpDir, "Third checkpoint")
+	if err != nil {
+		t.Fatalf("expected third Checkpoint with no changes to succeed, got %v", err)
+	}
 }
 
 func TestCheckpoint_NoGitInPath(t *testing.T) {
@@ -96,6 +106,10 @@ func TestCheckpoint_NoGitInPath(t *testing.T) {
 }
 
 func TestCheckpoint_NonExistentDir(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("skipping test: git executable not found in PATH")
+	}
+
 	tmpDir := t.TempDir()
 	nestedDir := filepath.Join(tmpDir, "nested", "workspace")
 
@@ -116,7 +130,11 @@ func TestCheckpoint_NonExistentDir(t *testing.T) {
 	}
 }
 
-func TestCheckpoint_MockErrors(t *testing.T) {
+func TestCheckpoint_MockInitError(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("skipping test: git executable not found in PATH")
+	}
+
 	origExec := gitutil.ExecCommand
 	defer func() { gitutil.ExecCommand = origExec }()
 
@@ -129,10 +147,10 @@ func TestCheckpoint_MockErrors(t *testing.T) {
 		t.Fatalf("failed to write file: %v", err)
 	}
 
-	// 1. Mock Init error
 	gitutil.ExecCommand = func(ctx context.Context, command string, args ...string) *exec.Cmd {
 		if command == "git" && len(args) > 0 && args[0] == "init" {
-			return exec.CommandContext(ctx, "false")
+			args = append(args, "--definitely-not-a-valid-flag-to-force-failure")
+			return origExec(ctx, command, args...)
 		}
 		return origExec(ctx, command, args...)
 	}
@@ -141,51 +159,103 @@ func TestCheckpoint_MockErrors(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "failed to initialize git repository") {
 		t.Errorf("expected init failure error, got: %v", err)
 	}
+}
 
-	// 2. Mock AddAll error
-	// Remove the git repository first so IsInsideWorkTree falls back to Init (which we allow to succeed)
-	// then fail the add command.
+func TestCheckpoint_MockAddAllError(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("skipping test: git executable not found in PATH")
+	}
+
+	origExec := gitutil.ExecCommand
+	defer func() { gitutil.ExecCommand = origExec }()
+
+	tmpDir := t.TempDir()
+	ctx := context.Background()
+
+	initialFile := filepath.Join(tmpDir, "manifest.json")
+	if err := os.WriteFile(initialFile, []byte(`{"status":"initiated"}`), 0600); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+
 	gitutil.ExecCommand = func(ctx context.Context, command string, args ...string) *exec.Cmd {
 		if command == "git" && len(args) > 0 && args[0] == "add" {
-			return exec.CommandContext(ctx, "false")
+			args = append(args, "--definitely-not-a-valid-flag-to-force-failure")
+			return origExec(ctx, command, args...)
 		}
 		return origExec(ctx, command, args...)
 	}
 
-	err = Checkpoint(ctx, tmpDir, "Test Add Error")
+	err := Checkpoint(ctx, tmpDir, "Test Add Error")
 	if err == nil || !strings.Contains(err.Error(), "failed to add files to git staging") {
 		t.Errorf("expected add failure error, got: %v", err)
 	}
+}
 
-	// 3. Mock Commit fatal error (not "nothing to commit")
+func TestCheckpoint_MockCommitError(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("skipping test: git executable not found in PATH")
+	}
+
+	origExec := gitutil.ExecCommand
+	defer func() { gitutil.ExecCommand = origExec }()
+
+	tmpDir := t.TempDir()
+	ctx := context.Background()
+
+	initialFile := filepath.Join(tmpDir, "manifest.json")
+	if err := os.WriteFile(initialFile, []byte(`{"status":"initiated"}`), 0600); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+
 	gitutil.ExecCommand = func(ctx context.Context, command string, args ...string) *exec.Cmd {
 		if command == "git" && len(args) > 0 && args[0] == "commit" {
-			return exec.CommandContext(ctx, "sh", "-c", "echo 'fatal: some git error' >&2; exit 1")
+			args = append(args, "--definitely-not-a-valid-flag-to-force-failure")
+			return origExec(ctx, command, args...)
 		}
 		return origExec(ctx, command, args...)
 	}
 
-	err = Checkpoint(ctx, tmpDir, "Test Commit Error")
+	err := Checkpoint(ctx, tmpDir, "Test Commit Error")
 	if err == nil || !strings.Contains(err.Error(), "failed to commit changes") {
 		t.Errorf("expected commit failure error, got: %v", err)
 	}
+}
 
-	// 4. Mock Config error
+func TestCheckpoint_MockConfigError(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("skipping test: git executable not found in PATH")
+	}
+
+	origExec := gitutil.ExecCommand
+	defer func() { gitutil.ExecCommand = origExec }()
+
+	tmpDir := t.TempDir()
+	ctx := context.Background()
+
+	initialFile := filepath.Join(tmpDir, "manifest.json")
+	if err := os.WriteFile(initialFile, []byte(`{"status":"initiated"}`), 0600); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+
 	gitutil.ExecCommand = func(ctx context.Context, command string, args ...string) *exec.Cmd {
 		if command == "git" && len(args) > 1 && args[0] == "config" {
-			return exec.CommandContext(ctx, "false")
+			args = append(args, "--definitely-not-a-valid-flag-to-force-failure")
+			return origExec(ctx, command, args...)
 		}
 		return origExec(ctx, command, args...)
 	}
 
-	// This should still succeed because local config failures are non-fatal, but it will execute the branches.
-	err = Checkpoint(ctx, tmpDir, "Test Config Error")
+	err := Checkpoint(ctx, tmpDir, "Test Config Error")
 	if err != nil {
 		t.Errorf("expected checkpoint to succeed despite config error, got %v", err)
 	}
 }
 
 func TestCheckpoint_InitiateError(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("skipping test: git executable not found in PATH")
+	}
+
 	origExec := gitutil.ExecCommand
 	defer func() { gitutil.ExecCommand = origExec }()
 
@@ -194,7 +264,8 @@ func TestCheckpoint_InitiateError(t *testing.T) {
 	// Mock git commit to fail
 	gitutil.ExecCommand = func(ctx context.Context, command string, args ...string) *exec.Cmd {
 		if command == "git" && len(args) > 0 && args[0] == "commit" {
-			return exec.CommandContext(ctx, "sh", "-c", "echo 'fatal: some git error' >&2; exit 1")
+			args = append(args, "--definitely-not-a-valid-flag-to-force-failure")
+			return origExec(ctx, command, args...)
 		}
 		return origExec(ctx, command, args...)
 	}
@@ -211,6 +282,10 @@ func TestCheckpoint_InitiateError(t *testing.T) {
 }
 
 func TestCheckpoint_BrewError(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("skipping test: git executable not found in PATH")
+	}
+
 	origExec := gitutil.ExecCommand
 	defer func() { gitutil.ExecCommand = origExec }()
 
@@ -229,7 +304,8 @@ func TestCheckpoint_BrewError(t *testing.T) {
 	// Mock git commit to fail
 	gitutil.ExecCommand = func(ctx context.Context, command string, args ...string) *exec.Cmd {
 		if command == "git" && len(args) > 0 && args[0] == "commit" {
-			return exec.CommandContext(ctx, "sh", "-c", "echo 'fatal: some git error' >&2; exit 1")
+			args = append(args, "--definitely-not-a-valid-flag-to-force-failure")
+			return origExec(ctx, command, args...)
 		}
 		return origExec(ctx, command, args...)
 	}
@@ -252,22 +328,47 @@ func TestCheckpoint_BrewError(t *testing.T) {
 }
 
 func TestCheckpoint_MkdirAllError(t *testing.T) {
-	tmpDir := t.TempDir()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("skipping test: git executable not found in PATH")
+	}
 
-	// Create a file at filePath
+	tmpDir := t.TempDir()
+	noWriteDir := filepath.Join(tmpDir, "nowrite")
+	if err := os.Mkdir(noWriteDir, 0500); err != nil {
+		t.Fatalf("failed to create nowrite dir: %v", err)
+	}
+	defer func() {
+		_ = os.Chmod(noWriteDir, 0700) // #nosec G302
+	}()
+
+	err := Checkpoint(context.Background(), filepath.Join(noWriteDir, "nested"), "Should fail on MkdirAll")
+	if err == nil || !strings.Contains(err.Error(), "failed to create directory") {
+		t.Errorf("expected failed to create directory error, got: %v", err)
+	}
+}
+
+func TestCheckpoint_StatNotDirError(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("skipping test: git executable not found in PATH")
+	}
+
+	tmpDir := t.TempDir()
 	filePath := filepath.Join(tmpDir, "file")
 	if err := os.WriteFile(filePath, []byte(""), 0600); err != nil {
 		t.Fatalf("failed to write file: %v", err)
 	}
 
-	// Try to checkpoint inside a nested path under the file. MkdirAll should fail.
-	err := Checkpoint(context.Background(), filepath.Join(filePath, "nested"), "Should fail")
-	if err == nil || !strings.Contains(err.Error(), "failed to create directory") {
-		t.Errorf("expected MkdirAll failure, got: %v", err)
+	err := Checkpoint(context.Background(), filepath.Join(filePath, "nested"), "Should fail on ENOTDIR stat")
+	if err == nil || !strings.Contains(err.Error(), "failed to stat directory") {
+		t.Errorf("expected failed to stat directory error, got: %v", err)
 	}
 }
 
 func TestCheckpoint_AssembleError(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("skipping test: git executable not found in PATH")
+	}
+
 	origExec := gitutil.ExecCommand
 	defer func() { gitutil.ExecCommand = origExec }()
 
@@ -287,7 +388,8 @@ func TestCheckpoint_AssembleError(t *testing.T) {
 	// Mock git commit to fail
 	gitutil.ExecCommand = func(ctx context.Context, command string, args ...string) *exec.Cmd {
 		if command == "git" && len(args) > 0 && args[0] == "commit" {
-			return exec.CommandContext(ctx, "sh", "-c", "echo 'fatal: some git error' >&2; exit 1")
+			args = append(args, "--definitely-not-a-valid-flag-to-force-failure")
+			return origExec(ctx, command, args...)
 		}
 		return origExec(ctx, command, args...)
 	}
@@ -332,5 +434,81 @@ func TestCheckpoint_AssembleError(t *testing.T) {
 	_, err = Assemble(ctx, optsAssemble)
 	if err == nil || !strings.Contains(err.Error(), "failed to commit changes") {
 		t.Errorf("expected Assemble to fail due to checkpoint commit error, got: %v", err)
+	}
+}
+
+func TestCheckpoint_PathIsFile(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("skipping test: git executable not found in PATH")
+	}
+
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "file.txt")
+	if err := os.WriteFile(filePath, []byte("hello"), 0600); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+
+	err := Checkpoint(context.Background(), filePath, "Should fail on file")
+	if err == nil || !strings.Contains(err.Error(), "exists but is not a directory") {
+		t.Errorf("expected exists but is not a directory error, got: %v", err)
+	}
+}
+
+func TestCheckpoint_GitDirStatError(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("skipping test: git executable not found in PATH")
+	}
+
+	tmpDir := t.TempDir()
+	noPermDir := filepath.Join(tmpDir, "noperm")
+	if err := os.Mkdir(noPermDir, 0700); err != nil {
+		t.Fatalf("failed to create noperm dir: %v", err)
+	}
+
+	gitDir := filepath.Join(noPermDir, ".git")
+	if err := os.Mkdir(gitDir, 0700); err != nil {
+		t.Fatalf("failed to create git dir: %v", err)
+	}
+
+	// Change permissions of noPermDir to 0000 so stat on gitDir fails with permission denied
+	if err := os.Chmod(noPermDir, 0000); err != nil {
+		t.Fatalf("failed to chmod noperm dir: %v", err)
+	}
+	defer func() {
+		_ = os.Chmod(noPermDir, 0700) // #nosec G302
+	}()
+
+	err := Checkpoint(context.Background(), noPermDir, "Should fail on git dir stat")
+	if err == nil || !strings.Contains(err.Error(), "failed to stat git directory") {
+		t.Errorf("expected stat git directory error, got: %v", err)
+	}
+}
+
+func TestCheckpoint_DirStatError(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("skipping test: git executable not found in PATH")
+	}
+
+	tmpDir := t.TempDir()
+	parentDir := filepath.Join(tmpDir, "noperm")
+	if err := os.Mkdir(parentDir, 0700); err != nil {
+		t.Fatalf("failed to create parent dir: %v", err)
+	}
+	targetDir := filepath.Join(parentDir, "target")
+	if err := os.Mkdir(targetDir, 0700); err != nil {
+		t.Fatalf("failed to create target dir: %v", err)
+	}
+
+	// Change permissions of parentDir to 0000 so stat targetDir fails with permission denied
+	if err := os.Chmod(parentDir, 0000); err != nil {
+		t.Fatalf("failed to chmod parent dir: %v", err)
+	}
+	defer func() {
+		_ = os.Chmod(parentDir, 0700) // #nosec G302
+	}()
+
+	err := Checkpoint(context.Background(), targetDir, "Should fail on dir stat")
+	if err == nil || !strings.Contains(err.Error(), "failed to stat directory") {
+		t.Errorf("expected stat directory error, got: %v", err)
 	}
 }

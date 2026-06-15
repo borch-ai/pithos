@@ -26,20 +26,14 @@ func Checkpoint(ctx context.Context, dir string, message string) error {
 		return fmt.Errorf("failed to resolve absolute path of %s: %w", dir, err)
 	}
 
-	// Ensure the directory exists
-	if _, err := os.Stat(absDir); err != nil {
-		if err := os.MkdirAll(absDir, 0750); err != nil {
-			return fmt.Errorf("failed to create directory %s for git checkpoint: %w", absDir, err)
-		}
+	// Ensure the directory exists and is actually a directory.
+	if err := ensureDirExists(absDir); err != nil {
+		return err
 	}
 
-	// 3. Checks if the directory has its own git repository via checking for .git folder.
-	gitDir := filepath.Join(absDir, ".git")
-	if _, err := os.Stat(gitDir); os.IsNotExist(err) {
-		// 4. If not, initializes a git repository using gitutil.Init.
-		if err := gitutil.Init(ctx, absDir); err != nil {
-			return fmt.Errorf("failed to initialize git repository: %w", err)
-		}
+	// 3. Checks if the directory has its own git repository and initializes it if needed.
+	if err := ensureGitRepo(ctx, absDir); err != nil {
+		return err
 	}
 
 	// Robustness check: ensure git user.name and user.email are configured so commit does not fail.
@@ -47,7 +41,7 @@ func Checkpoint(ctx context.Context, dir string, message string) error {
 		_, _ = gitutil.RunGitCommand(ctx, absDir, "config", "user.name", "Pithos Agent")
 	}
 	if _, err := gitutil.RunGitCommand(ctx, absDir, "config", "user.email"); err != nil {
-		_, _ = gitutil.RunGitCommand(ctx, absDir, "config", "user.email", "agent@borch.ai")
+		_, _ = gitutil.RunGitCommand(ctx, absDir, "config", "user.email", "agent@borch-ai")
 	}
 
 	// 5. Adds modified/untracked files using gitutil.AddAll.
@@ -64,5 +58,36 @@ func Checkpoint(ctx context.Context, dir string, message string) error {
 		return fmt.Errorf("failed to commit changes: %w", err)
 	}
 
+	return nil
+}
+
+func ensureDirExists(dir string) error {
+	fi, err := os.Stat(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			if mkdirErr := os.MkdirAll(dir, 0750); mkdirErr != nil {
+				return fmt.Errorf("failed to create directory %s for git checkpoint: %w", dir, mkdirErr)
+			}
+			return nil
+		}
+		return fmt.Errorf("failed to stat directory %s: %w", dir, err)
+	}
+	if !fi.IsDir() {
+		return fmt.Errorf("path %s exists but is not a directory", dir)
+	}
+	return nil
+}
+
+func ensureGitRepo(ctx context.Context, dir string) error {
+	gitDir := filepath.Join(dir, ".git")
+	if _, err := os.Stat(gitDir); err != nil {
+		if os.IsNotExist(err) {
+			if initErr := gitutil.Init(ctx, dir); initErr != nil {
+				return fmt.Errorf("failed to initialize git repository: %w", initErr)
+			}
+			return nil
+		}
+		return fmt.Errorf("failed to stat git directory %s: %w", gitDir, err)
+	}
 	return nil
 }

@@ -35,7 +35,10 @@ var checkpointListCmd = &cobra.Command{
 
 		gitDir := filepath.Join(dir, ".git")
 		if _, err := os.Stat(gitDir); err != nil {
-			return fmt.Errorf("directory %s is not inside a git repository", dir)
+			if os.IsNotExist(err) {
+				return fmt.Errorf("directory %s is not inside a git repository", dir)
+			}
+			return fmt.Errorf("failed to check git directory: %w", err)
 		}
 
 		// Run git log --oneline
@@ -64,7 +67,10 @@ var checkpointRestoreCmd = &cobra.Command{
 
 		gitDir := filepath.Join(dir, ".git")
 		if _, err := os.Stat(gitDir); err != nil {
-			return fmt.Errorf("directory %s is not inside a git repository", dir)
+			if os.IsNotExist(err) {
+				return fmt.Errorf("directory %s is not inside a git repository", dir)
+			}
+			return fmt.Errorf("failed to check git directory: %w", err)
 		}
 
 		// Perform reset hard to the commit
