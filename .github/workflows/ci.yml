@@ -4,8 +4,12 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
-  ci:
+  run:
     uses: borch-ai/.github/.github/workflows/go-ci-with-sibling.yml@main
     secrets: inherit
     with:

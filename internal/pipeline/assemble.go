@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/borch-ai/pithos/internal/manifest"
 	"github.com/borch-ai/pithos/internal/mcp"
@@ -14,12 +15,14 @@ import (
 
 // AssembleOptions holds configuration parameters for the assemble command.
 type AssembleOptions struct {
-	InputDir     string
-	Format       string // e.g. "paperback", "hardcover"
-	Bleed        bool
-	TrimSize     string           // e.g. "6x9"
-	PaperType    string           // e.g. "white"
-	MCPTransport mcpsdk.Transport // For testing
+	InputDir         string
+	Format           string // e.g. "paperback", "hardcover"
+	Bleed            bool
+	TrimSize         string           // e.g. "6x9"
+	PaperType        string           // e.g. "white"
+	MCPTransport     mcpsdk.Transport // For testing (fallback)
+	KDPMathTransport mcpsdk.Transport // For testing
+	TypstTransport   mcpsdk.Transport // For testing
 }
 
 type geometryResult struct {
@@ -101,11 +104,91 @@ func Assemble(ctx context.Context, opts AssembleOptions) (*manifest.Manifest, er
 		Guides:               geom.Guides,
 	}
 
-	if err := m.Save(); err != nil {
-		return nil, fmt.Errorf("failed to save manifest after geometry assembly: %w", err)
+	if saveErr := m.Save(); saveErr != nil {
+		return nil, fmt.Errorf("failed to save manifest after geometry assembly: %w", saveErr)
+	}
+
+	// 5. Compile the interior PDF
+	pdfPath, err := compileInteriorPDF(ctx, opts, m)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := m.RegisterAsset("interior_pdf", pdfPath); err != nil {
+		return nil, fmt.Errorf("failed to register interior PDF asset: %w", err)
 	}
 
 	return m, nil
+}
+
+func compileInteriorPDF(ctx context.Context, opts AssembleOptions, m *manifest.Manifest) (string, error) {
+	manuscriptPath := filepath.Join(opts.InputDir, "manuscript.md")
+	imagesDir := filepath.Join(opts.InputDir, "images")
+	outputPath := filepath.Join(opts.InputDir, "interior.pdf")
+
+	trimSize := opts.TrimSize
+	if trimSize == "" {
+		trimSize = "6x9"
+	}
+
+	pageSize := formatTrimSizeForTypst(trimSize)
+	bleedVal := fmt.Sprintf("%.3fin", m.KDPLayout.Bleed)
+	marginVal := fmt.Sprintf("%.3fin", m.KDPLayout.MarginSize)
+
+	// Call pw-mcp-typst MCP client
+	mcpClient := mcp.NewPluginClient(mcp.PluginTypst)
+	if opts.TypstTransport != nil {
+		mcpClient.SetTransport(opts.TypstTransport)
+	} else if opts.MCPTransport != nil {
+		mcpClient.SetTransport(opts.MCPTransport)
+	}
+
+	if startErr := mcpClient.Start(ctx); startErr != nil {
+		return "", fmt.Errorf("failed to start MCP typst client: %w", startErr)
+	}
+	defer func() { _ = mcpClient.Stop() }()
+
+	args := map[string]interface{}{
+		"manuscript_path": manuscriptPath,
+		"images_dir":      imagesDir,
+		"output_path":     outputPath,
+		"page_size":       pageSize,
+		"bleed":           bleedVal,
+		"margin_inside":   marginVal,
+		"margin_outside":  marginVal,
+	}
+
+	resText, err := mcpClient.CallTool(ctx, "compile_interior", args)
+	if err != nil {
+		return "", fmt.Errorf("interior compilation failed: %w", err)
+	}
+
+	var result struct {
+		OutputPDF string `json:"output_pdf"`
+		PageCount int    `json:"page_count"`
+	}
+	if err := json.Unmarshal([]byte(resText), &result); err == nil {
+		if result.OutputPDF != "" {
+			return result.OutputPDF, nil
+		}
+		return outputPath, nil
+	}
+
+	// Fallback to checking if the raw response text is a plain path pointing to a PDF file
+	trimmedRes := strings.TrimSpace(resText)
+	if strings.HasSuffix(strings.ToLower(trimmedRes), ".pdf") {
+		return trimmedRes, nil
+	}
+
+	return "", fmt.Errorf("unexpected non-JSON response from compile_interior tool (raw: %q)", resText)
+}
+
+func formatTrimSizeForTypst(trimSize string) string {
+	parts := strings.Split(strings.ToLower(trimSize), "x")
+	if len(parts) == 2 {
+		return fmt.Sprintf("%sin,%sin", strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1]))
+	}
+	return "6in,9in" // fallback default
 }
 
 func fetchGeometry(ctx context.Context, opts AssembleOptions, pageCount int, format string) (geometryResult, error) {
@@ -122,7 +205,9 @@ func fetchGeometry(ctx context.Context, opts AssembleOptions, pageCount int, for
 
 	// 3. Connect to pw-mcp-kdp-math MCP client
 	mcpClient := mcp.NewPluginClient(mcp.PluginKDPMath)
-	if opts.MCPTransport != nil {
+	if opts.KDPMathTransport != nil {
+		mcpClient.SetTransport(opts.KDPMathTransport)
+	} else if opts.MCPTransport != nil {
 		mcpClient.SetTransport(opts.MCPTransport)
 	}
 

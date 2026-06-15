@@ -24,6 +24,8 @@ const (
 	PluginSEO PluginType = "pw-mcp-seo"
 	// PluginVideo represents the video asset generation plugin.
 	PluginVideo PluginType = "pw-mcp-video"
+	// PluginTypst represents the Typst compilation plugin.
+	PluginTypst PluginType = "pw-mcp-typst"
 )
 
 // PluginClient handles connection lifecycle and requests to a specific MCP server.
@@ -79,6 +81,8 @@ func (pc *PluginClient) resolveBinaryPath() string {
 		return config.Cfg.MCP.SEOPath
 	case PluginVideo:
 		return config.Cfg.MCP.VideoPath
+	case PluginTypst:
+		return config.Cfg.MCP.TypstPath
 	default:
 		return string(pc.pluginType)
 	}

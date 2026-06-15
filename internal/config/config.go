@@ -29,6 +29,7 @@ type MCPConfig struct {
 	KDPMathPath  string `mapstructure:"kdp_math_path"`
 	SEOPath      string `mapstructure:"seo_path"`
 	VideoPath    string `mapstructure:"video_path"`
+	TypstPath    string `mapstructure:"typst_path"`
 }
 
 // APIConfig holds API keys for LLM and content services.
@@ -57,6 +58,7 @@ func LoadConfig(cfgFile string) (*Config, error) {
 	v.SetDefault("mcp.kdp_math_path", "")
 	v.SetDefault("mcp.seo_path", "")
 	v.SetDefault("mcp.video_path", "")
+	v.SetDefault("mcp.typst_path", "")
 	v.SetDefault("api.gemini_key", "")
 	v.SetDefault("api.openai_key", "")
 	v.SetDefault("telemetry.lamplighter_enabled", false)
@@ -143,6 +145,11 @@ func finalizeLoad(v *viper.Viper) (*Config, error) {
 	}
 
 	rawConfig.MCP.VideoPath, err = validateOrFallbackPath(rawConfig.MCP.VideoPath, "pw-mcp-video")
+	if err != nil {
+		errs = append(errs, err.Error())
+	}
+
+	rawConfig.MCP.TypstPath, err = validateOrFallbackPath(rawConfig.MCP.TypstPath, "pw-mcp-typst")
 	if err != nil {
 		errs = append(errs, err.Error())
 	}
