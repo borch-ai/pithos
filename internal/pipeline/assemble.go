@@ -118,6 +118,10 @@ func Assemble(ctx context.Context, opts AssembleOptions) (*manifest.Manifest, er
 		return nil, fmt.Errorf("failed to register interior PDF asset: %w", err)
 	}
 
+	if err := Checkpoint(ctx, opts.InputDir, "Compiled print layouts and PDFs"); err != nil {
+		return nil, err
+	}
+
 	return m, nil
 }
 

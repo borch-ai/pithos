@@ -39,12 +39,21 @@ check-coverage: test
 	fi
 
 lint:
-	@echo "Running linter..."
-	@if command -v golangci-lint >/dev/null; then \
-		golangci-lint run; \
+	@if command -v powerword >/dev/null 2>&1; then \
+		echo "Running linter via powerword..."; \
+		powerword lint-go; \
 	else \
-		echo "golangci-lint not installed, running basic go vet..."; \
-		$(GOCMD) vet ./...; \
+		echo "Warning: 'powerword' CLI not found. Falling back to local golangci-lint..."; \
+		if command -v golangci-lint >/dev/null 2>&1; then \
+			if [ -f "../powerword/.golangci.yml" ]; then \
+				golangci-lint run --config=../powerword/.golangci.yml; \
+			else \
+				golangci-lint run; \
+			fi; \
+		else \
+			echo "Warning: golangci-lint not installed, running basic go vet..."; \
+			$(GOCMD) vet ./...; \
+		fi; \
 	fi
 
 vuln:

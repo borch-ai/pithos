@@ -36,7 +36,7 @@ type BrewOptions struct {
 
 // Brew executes the manuscript generation and page-by-page illustration generation.
 //
-//nolint:gocognit // Brew function integrates manifest loading, overrides, manuscript generation, review loop, and illustration generation
+//nolint:gocognit,funlen // Brew function integrates manifest loading, overrides, manuscript generation, review loop, and illustration generation
 func Brew(ctx context.Context, opts BrewOptions) error {
 	if opts.OutputDir == "" {
 		return errors.New("output directory is required")
@@ -73,6 +73,7 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 	} else if !os.IsNotExist(statErr) {
 		return fmt.Errorf("failed to check manuscript.md status: %w", statErr)
 	}
+	//nolint:nestif // Import block check nested conditions are clean but exceed nestif threshold
 	if m.Progress.ManuscriptGenerated && hasManuscript {
 		changed, importErr := importManuscriptFromMarkdown(opts.OutputDir, m)
 		if importErr != nil {
@@ -80,6 +81,9 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 		}
 		if changed {
 			fmt.Println("Successfully imported edits from manuscript.md.")
+			if err := Checkpoint(ctx, opts.OutputDir, "Imported manuscript edits from review"); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -94,6 +98,10 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 
 	// 2. Generate illustrations via MCP ImageGen server
 	if err := generateIllustrations(ctx, m, opts); err != nil {
+		return err
+	}
+
+	if err := Checkpoint(ctx, opts.OutputDir, "Completed illustration generation"); err != nil {
 		return err
 	}
 
@@ -219,6 +227,9 @@ func generateManuscript(ctx context.Context, m *manifest.Manifest, opts BrewOpti
 
 	if err := m.Save(); err != nil {
 		return fmt.Errorf("failed to save manifest after manuscript generation: %w", err)
+	}
+	if err := Checkpoint(ctx, opts.OutputDir, "Generated stanzas and prompts"); err != nil {
+		return err
 	}
 	return nil
 }

@@ -72,9 +72,10 @@ Focus: Automated review tools, local critic hooks, metric instrumentation, and p
 *   [ ] **Task 3.5: Selective Page Redo / Overrides**
     *   Support selective regeneration of specific pages or stanzas in the `brew` command, allowing users to rerun the pipeline for only a subset of pages.
     *   [Implementation Plan](plans/phase_3/task_3_5_selective_page_redo.md)
-*   [ ] **Task 3.6: Workspace Git Checkpoints**
-    *   Integrate a local, automated Git checkpoint system into Pithos workspace management, committing state changes and assets automatically.
+*   [x] **Task 3.6: Workspace Git Checkpoints**
+    *   Integrate a local, automated Git checkpoint system into Pithos workspace management, committing state changes and assets automatically using the shared `pkg/gitutil` package from Powerword.
     *   [Implementation Plan](plans/phase_3/task_3_6_workspace_git_checkpoints.md)
+
 
 ---
 

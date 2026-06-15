@@ -67,3 +67,11 @@ func TestResolveBookPath(t *testing.T) {
 		})
 	}
 }
+
+func TestResolveBookPathPublic(t *testing.T) {
+	expected := filepath.Join("books", "public-book")
+	actual := ResolveBookPath("public-book")
+	if actual != expected {
+		t.Errorf("ResolveBookPath(\"public-book\") = %q; expected %q", actual, expected)
+	}
+}
