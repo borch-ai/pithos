@@ -28,7 +28,7 @@ Integrate with a standalone `pw-mcp-typst` Powerword MCP plugin to compile the b
 #### [MODIFY] [assemble.go](file://../../internal/pipeline/assemble.go)
 - [x] Update `Assemble` to launch the `pw-mcp-typst` MCP client.
 - [x] Compile the page illustrations and stanzas into a custom Typst layout template dynamically.
-- [x] Call the `typst_compile` tool on the MCP client to generate the high-res print-ready PDF.
+- [x] Call the `compile_interior` tool on the MCP client to generate the high-res print-ready PDF.
 - [x] Save the generated PDF file path to the manifest registry under the key `interior_pdf`.
 
 ---

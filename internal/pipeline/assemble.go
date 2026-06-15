@@ -158,9 +158,22 @@ func compileInteriorPDF(ctx context.Context, opts AssembleOptions, m *manifest.M
 		"margin_outside":  marginVal,
 	}
 
-	_, err := mcpClient.CallTool(ctx, "compile_interior", args)
+	resText, err := mcpClient.CallTool(ctx, "compile_interior", args)
 	if err != nil {
 		return "", fmt.Errorf("interior compilation failed: %w", err)
+	}
+
+	var result struct {
+		OutputPDF string `json:"output_pdf"`
+		PageCount int    `json:"page_count"`
+	}
+	if err := json.Unmarshal([]byte(resText), &result); err != nil {
+		// If response is not valid JSON, fallback to configured output path
+		return outputPath, nil
+	}
+
+	if result.OutputPDF != "" {
+		return result.OutputPDF, nil
 	}
 
 	return outputPath, nil
