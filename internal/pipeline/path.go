@@ -45,3 +45,8 @@ Loop:
 	}
 	return filepath.Join("books", cleaned)
 }
+
+// ResolveBookPath resolves output/input directories under "books/" for CLI usage.
+func ResolveBookPath(path string) string {
+	return resolveBookPath(path)
+}

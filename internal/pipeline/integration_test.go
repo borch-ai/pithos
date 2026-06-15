@@ -15,8 +15,10 @@ import (
 
 	"github.com/borch-ai/pithos/internal/config"
 	"github.com/borch-ai/pithos/internal/manifest"
+	"github.com/borch-ai/powerword/pkg/gitutil"
 )
 
+//nolint:gocognit,funlen,nestif // Integration tests have multiple steps, complex checking blocks, and configurations
 func TestBrew_Integration_RealSubprocess(t *testing.T) {
 	tempDir := t.TempDir()
 	binaryPath := buildImageGenBinary(t, tempDir)
@@ -61,6 +63,28 @@ func TestBrew_Integration_RealSubprocess(t *testing.T) {
 		t.Fatalf("Brew integration failed: %v", err)
 	}
 
+	// Verify Git Checkpoints were generated during integration pipeline run
+	gitDir := filepath.Join(tempDir, ".git")
+	if _, statErr := os.Stat(gitDir); os.IsNotExist(statErr) {
+		t.Error("expected .git directory to exist in the workspace")
+	} else {
+		logOut, logErr := gitutil.RunGitCommand(ctx, tempDir, "log", "--oneline")
+		if logErr != nil {
+			t.Errorf("failed to read git log: %v", logErr)
+		} else {
+			expectedMilestones := []string{
+				"Initial workspace setup",
+				"Generated stanzas and prompts",
+				"Completed illustration generation",
+			}
+			for _, milestone := range expectedMilestones {
+				if !strings.Contains(logOut, milestone) {
+					t.Errorf("expected git log to contain milestone %q, got log:\n%s", milestone, logOut)
+				}
+			}
+		}
+	}
+
 	// 6. Verify outputs
 	m, err := manifest.LoadManifest(filepath.Join(tempDir, "manifest.json"))
 	if err != nil {
@@ -96,6 +120,7 @@ func TestBrew_Integration_RealSubprocess(t *testing.T) {
 	}
 }
 
+//nolint:gocognit,funlen,nestif // Integration review test requires multi-step setup, manuscript edit modifications, and git logs checks
 func TestBrew_Integration_ReviewFlow(t *testing.T) {
 	tempDir := t.TempDir()
 	binaryPath := buildImageGenBinary(t, tempDir)
@@ -161,14 +186,39 @@ func TestBrew_Integration_ReviewFlow(t *testing.T) {
 	ctx2, cancel2 := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel2()
 
-	err = Brew(ctx2, BrewOptions{
+	optsBrew := BrewOptions{
 		OutputDir:   tempDir,
 		LLM:         mockLLMClient,
 		Review:      false,
 		Concurrency: 2,
-	})
+	}
+
+	err = Brew(ctx2, optsBrew)
 	if err != nil {
 		t.Fatalf("expected Brew to succeed on resume/import run, got %v", err)
+	}
+
+	// Verify Git Checkpoints were generated during review flow resume/import run
+	gitDir2 := filepath.Join(tempDir, ".git")
+	if _, statErr := os.Stat(gitDir2); os.IsNotExist(statErr) {
+		t.Error("expected .git directory to exist in the workspace")
+	} else {
+		logOut, logErr := gitutil.RunGitCommand(ctx2, tempDir, "log", "--oneline")
+		if logErr != nil {
+			t.Errorf("failed to read git log: %v", logErr)
+		} else {
+			expectedMilestones := []string{
+				"Initial workspace setup",
+				"Generated stanzas and prompts",
+				"Imported manuscript edits from review",
+				"Completed illustration generation",
+			}
+			for _, milestone := range expectedMilestones {
+				if !strings.Contains(logOut, milestone) {
+					t.Errorf("expected git log to contain milestone %q, got log:\n%s", milestone, logOut)
+				}
+			}
+		}
 	}
 
 	// 8. Verify final manifest and images

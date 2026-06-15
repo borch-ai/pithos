@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -59,6 +60,11 @@ func Initiate(opts InitiateOptions) (*manifest.Manifest, error) {
 
 	if err := m.Save(); err != nil {
 		return nil, fmt.Errorf("failed to save initial manifest.json: %w", err)
+	}
+
+	// 5. Create initial Git checkpoint
+	if err := Checkpoint(context.Background(), opts.OutputDir, "Initial workspace setup"); err != nil {
+		return nil, fmt.Errorf("failed to create initial git checkpoint: %w", err)
 	}
 
 	return m, nil

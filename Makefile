@@ -39,13 +39,8 @@ check-coverage: test
 	fi
 
 lint:
-	@echo "Running linter..."
-	@if command -v golangci-lint >/dev/null; then \
-		golangci-lint run; \
-	else \
-		echo "golangci-lint not installed, running basic go vet..."; \
-		$(GOCMD) vet ./...; \
-	fi
+	@echo "Running linter via powerword..."
+	powerword lint-go
 
 vuln:
 	@echo "Checking for vulnerabilities..."
