@@ -7,7 +7,7 @@ echo "Running pre-push quality and critic checks..."
 
 # 1. Verify CI configuration matches local replacement directives
 echo "Verifying CI configuration matches local replacement directives..."
-replaces=$(grep -E '^\s*replace\s+github.com/borch-ai/[a-zA-Z0-9_-]+\s+=>' go.mod | awk '{print $2}')
+replaces=$(grep -E '^[[:space:]]*replace[[:space:]]+github.com/borch-ai/[a-zA-Z0-9_-]+[[:space:]]+=>' go.mod | awk '{print $2}')
 
 for repl in $replaces; do
   repo_name=$(echo "$repl" | sed 's|github.com/borch-ai/||')
@@ -16,7 +16,7 @@ for repl in $replaces; do
   # Accept either:
   #   (a) an inline checkout step:       repository: borch-ai/<repo>
   #   (b) a reusable workflow input:     sibling-repo: borch-ai/<repo>
-  if ! grep -qE "(repository:|sibling-repo:)\s+borch-ai/$repo_name" .github/workflows/ci.yml; then
+  if ! grep -qE "(repository:|sibling-repo:)[[:space:]]+borch-ai/$repo_name" .github/workflows/ci.yml; then
     echo "Error: go.mod replaces 'github.com/borch-ai/$repo_name' with a local sibling, but .github/workflows/ci.yml is missing a checkout step or sibling-repo input for 'borch-ai/$repo_name'."
     exit 1
   fi
@@ -25,7 +25,7 @@ for repl in $replaces; do
   #   (a) an explicit token on the checkout step if checked out inline
   #   (b) secrets: inherit if checked out via reusable workflow
   if grep -q "repository: borch-ai/$repo_name" .github/workflows/ci.yml; then
-    if ! grep -A 5 "repository: borch-ai/$repo_name" .github/workflows/ci.yml | grep -q -E 'token: \$\{\{\s*(secrets\.|github\.token|steps\.)'; then
+    if ! grep -A 5 "repository: borch-ai/$repo_name" .github/workflows/ci.yml | grep -q -E 'token: \$\{\{[[:space:]]*(secrets\.|github\.token|steps\.)'; then
       echo "Error: .github/workflows/ci.yml checks out sibling repository '$repo_name' inline but does not configure a token (e.g. token: \${{ github.token }} or \${{ secrets.PAT_TOKEN }})."
       exit 1
     fi

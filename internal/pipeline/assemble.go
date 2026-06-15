@@ -167,16 +167,20 @@ func compileInteriorPDF(ctx context.Context, opts AssembleOptions, m *manifest.M
 		OutputPDF string `json:"output_pdf"`
 		PageCount int    `json:"page_count"`
 	}
-	if err := json.Unmarshal([]byte(resText), &result); err != nil {
-		// If response is not valid JSON, fallback to configured output path
+	if err := json.Unmarshal([]byte(resText), &result); err == nil {
+		if result.OutputPDF != "" {
+			return result.OutputPDF, nil
+		}
 		return outputPath, nil
 	}
 
-	if result.OutputPDF != "" {
-		return result.OutputPDF, nil
+	// Fallback to checking if the raw response text is a plain path pointing to a PDF file
+	trimmedRes := strings.TrimSpace(resText)
+	if strings.HasSuffix(strings.ToLower(trimmedRes), ".pdf") {
+		return trimmedRes, nil
 	}
 
-	return outputPath, nil
+	return "", fmt.Errorf("unexpected non-JSON response from compile_interior tool (raw: %q)", resText)
 }
 
 func formatTrimSizeForTypst(trimSize string) string {
