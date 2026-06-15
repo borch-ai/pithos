@@ -3,7 +3,7 @@
 **Status:** Completed
 **Go Version:** 1.26.4
 **Date Completed:** June 15, 2026
-**Unit Test Coverage:** 95.8% (git.go), 91.0% (total internal)
+**Unit Test Coverage:** 91.3% (git.go), 91.1% (total internal)
 
 Integrate a local, automated Git checkpoint system into Pithos workspace management, committing state changes and assets automatically so users can roll back files using the CLI. This task consumes the shared `pkg/gitutil` utility package from Powerword to avoid redundant process execution logic.
 
