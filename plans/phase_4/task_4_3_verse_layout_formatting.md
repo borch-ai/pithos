@@ -7,12 +7,17 @@
 
 Preserve stanza verse line breaks in Typst layouts instead of collapsing them into paragraphs. Parody stanzas are written in structured rhythm (AABB/ABAB) and must keep their line breaks to render as poetry.
 
+## User Review Required
+
+> [!NOTE]
+> This requires layout format updates in both the client and the layout templates.
+
 ## Proposed Changes
 
 ### Pre-processing Manuscript
 Update Pithos layout assembly step to pre-process the manuscript text before sending it to the `pw-mcp-typst` compiler. Alternatively, update the compiler args to parse line breaks.
 
-#### [MODIFY] [assemble.go](file:///Users/human/code/pithos/internal/pipeline/assemble.go)
+#### [MODIFY] [assemble.go](file://../../internal/pipeline/assemble.go)
 - Format lines containing stanzas to translate newline characters (`\n`) into Typst line breaks (` \ `) or wrap them in block elements.
 
 ---
