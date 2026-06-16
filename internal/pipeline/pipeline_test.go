@@ -237,6 +237,7 @@ func TestInitiate_Errors(t *testing.T) {
 	}
 }
 
+//nolint:funlen // End-to-end mocked brew verification involves extensive mock setup and output checking
 func TestBrew_EndToEnd_Mocked(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "pithos-brew-*")
 	if err != nil {

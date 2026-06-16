@@ -549,21 +549,7 @@ func TestAssemble_Integration_RealSubprocess(t *testing.T) {
 		t.Fatalf("Assemble integration test failed: %v", err)
 	}
 	if hasTypstInstalled {
-		interiorPDF := filepath.Join(tempDir, "interior.pdf")
-		if _, statErr := os.Stat(interiorPDF); os.IsNotExist(statErr) {
-			t.Error("expected interior.pdf to exist, but it was not found")
-		}
-
-		m2, err := manifest.LoadManifest(filepath.Join(tempDir, "manifest.json"))
-		if err != nil {
-			t.Fatalf("failed to reload manifest in integration test: %v", err)
-		}
-		if len(m2.Kiln.Milestones) != 2 || m2.Kiln.Milestones[0] != "initiate_complete" || m2.Kiln.Milestones[1] != "assemble_complete" {
-			t.Errorf("expected milestones [initiate_complete, assemble_complete], got %v", m2.Kiln.Milestones)
-		}
-		if m2.Kiln.InteriorPDFPath == "" {
-			t.Error("expected Kiln interior PDF path to be populated")
-		}
+		verifyAssembleOutputs(t, tempDir)
 	}
 	if !hasTypstInstalled {
 		if err == nil {
@@ -603,4 +589,23 @@ func buildTypstBinary(t *testing.T, tempDir string) string {
 	}
 
 	return binaryPath
+}
+
+func verifyAssembleOutputs(t *testing.T, tempDir string) {
+	t.Helper()
+	interiorPDF := filepath.Join(tempDir, "interior.pdf")
+	if _, statErr := os.Stat(interiorPDF); os.IsNotExist(statErr) {
+		t.Error("expected interior.pdf to exist, but it was not found")
+	}
+
+	m2, err := manifest.LoadManifest(filepath.Join(tempDir, "manifest.json"))
+	if err != nil {
+		t.Fatalf("failed to reload manifest in integration test: %v", err)
+	}
+	if len(m2.Kiln.Milestones) != 2 || m2.Kiln.Milestones[0] != "initiate_complete" || m2.Kiln.Milestones[1] != "assemble_complete" {
+		t.Errorf("expected milestones [initiate_complete, assemble_complete], got %v", m2.Kiln.Milestones)
+	}
+	if m2.Kiln.InteriorPDFPath == "" {
+		t.Error("expected Kiln interior PDF path to be populated")
+	}
 }
