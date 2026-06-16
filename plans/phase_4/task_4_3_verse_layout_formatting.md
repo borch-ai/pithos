@@ -7,6 +7,15 @@
 
 Preserve stanza verse line breaks in Typst layouts instead of collapsing them into paragraphs. Parody stanzas are written in structured rhythm (AABB/ABAB) and must keep their line breaks to render as poetry.
 
+## User Review Required
+
+> [!NOTE]
+> None. The downstream `pw-mcp-typst` compiler already formats stanza verses. Pithos ensures the manuscript file is auto-exported if missing.
+
+## Open Questions
+
+None.
+
 ## Design Decision & Implementation Details
 
 During research, we verified that the downstream `pw-mcp-typst` compiler already contains the parsing logic to replace single newlines (`\n`) in stanzas with Typst break syntax (` \\\n `) inside paragraphs before compiling. 
