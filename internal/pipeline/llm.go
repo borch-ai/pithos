@@ -81,7 +81,16 @@ func (a *PowerwordClientAdapter) GenerateVisualGuides(ctx context.Context, theme
 		usage = *msg.Usage
 	}
 
-	return finalResp.StyleSeed, finalResp.CharacterProfile, usage, nil
+	styleSeed := strings.TrimSpace(finalResp.StyleSeed)
+	characterProfile := strings.TrimSpace(finalResp.CharacterProfile)
+	if styleSeed == "" {
+		return "", "", telemetry.TokenUsage{}, errors.New("llm returned an empty style_seed")
+	}
+	if characterProfile == "" {
+		return "", "", telemetry.TokenUsage{}, errors.New("llm returned an empty character_profile")
+	}
+
+	return styleSeed, characterProfile, usage, nil
 }
 
 // GenerateStanzas queries the powerword LLMClient to generate parodic stanzas based on a theme, incorporating the global style and character guides.

@@ -1774,6 +1774,27 @@ func TestBrew_ReviewFlow_GuidesExport(t *testing.T) {
 	if !strings.Contains(content, "<!-- CharacterProfile: A chubby cat -->") {
 		t.Errorf("exported file missing CharacterProfile comment: %s", content)
 	}
+
+	// Verify sanitization of comment terminators (-->) in Style and CharacterProfile
+	unsanitizedStyle := "claymation --> style"
+	unsanitizedProfile := "A chubby cat --> who wears glasses"
+	err = exportManuscriptToMarkdown(tmpDir, unsanitizedStyle, unsanitizedProfile, m.Progress.Pages)
+	if err != nil {
+		t.Fatalf("failed to export: %v", err)
+	}
+
+	//nolint:gosec
+	dataSanitized, err := os.ReadFile(manuscriptPath)
+	if err != nil {
+		t.Fatalf("failed to read manuscript.md: %v", err)
+	}
+	contentSanitized := string(dataSanitized)
+	if !strings.Contains(contentSanitized, "<!-- Style: claymation -- style -->") {
+		t.Errorf("Style comment was not sanitized correctly: %s", contentSanitized)
+	}
+	if !strings.Contains(contentSanitized, "<!-- CharacterProfile: A chubby cat -- who wears glasses -->") {
+		t.Errorf("CharacterProfile comment was not sanitized correctly: %s", contentSanitized)
+	}
 }
 
 func TestBrew_ReviewFlow_GuidesStyleReset(t *testing.T) {

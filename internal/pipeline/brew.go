@@ -498,11 +498,17 @@ func copyFile(src, dst string) error {
 	return out.Sync()
 }
 
+func sanitizeCommentText(text string) string {
+	text = strings.TrimSpace(text)
+	text = strings.ReplaceAll(text, "\n", " ")
+	return strings.ReplaceAll(text, "-->", "--")
+}
+
 func exportManuscriptToMarkdown(outputDir string, style, charProfile string, pages []manifest.PageState) error {
 	var sb strings.Builder
 	sb.WriteString("<!-- PITHOS MANUSCRIPT REVIEW -->\n")
-	fmt.Fprintf(&sb, "<!-- Style: %s -->\n", strings.ReplaceAll(strings.TrimSpace(style), "\n", " "))
-	fmt.Fprintf(&sb, "<!-- CharacterProfile: %s -->\n", strings.ReplaceAll(strings.TrimSpace(charProfile), "\n", " "))
+	fmt.Fprintf(&sb, "<!-- Style: %s -->\n", sanitizeCommentText(style))
+	fmt.Fprintf(&sb, "<!-- CharacterProfile: %s -->\n", sanitizeCommentText(charProfile))
 	sb.WriteString("<!-- Edit the stanzas, prompts, and global style/character guides above. -->\n")
 	sb.WriteString("<!-- Each page block begins with a '# Page N' header, followed by two subsections: -->\n")
 	sb.WriteString("<!-- '## Text' — the stanza/prose to edit, and '## Prompt' — the illustration prompt to edit. -->\n")

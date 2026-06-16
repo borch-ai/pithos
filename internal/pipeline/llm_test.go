@@ -262,6 +262,32 @@ func TestPowerwordClientAdapter_GenerateVisualGuides_Error(t *testing.T) {
 	}
 }
 
+func TestPowerwordClientAdapter_GenerateVisualGuides_Validation(t *testing.T) {
+	// 1. Missing style_seed
+	mockMsgStyleEmpty := &llm.Message{
+		Role:    llm.RoleAssistant,
+		Content: `{"style_seed": "", "character_profile": "A chubby cat"}`,
+	}
+	mockClient := &mockPWClient{response: mockMsgStyleEmpty}
+	adapter := &PowerwordClientAdapter{client: mockClient, modelName: "test-model"}
+	_, _, _, err := adapter.GenerateVisualGuides(context.Background(), "theme")
+	if err == nil || !strings.Contains(err.Error(), "empty style_seed") {
+		t.Errorf("expected error for empty style_seed, got: %v", err)
+	}
+
+	// 2. Missing character_profile
+	mockMsgProfileEmpty := &llm.Message{
+		Role:    llm.RoleAssistant,
+		Content: `{"style_seed": "claymation style", "character_profile": "   "}`,
+	}
+	mockClient2 := &mockPWClient{response: mockMsgProfileEmpty}
+	adapter2 := &PowerwordClientAdapter{client: mockClient2, modelName: "test-model"}
+	_, _, _, err = adapter2.GenerateVisualGuides(context.Background(), "theme")
+	if err == nil || !strings.Contains(err.Error(), "empty character_profile") {
+		t.Errorf("expected error for empty character_profile, got: %v", err)
+	}
+}
+
 func TestCleanJSONText(t *testing.T) {
 	tests := []struct {
 		input    string
