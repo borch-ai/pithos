@@ -144,24 +144,24 @@ func (a *PowerwordClientAdapter) GenerateStanzas(ctx context.Context, theme stri
 func cleanJSONText(text string) string {
 	text = strings.TrimSpace(text)
 	firstIdx := strings.Index(text, "```")
-	if firstIdx != -1 {
-		lastIdx := strings.LastIndex(text, "```")
-		if lastIdx != -1 && lastIdx > firstIdx {
-			contentStart := firstIdx + 3
-			if newlineIdx := strings.Index(text[contentStart:], "\n"); newlineIdx != -1 {
-				contentStart = contentStart + newlineIdx + 1
-			}
-			text = text[contentStart:lastIdx]
-		} else {
-			contentStart := firstIdx + 3
-			if newlineIdx := strings.Index(text[contentStart:], "\n"); newlineIdx != -1 {
-				contentStart = contentStart + newlineIdx + 1
-			}
-			text = text[contentStart:]
-		}
-		text = strings.TrimSpace(text)
+	if firstIdx == -1 {
+		return text
 	}
-	return text
+
+	lastIdx := strings.LastIndex(text, "```")
+	if lastIdx == -1 || lastIdx <= firstIdx {
+		contentStart := firstIdx + 3
+		if newlineIdx := strings.Index(text[contentStart:], "\n"); newlineIdx != -1 {
+			contentStart = contentStart + newlineIdx + 1
+		}
+		return strings.TrimSpace(text[contentStart:])
+	}
+
+	contentStart := firstIdx + 3
+	if newlineIdx := strings.Index(text[contentStart:], "\n"); newlineIdx != -1 {
+		contentStart = contentStart + newlineIdx + 1
+	}
+	return strings.TrimSpace(text[contentStart:lastIdx])
 }
 
 // newPowerwordLLMClient creates a powerword LLMClient configured for either Gemini or OpenAI
