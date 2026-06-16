@@ -524,3 +524,59 @@ func TestAssemble_TypstError(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
+
+func TestAssemble_ManuscriptStatError(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos-assemble-stat-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	// Initiate manifest
+	optsInit := InitiateOptions{
+		OutputDir:       tmpDir,
+		Theme:           "Parody Theme",
+		TargetPageCount: 3,
+	}
+	m, err := Initiate(optsInit)
+	if err != nil {
+		t.Fatalf("Initiate failed: %v", err)
+	}
+
+	m.Progress.Pages = make([]manifest.PageState, 3)
+	if saveErr := m.Save(); saveErr != nil {
+		t.Fatalf("failed to save manifest: %v", saveErr)
+	}
+
+	// Create an unreadable directory
+	unreadableDir := filepath.Join(tmpDir, "unreadable")
+	if err := os.Mkdir(unreadableDir, 0700); err != nil {
+		t.Fatalf("failed to create unreadable dir: %v", err)
+	}
+
+	manuscriptPath := filepath.Join(tmpDir, "manuscript.md")
+	// Symlink to a file inside the unreadable directory
+	targetPath := filepath.Join(unreadableDir, "target")
+	if err := os.Symlink(targetPath, manuscriptPath); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
+
+	// Change permissions of unreadableDir to 000
+	if err := os.Chmod(unreadableDir, 000); err != nil {
+		t.Fatalf("failed to chmod unreadable dir: %v", err)
+	}
+	defer func() { _ = os.Chmod(unreadableDir, 0700) }() // Restore to allow cleanup
+
+	ctx := context.Background()
+	optsAssemble := AssembleOptions{
+		InputDir: tmpDir,
+	}
+
+	_, err = Assemble(ctx, optsAssemble)
+	if err == nil {
+		t.Error("expected error when os.Stat fails on manuscript.md with permission error, got nil")
+	} else if !strings.Contains(err.Error(), "failed to check manuscript.md status") {
+		t.Errorf("expected error to contain 'failed to check manuscript.md status', got: %v", err)
+	}
+}
+

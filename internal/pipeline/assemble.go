@@ -128,9 +128,13 @@ func Assemble(ctx context.Context, opts AssembleOptions) (*manifest.Manifest, er
 
 func compileInteriorPDF(ctx context.Context, opts AssembleOptions, m *manifest.Manifest) (string, error) {
 	manuscriptPath := filepath.Join(opts.InputDir, "manuscript.md")
-	if _, err := os.Stat(manuscriptPath); os.IsNotExist(err) {
-		if exportErr := exportManuscriptToMarkdown(opts.InputDir, m.Progress.Pages); exportErr != nil {
-			return "", fmt.Errorf("failed to export manuscript.md: %w", exportErr)
+	if _, err := os.Stat(manuscriptPath); err != nil {
+		if os.IsNotExist(err) {
+			if exportErr := exportManuscriptToMarkdown(opts.InputDir, m.Progress.Pages); exportErr != nil {
+				return "", fmt.Errorf("failed to export manuscript.md: %w", exportErr)
+			}
+		} else {
+			return "", fmt.Errorf("failed to check manuscript.md status: %w", err)
 		}
 	}
 	imagesDir := filepath.Join(opts.InputDir, "images")
