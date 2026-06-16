@@ -548,24 +548,11 @@ func TestAssemble_ManuscriptStatError(t *testing.T) {
 		t.Fatalf("failed to save manifest: %v", saveErr)
 	}
 
-	// Create an unreadable directory
-	unreadableDir := filepath.Join(tmpDir, "unreadable")
-	if err := os.Mkdir(unreadableDir, 0700); err != nil {
-		t.Fatalf("failed to create unreadable dir: %v", err)
-	}
-
 	manuscriptPath := filepath.Join(tmpDir, "manuscript.md")
-	// Symlink to a file inside the unreadable directory
-	targetPath := filepath.Join(unreadableDir, "target")
-	if err := os.Symlink(targetPath, manuscriptPath); err != nil {
-		t.Fatalf("failed to create symlink: %v", err)
+	// Create a symlink loop (manuscript.md points to itself) to force os.Stat to fail
+	if symlinkErr := os.Symlink("manuscript.md", manuscriptPath); symlinkErr != nil {
+		t.Fatalf("failed to create symlink: %v", symlinkErr)
 	}
-
-	// Change permissions of unreadableDir to 000
-	if err := os.Chmod(unreadableDir, 000); err != nil {
-		t.Fatalf("failed to chmod unreadable dir: %v", err)
-	}
-	defer func() { _ = os.Chmod(unreadableDir, 0700) }() // Restore to allow cleanup
 
 	ctx := context.Background()
 	optsAssemble := AssembleOptions{
@@ -574,9 +561,8 @@ func TestAssemble_ManuscriptStatError(t *testing.T) {
 
 	_, err = Assemble(ctx, optsAssemble)
 	if err == nil {
-		t.Error("expected error when os.Stat fails on manuscript.md with permission error, got nil")
+		t.Error("expected error when os.Stat fails on manuscript.md with symlink loop, got nil")
 	} else if !strings.Contains(err.Error(), "failed to check manuscript.md status") {
 		t.Errorf("expected error to contain 'failed to check manuscript.md status', got: %v", err)
 	}
 }
-
