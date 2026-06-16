@@ -191,58 +191,6 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
 
 ---
 
-## Phase 6: Long-Form & Serious Publishing
-Focus: Evolving Pithos into a modular, outline-driven book generation tool for technical writing, self-help, and novels.
-
-*   [ ] **Task 6.1: Virtual Author Profiles & Persona Manager**
-    *   Introduce modular author profile definitions (`authors/*.toml`), allowing custom pen names, personas, writing rules, and TTS voice pairings to be swapped dynamically.
-    *   [Implementation Plan](plans/phase_6/task_6_1_author_profiles_persona_manager.md)
-*   [ ] **Task 6.2: Hierarchical Outline-Driven Book Scaffolder**
-    *   Implement multi-tier book generation (`series` -> `volume` -> `chapters` -> `sections`), allowing structured planning and outline generation prior to writing text.
-    *   [Implementation Plan](plans/phase_6/task_6_2_hierarchical_scaffolder.md)
-*   [ ] **Task 6.3: Modular Multi-File Workspace**
-    *   Support compiling books from structured sub-folders (e.g., `chapters/*.md`, `references.bib`) rather than a single `manuscript.md` file.
-    *   [Implementation Plan](plans/phase_6/task_6_3_modular_workspace.md)
-*   [ ] **Task 6.4: Typst Professional Book Compilation & Templates**
-    *   Integrate professional Typst layout templates for non-fiction (margins, headers, footers, table of contents) and novels (front-matter, chapter drop caps).
-    *   [Implementation Plan](plans/phase_6/task_6_4_typst_professional_compilation.md)
-*   [ ] **Task 6.5: EPUB Ebook Compilation & Formatting**
-    *   Package the modular chapters, metadata, style guides, and cover image into standard, clean, validation-passing EPUB files for digital distribution.
-    *   [Implementation Plan](plans/phase_6/task_6_5_epub_ebook_compilation.md)
-*   [ ] **Task 6.6: Technical Diagram & Schematic Generation**
-    *   Connect to MCP servers (`pw-mcp-diagram`) to generate vector diagrams (Mermaid, SVG, Graphviz) from text prompts and embed them in technical chapters.
-    *   [Implementation Plan](plans/phase_6/task_6_6_technical_diagram_generation.md)
-*   [ ] **Task 6.7: Automated Lorebook & Technical Glossary Manager**
-    *   Maintain a global terminology/lore glossary in the manifest, feeding it as context to the LLM to prevent inconsistent terms in sci-fi/fantasy (lore-drift) or technical guides.
-    *   [Implementation Plan](plans/phase_6/task_6_7_lorebook_glossary_manager.md)
-*   [ ] **Task 6.8: Chapter Takeaways & Review Exercises Generator**
-    *   Parse chapter drafts and prompt the LLM to generate learning summaries, review quizzes, and exercises to append to each chapter.
-    *   [Implementation Plan](plans/phase_6/task_6_8_chapter_takeaways_review_generator.md)
-*   [ ] **Task 6.9: Editorial Style Critic & Code Snippet Validator**
-    *   Build an automated editorial critic that reviews drafts for reading level, voice, passive/active verb checks, and compile-verifies technical code snippets.
-    *   [Implementation Plan](plans/phase_6/task_6_9_editorial_critic_validator.md)
-*   [ ] **Task 6.10: Interactive Style Revision & Diff Reviewer**
-    *   Implement an interactive terminal diff tool allowing authors to review, accept, or reject editorial style critic recommendations side-by-side.
-    *   [Implementation Plan](plans/phase_6/task_6_10_interactive_diff_reviewer.md)
-*   [ ] **Task 6.11: Bibliography, Citations & References Manager**
-    *   Support ingesting BibTeX (`references.bib`) citations, passing citation targets to the LLM during drafting, and compiling formatted bibliographies.
-    *   [Implementation Plan](plans/phase_6/task_6_11_citations_reference_manager.md)
-*   [ ] **Task 6.12: Local "Consult" RAG Chatbot Subcommand**
-    *   Implement a local RAG consultant CLI command (e.g. `pithos consult`) querying completed book content to provide customized playbooks using your exact terminology.
-    *   [Implementation Plan](plans/phase_6/task_6_12_local_consult_chatbot.md)
-*   [ ] **Task 6.13: Automated Audiobook Synthesis & TTS Narrator**
-    *   Connect to text-to-speech MCP plugins to synthesize high-quality voice audio for completed book chapters and package them into audiobook files.
-    *   [Implementation Plan](plans/phase_6/task_6_13_audiobook_tts_narrator.md)
-
-
-
-
-
-
-
-
----
-
 ## Phase 6: Speculative — Long-Form & Serious Publishing
 
 > [!WARNING]
