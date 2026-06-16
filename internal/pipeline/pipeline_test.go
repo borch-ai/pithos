@@ -86,6 +86,10 @@ func (m *mockLLM) GenerateStanzas(ctx context.Context, theme string, count int, 
 	return m.stanzas, prompts, m.usage, nil
 }
 
+func (m *mockLLM) Ping(ctx context.Context) error {
+	return m.err
+}
+
 func setupMockImageGenServer(t *testing.T, ctx context.Context, serverTransport mcpsdk.Transport, generatedImagePath string) (*mcpsdk.ServerSession, func()) {
 	t.Helper()
 	server := mcpsdk.NewServer(&mcpsdk.Implementation{

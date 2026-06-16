@@ -169,13 +169,13 @@ func setupLLMClient(opts BrewOptions) (LLMClient, error) {
 	case opts.LLM != nil:
 		return opts.LLM, nil
 	case config.Cfg != nil && config.Cfg.API.GeminiKey != "":
-		pwClient, err := newPowerwordLLMClient("gemini-2.5-flash", config.Cfg.API.GeminiKey, "", opts.HTTPClient)
+		pwClient, err := newLLMClientFunc("gemini-2.5-flash", config.Cfg.API.GeminiKey, "", opts.HTTPClient)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create gemini client: %w", err)
 		}
 		return &PowerwordClientAdapter{client: pwClient, modelName: "gemini-2.5-flash"}, nil
 	case config.Cfg != nil && config.Cfg.API.OpenAIKey != "":
-		pwClient, err := newPowerwordLLMClient("gpt-4o", "", config.Cfg.API.OpenAIKey, opts.HTTPClient)
+		pwClient, err := newLLMClientFunc("gpt-4o", "", config.Cfg.API.OpenAIKey, opts.HTTPClient)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create openai client: %w", err)
 		}
