@@ -135,7 +135,7 @@ func compileInteriorPDF(ctx context.Context, opts AssembleOptions, m *manifest.M
 		if len(m.Progress.Pages) == 0 {
 			return "", errors.New("cannot assemble book: manuscript.md is missing and no pages are generated in the manifest")
 		}
-		if exportErr := exportManuscriptToMarkdown(opts.InputDir, m.Progress.Pages); exportErr != nil {
+		if exportErr := exportManuscriptToMarkdown(opts.InputDir, m.BookProperties.Style, m.BookProperties.CharacterProfile, m.Progress.Pages); exportErr != nil {
 			return "", fmt.Errorf("failed to export manuscript.md: %w", exportErr)
 		}
 	}

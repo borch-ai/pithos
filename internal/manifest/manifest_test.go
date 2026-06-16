@@ -27,10 +27,11 @@ func TestNewManifest(t *testing.T) {
 func TestJSONSerialization(t *testing.T) {
 	m := NewManifest("")
 	m.BookProperties = BookProperties{
-		Theme:           "Adventure",
-		Style:           "WaterColor",
-		Format:          "6x9",
-		TargetPageCount: 24,
+		Theme:            "Adventure",
+		Style:            "WaterColor",
+		CharacterProfile: "A character profile",
+		Format:           "6x9",
+		TargetPageCount:  24,
 	}
 	m.Progress.ManuscriptGenerated = true
 	m.Progress.CoverImageGenerated = true
@@ -57,6 +58,9 @@ func TestJSONSerialization(t *testing.T) {
 
 	if m2.BookProperties.Theme != m.BookProperties.Theme {
 		t.Errorf("expected Theme %s, got %s", m.BookProperties.Theme, m2.BookProperties.Theme)
+	}
+	if m2.BookProperties.CharacterProfile != m.BookProperties.CharacterProfile {
+		t.Errorf("expected CharacterProfile %s, got %s", m.BookProperties.CharacterProfile, m2.BookProperties.CharacterProfile)
 	}
 	if m2.Progress.ManuscriptGenerated != m.Progress.ManuscriptGenerated {
 		t.Errorf("expected ManuscriptGenerated %v, got %v", m.Progress.ManuscriptGenerated, m2.Progress.ManuscriptGenerated)

@@ -46,7 +46,7 @@ func TestPowerwordClientAdapter_GenerateStanzas_Success(t *testing.T) {
 	mockClient := &mockPWClient{response: mockMsg}
 	adapter := &PowerwordClientAdapter{client: mockClient, modelName: "test-model"}
 
-	stanzas, prompts, usage, err := adapter.GenerateStanzas(context.Background(), "theme", 3)
+	stanzas, prompts, usage, err := adapter.GenerateStanzas(context.Background(), "theme", 3, "mock-style", "mock-profile")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -72,7 +72,7 @@ func TestPowerwordClientAdapter_GenerateStanzas_GenerateError(t *testing.T) {
 	mockClient := &mockPWClient{err: errors.New("API error")}
 	adapter := &PowerwordClientAdapter{client: mockClient, modelName: "test-model"}
 
-	_, _, _, err := adapter.GenerateStanzas(context.Background(), "theme", 3)
+	_, _, _, err := adapter.GenerateStanzas(context.Background(), "theme", 3, "mock-style", "mock-profile")
 	if err == nil {
 		t.Error("expected error, got nil")
 	}
@@ -82,14 +82,14 @@ func TestPowerwordClientAdapter_GenerateStanzas_EmptyResponse(t *testing.T) {
 	mockClient := &mockPWClient{response: nil}
 	adapter := &PowerwordClientAdapter{client: mockClient, modelName: "test-model"}
 
-	_, _, _, err := adapter.GenerateStanzas(context.Background(), "theme", 3)
+	_, _, _, err := adapter.GenerateStanzas(context.Background(), "theme", 3, "mock-style", "mock-profile")
 	if err == nil {
 		t.Error("expected error for nil response message, got nil")
 	}
 
 	mockClientEmpty := &mockPWClient{response: &llm.Message{Content: ""}}
 	adapterEmpty := &PowerwordClientAdapter{client: mockClientEmpty, modelName: "test-model"}
-	_, _, _, err = adapterEmpty.GenerateStanzas(context.Background(), "theme", 3)
+	_, _, _, err = adapterEmpty.GenerateStanzas(context.Background(), "theme", 3, "mock-style", "mock-profile")
 	if err == nil {
 		t.Error("expected error for empty response content, got nil")
 	}
@@ -103,7 +103,7 @@ func TestPowerwordClientAdapter_GenerateStanzas_InvalidJSON(t *testing.T) {
 	mockClient := &mockPWClient{response: mockMsg}
 	adapter := &PowerwordClientAdapter{client: mockClient, modelName: "test-model"}
 
-	_, _, _, err := adapter.GenerateStanzas(context.Background(), "theme", 3)
+	_, _, _, err := adapter.GenerateStanzas(context.Background(), "theme", 3, "mock-style", "mock-profile")
 	if err == nil {
 		t.Error("expected error for invalid JSON content, got nil")
 	}
@@ -117,7 +117,7 @@ func TestPowerwordClientAdapter_GenerateStanzas_StanzasMismatch(t *testing.T) {
 	mockClient := &mockPWClient{response: mockMsg}
 	adapter := &PowerwordClientAdapter{client: mockClient, modelName: "test-model"}
 
-	_, _, _, err := adapter.GenerateStanzas(context.Background(), "theme", 3)
+	_, _, _, err := adapter.GenerateStanzas(context.Background(), "theme", 3, "mock-style", "mock-profile")
 	if err == nil {
 		t.Error("expected error for stanzas count mismatch, got nil")
 	}
@@ -131,7 +131,7 @@ func TestPowerwordClientAdapter_GenerateStanzas_PromptsMismatch(t *testing.T) {
 	mockClient := &mockPWClient{response: mockMsg}
 	adapter := &PowerwordClientAdapter{client: mockClient, modelName: "test-model"}
 
-	_, _, _, err := adapter.GenerateStanzas(context.Background(), "theme", 3)
+	_, _, _, err := adapter.GenerateStanzas(context.Background(), "theme", 3, "mock-style", "mock-profile")
 	if err == nil {
 		t.Error("expected error for prompts count mismatch, got nil")
 	}
@@ -174,13 +174,13 @@ func TestNewPowerwordLLMClient_BaseURLNormalization(t *testing.T) {
 
 func TestPowerwordClientAdapter_GenerateStanzas_NilClient(t *testing.T) {
 	var adapter *PowerwordClientAdapter
-	_, _, _, err := adapter.GenerateStanzas(context.Background(), "theme", 3)
+	_, _, _, err := adapter.GenerateStanzas(context.Background(), "theme", 3, "mock-style", "mock-profile")
 	if err == nil {
 		t.Error("expected error for nil adapter, got nil")
 	}
 
 	adapter2 := &PowerwordClientAdapter{client: nil, modelName: "test-model"}
-	_, _, _, err = adapter2.GenerateStanzas(context.Background(), "theme", 3)
+	_, _, _, err = adapter2.GenerateStanzas(context.Background(), "theme", 3, "mock-style", "mock-profile")
 	if err == nil {
 		t.Error("expected error for nil underlying client, got nil")
 	}
@@ -208,10 +208,80 @@ func TestPowerwordClientAdapter_GenerateStanzas_InvalidJSON_Truncation(t *testin
 	mockClient := &mockPWClient{response: mockMsg}
 	adapter := &PowerwordClientAdapter{client: mockClient, modelName: "test-model"}
 
-	_, _, _, err := adapter.GenerateStanzas(context.Background(), "theme", 3)
+	_, _, _, err := adapter.GenerateStanzas(context.Background(), "theme", 3, "mock-style", "mock-profile")
 	if err == nil {
 		t.Error("expected error for long invalid JSON, got nil")
 	} else if !strings.Contains(err.Error(), "...") {
 		t.Errorf("expected error message to contain truncated text (with ellipsis), got: %v", err)
+	}
+}
+
+func TestPowerwordClientAdapter_GenerateVisualGuides_Success(t *testing.T) {
+	mockMsg := &llm.Message{
+		Role:    llm.RoleAssistant,
+		Content: `{"style_seed": "claymation style", "character_profile": "A chubby orange cat"}`,
+		Usage: &telemetry.TokenUsage{
+			InputTokens:  100,
+			OutputTokens: 50,
+		},
+	}
+
+	mockClient := &mockPWClient{response: mockMsg}
+	adapter := &PowerwordClientAdapter{client: mockClient, modelName: "test-model"}
+
+	style, profile, usage, err := adapter.GenerateVisualGuides(context.Background(), "theme")
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if style != "claymation style" {
+		t.Errorf("expected style 'claymation style', got %q", style)
+	}
+	if profile != "A chubby orange cat" {
+		t.Errorf("expected profile 'A chubby orange cat', got %q", profile)
+	}
+	if usage.InputTokens != 100 || usage.OutputTokens != 50 {
+		t.Errorf("unexpected usage: %+v", usage)
+	}
+}
+
+func TestPowerwordClientAdapter_GenerateVisualGuides_Error(t *testing.T) {
+	mockClient := &mockPWClient{err: errors.New("API error")}
+	adapter := &PowerwordClientAdapter{client: mockClient, modelName: "test-model"}
+
+	_, _, _, err := adapter.GenerateVisualGuides(context.Background(), "theme")
+	if err == nil {
+		t.Error("expected error, got nil")
+	}
+
+	mockClientNilMsg := &mockPWClient{response: nil}
+	adapterNil := &PowerwordClientAdapter{client: mockClientNilMsg, modelName: "test-model"}
+	_, _, _, err = adapterNil.GenerateVisualGuides(context.Background(), "theme")
+	if err == nil {
+		t.Error("expected error for nil response, got nil")
+	}
+}
+
+func TestCleanJSONText(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"{}", "{}"},
+		{" \n {\"key\": \"value\"} \n ", "{\"key\": \"value\"}"},
+		{"```json\n{\"foo\": \"bar\"}\n```", "{\"foo\": \"bar\"}"},
+		{"```\n{\"foo\": \"bar\"}\n```", "{\"foo\": \"bar\"}"},
+		{"```json\n{\"foo\": \"bar\"}```", "{\"foo\": \"bar\"}"},
+		{"```json\n\n```", ""},
+		{"", ""},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.input, func(t *testing.T) {
+			got := cleanJSONText(tc.input)
+			if got != tc.expected {
+				t.Errorf("cleanJSONText(%q) = %q; expected %q", tc.input, got, tc.expected)
+			}
+		})
 	}
 }

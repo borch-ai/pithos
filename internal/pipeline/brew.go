@@ -153,7 +153,7 @@ func handleReviewCheckpoint(opts BrewOptions, m *manifest.Manifest, manuscriptPa
 		return fmt.Errorf("failed to check manuscript.md status for review: %w", statErr)
 	}
 	if os.IsNotExist(statErr) {
-		if exportErr := exportManuscriptToMarkdown(opts.OutputDir, m.Progress.Pages); exportErr != nil {
+		if exportErr := exportManuscriptToMarkdown(opts.OutputDir, m.BookProperties.Style, m.BookProperties.CharacterProfile, m.Progress.Pages); exportErr != nil {
 			return exportErr
 		}
 	}
@@ -201,7 +201,34 @@ func generateManuscript(ctx context.Context, m *manifest.Manifest, opts BrewOpti
 		return errors.New("neither Gemini nor OpenAI API key is configured")
 	}
 
-	stanzas, prompts, tokenUsage, err := llmClient.GenerateStanzas(ctx, theme, pageCount)
+	if m.BookProperties.Style == "" || m.BookProperties.CharacterProfile == "" {
+		styleVal, charProfileVal, guideUsage, err := llmClient.GenerateVisualGuides(ctx, theme)
+		if err != nil {
+			return fmt.Errorf("failed to generate visual style/character guides: %w", err)
+		}
+
+		var modelName string
+		switch client := llmClient.(type) {
+		case *PowerwordClientAdapter:
+			modelName = client.modelName
+		default:
+			modelName = "unknown"
+		}
+		var pricing map[string]telemetry.ModelPricing
+		if config.Cfg != nil {
+			pricing = config.Cfg.Pricing
+		}
+		m.RecordLLMUsage(modelName, guideUsage, pricing)
+
+		if m.BookProperties.Style == "" {
+			m.BookProperties.Style = styleVal
+		}
+		if m.BookProperties.CharacterProfile == "" {
+			m.BookProperties.CharacterProfile = charProfileVal
+		}
+	}
+
+	stanzas, prompts, tokenUsage, err := llmClient.GenerateStanzas(ctx, theme, pageCount, m.BookProperties.Style, m.BookProperties.CharacterProfile)
 	if err != nil {
 		return fmt.Errorf("manuscript text generation failed: %w", err)
 	}
@@ -458,9 +485,12 @@ func copyFile(src, dst string) error {
 	return out.Sync()
 }
 
-func exportManuscriptToMarkdown(outputDir string, pages []manifest.PageState) error {
+func exportManuscriptToMarkdown(outputDir string, style, charProfile string, pages []manifest.PageState) error {
 	var sb strings.Builder
 	sb.WriteString("<!-- PITHOS MANUSCRIPT REVIEW -->\n")
+	fmt.Fprintf(&sb, "<!-- Style: %s -->\n", strings.ReplaceAll(strings.TrimSpace(style), "\n", " "))
+	fmt.Fprintf(&sb, "<!-- CharacterProfile: %s -->\n", strings.ReplaceAll(strings.TrimSpace(charProfile), "\n", " "))
+	sb.WriteString("<!-- Edit the stanzas, prompts, and global style/character guides above. -->\n")
 	sb.WriteString("<!-- Each page block begins with a '# Page N' header, followed by two subsections: -->\n")
 	sb.WriteString("<!-- '## Text' — the stanza/prose to edit, and '## Prompt' — the illustration prompt to edit. -->\n")
 	sb.WriteString("<!-- Do not change any '# Page N' or '## Text'/'## Prompt' headers themselves. -->\n")
@@ -559,14 +589,33 @@ func parsePageBlock(index int, lines []string) (parsedPage, bool, error) {
 }
 
 //nolint:gocognit // parsing manuscript lines requires multi-pass state machine for blocks and subheaders
-func parseManuscriptLines(lines []string) ([]parsedPage, bool, error) {
+func parseManuscriptLines(lines []string) (pages []parsedPage, style string, styleOk bool, charProfile string, charProfileOk bool, hasSubheaders bool, err error) {
 	var parsedPages []parsedPage
 	var currentIdx int
 	var currentLines []string
 	hasSubheadersAny := false
+	var parsedStyle string
+	var parsedStyleOk bool
+	var parsedCharProfile string
+	var parsedCharProfileOk bool
 
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
+
+		if strings.HasPrefix(trimmed, "<!--") && strings.HasSuffix(trimmed, "-->") {
+			commentContent := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(trimmed, "<!--"), "-->"))
+			if strings.HasPrefix(commentContent, "Style:") {
+				parsedStyle = strings.TrimSpace(strings.TrimPrefix(commentContent, "Style:"))
+				parsedStyleOk = true
+				continue
+			}
+			if strings.HasPrefix(commentContent, "CharacterProfile:") {
+				parsedCharProfile = strings.TrimSpace(strings.TrimPrefix(commentContent, "CharacterProfile:"))
+				parsedCharProfileOk = true
+				continue
+			}
+		}
+
 		if !strings.HasPrefix(trimmed, "# Page ") {
 			if currentIdx > 0 {
 				currentLines = append(currentLines, line)
@@ -577,7 +626,7 @@ func parseManuscriptLines(lines []string) ([]parsedPage, bool, error) {
 		if currentIdx > 0 {
 			pPage, hasSubs, err := parsePageBlock(currentIdx, currentLines)
 			if err != nil {
-				return nil, false, err
+				return nil, "", false, "", false, false, err
 			}
 			if hasSubs {
 				hasSubheadersAny = true
@@ -589,10 +638,10 @@ func parseManuscriptLines(lines []string) ([]parsedPage, bool, error) {
 		header := strings.TrimPrefix(trimmed, "# Page ")
 		idx, err := strconv.Atoi(header)
 		if err != nil {
-			return nil, false, fmt.Errorf("failed to parse page header %q: %w", line, err)
+			return nil, "", false, "", false, false, fmt.Errorf("failed to parse page header %q: %w", line, err)
 		}
 		if idx <= 0 {
-			return nil, false, fmt.Errorf("invalid page index %d in header %q: must be positive", idx, line)
+			return nil, "", false, "", false, false, fmt.Errorf("invalid page index %d in header %q: must be positive", idx, line)
 		}
 		currentIdx = idx
 	}
@@ -600,7 +649,7 @@ func parseManuscriptLines(lines []string) ([]parsedPage, bool, error) {
 	if currentIdx > 0 {
 		pPage, hasSubs, err := parsePageBlock(currentIdx, currentLines)
 		if err != nil {
-			return nil, false, err
+			return nil, "", false, "", false, false, err
 		}
 		if hasSubs {
 			hasSubheadersAny = true
@@ -608,7 +657,7 @@ func parseManuscriptLines(lines []string) ([]parsedPage, bool, error) {
 		parsedPages = append(parsedPages, pPage)
 	}
 
-	return parsedPages, hasSubheadersAny, nil
+	return parsedPages, parsedStyle, parsedStyleOk, parsedCharProfile, parsedCharProfileOk, hasSubheadersAny, nil
 }
 
 //nolint:gocognit // import verification requires matching multiple states (index, text modifications)
@@ -626,7 +675,7 @@ func importManuscriptFromMarkdown(outputDir string, m *manifest.Manifest, pagesF
 	content := strings.ReplaceAll(string(data), "\r\n", "\n")
 	lines := strings.Split(content, "\n")
 
-	parsedPages, _, err := parseManuscriptLines(lines)
+	parsedPages, parsedStyle, styleOk, parsedCharProfile, charProfileOk, _, err := parseManuscriptLines(lines)
 	if err != nil {
 		return false, err
 	}
@@ -661,6 +710,19 @@ func importManuscriptFromMarkdown(outputDir string, m *manifest.Manifest, pagesF
 	}
 
 	changed := false
+	styleChanged := false
+	if styleOk && parsedStyle != m.BookProperties.Style {
+		m.BookProperties.Style = parsedStyle
+		styleChanged = true
+		changed = true
+	}
+	charProfileChanged := false
+	if charProfileOk && parsedCharProfile != m.BookProperties.CharacterProfile {
+		m.BookProperties.CharacterProfile = parsedCharProfile
+		charProfileChanged = true
+		changed = true
+	}
+
 	for _, pp := range parsedPages {
 		found := false
 		for i, page := range m.Progress.Pages {
@@ -686,6 +748,13 @@ func importManuscriptFromMarkdown(outputDir string, m *manifest.Manifest, pagesF
 		}
 		if !found {
 			return false, fmt.Errorf("parsed page index %d does not exist in manifest", pp.index)
+		}
+	}
+
+	if styleChanged || charProfileChanged {
+		for i := range m.Progress.Pages {
+			m.Progress.Pages[i].Status = manifest.StatusPending
+			m.Progress.Pages[i].ImagePath = ""
 		}
 	}
 
