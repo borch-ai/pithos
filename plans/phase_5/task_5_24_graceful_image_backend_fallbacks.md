@@ -18,7 +18,7 @@ Implement automatic, graceful fallbacks between image generation backends (e.g.,
 
 ### 1. Powerword Repository (MCP Server changes)
 
-#### [MODIFY] [main.go](file:///Users/human/code/powerword/cmd/pw-mcp-imagegen/main.go)
+#### [MODIFY] [main.go](file://../../../powerword/cmd/pw-mcp-imagegen/main.go)
 - Update `imagegen_generate` MCP tool input schema to accept an optional `backend` string parameter:
   ```json
   "backend": {
@@ -28,7 +28,7 @@ Implement automatic, graceful fallbacks between image generation backends (e.g.,
   ```
 - Unmarshal and pass the `backend` argument to `service.GenerateImage`.
 
-#### [MODIFY] [imagegen.go](file:///Users/human/code/powerword/internal/plugins/imagegen/imagegen.go)
+#### [MODIFY] [imagegen.go](file://../../../powerword/internal/plugins/imagegen/imagegen.go)
 - Update the signature of `GenerateImage` to accept the `backend` override:
   ```go
   func (s *ImageGenService) GenerateImage(ctx context.Context, prompt string, size string, styleID string, backendOverride string) (string, string, error)
@@ -39,7 +39,7 @@ Implement automatic, graceful fallbacks between image generation backends (e.g.,
 
 ### 2. Pithos Repository (CLI client changes)
 
-#### [MODIFY] [brew.go](file:///Users/human/code/pithos/internal/pipeline/brew.go)
+#### [MODIFY] [brew.go](file://../../internal/pipeline/brew.go)
 - Wrap the `imagegen_generate` MCP tool call in a retry/fallback handler.
 - If the call fails:
   - Inspect the error message for patterns indicating authorization, credential, or model eligibility failure (e.g., `"model does not exist"`, `"401"`, `"unauthorized"`, `"api key"`).

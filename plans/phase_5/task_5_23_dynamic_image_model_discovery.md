@@ -18,7 +18,7 @@ Implement dynamic model discovery and capability resolution for the MCP image ge
 
 ### 1. Powerword Repository (MCP Server changes)
 
-#### [MODIFY] [imagegen.go](file:///Users/human/code/powerword/internal/plugins/imagegen/imagegen.go)
+#### [MODIFY] [imagegen.go](file://../../../powerword/internal/plugins/imagegen/imagegen.go)
 - Implement a method `(b *GoogleBackend) DiscoverModels(ctx context.Context) ([]string, error)` that queries Google's model list API endpoint (`GET /v1beta/models`).
 - Filter models to find those supporting image/video generation (e.g., containing `imagen` or `veo`).
 - Update `GenerateImage` in `GoogleBackend` and `VeoBackend` to:
@@ -26,7 +26,7 @@ Implement dynamic model discovery and capability resolution for the MCP image ge
   - Fall back to the latest verified/active version (e.g., resolving `imagen-4.0-generate-001` if `imagen-3.0-generate-002` fails).
 - Update the return type of `ImageGenService.GenerateImage` to return both the saved local file path and the **actual model name** used.
 
-#### [MODIFY] [main.go](file:///Users/human/code/powerword/cmd/pw-mcp-imagegen/main.go)
+#### [MODIFY] [main.go](file://../../../powerword/cmd/pw-mcp-imagegen/main.go)
 - Register a new MCP tool `imagegen_list_models` which returns the list of dynamically discovered image/video generation models.
 - Update the response of `imagegen_generate` tool to include the model used in the output string or structured metadata.
 
@@ -34,7 +34,7 @@ Implement dynamic model discovery and capability resolution for the MCP image ge
 
 ### 2. Pithos Repository (CLI client changes)
 
-#### [MODIFY] [brew.go](file:///Users/human/code/pithos/internal/pipeline/brew.go)
+#### [MODIFY] [brew.go](file://../../internal/pipeline/brew.go)
 - Parse the actual model returned by the MCP `imagegen_generate` result.
 - Log the model name used for each page generation.
 - Store the resolved image model name in the page's metadata / telemetry inside `manifest.json`.

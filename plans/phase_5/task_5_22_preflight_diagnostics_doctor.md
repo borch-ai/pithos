@@ -7,6 +7,11 @@
 
 Implement a preflight connection diagnostic subcommand (`pithos doctor`) that checks the setup and accessibility of all downstream services (MCP servers, API keys) before running the main book generation pipelines.
 
+## User Review Required
+
+> [!NOTE]
+> This command is purely diagnostic and does not modify the manifest or generate book assets.
+
 ## Proposed Changes
 
 ### CLI Layer
