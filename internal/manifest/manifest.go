@@ -175,12 +175,19 @@ func (m *Manifest) AddMilestone(milestone string) error {
 }
 
 // UpdatePDFPaths updates the interior and cover PDF absolute paths in Kiln status.
+// Paths are converted to absolute paths using filepath.Abs if they are relative.
 func (m *Manifest) UpdatePDFPaths(interiorPath, coverPath string) error {
 	m.mu.Lock()
 	if interiorPath != "" {
+		if abs, err := filepath.Abs(interiorPath); err == nil {
+			interiorPath = abs
+		}
 		m.Kiln.InteriorPDFPath = interiorPath
 	}
 	if coverPath != "" {
+		if abs, err := filepath.Abs(coverPath); err == nil {
+			coverPath = abs
+		}
 		m.Kiln.CoverPDFPath = coverPath
 	}
 	m.mu.Unlock()

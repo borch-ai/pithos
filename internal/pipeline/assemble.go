@@ -119,6 +119,8 @@ func Assemble(ctx context.Context, opts AssembleOptions) (*manifest.Manifest, er
 		return nil, fmt.Errorf("failed to register interior PDF asset: %w", err)
 	}
 
+	// cover_pdf is read from the AssetRegistry as a future-proof hook for when
+	// cover PDF generation is introduced in Task 5.18. Currently, it defaults to empty.
 	coverPDFPath := m.AssetRegistry["cover_pdf"]
 	if err := m.UpdatePDFPaths(pdfPath, coverPDFPath); err != nil {
 		return nil, fmt.Errorf("failed to update PDF paths in manifest: %w", err)
