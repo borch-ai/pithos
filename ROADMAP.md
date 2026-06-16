@@ -113,17 +113,26 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
 *   [ ] **Task 5.21: Character Invariant Injection**
     *   Inject visual invariant descriptors to preserve character consistency in generated illustration prompts.
     *   [Implementation Plan](plans/phase_5/task_5_21_character_invariant_injection.md)
+*   [ ] **Task 5.22: Preflight Diagnostic Subcommand (`pithos doctor`)**
+    *   Implement a `doctor` subcommand to run connectivity, credential, and backend health checks for all configured MCP plugins.
+    *   [Implementation Plan](plans/phase_5/task_5_22_preflight_diagnostics_doctor.md)
+*   [ ] **Task 5.23: Dynamic Image Model Discovery**
+    *   Query model capability list dynamically from provider APIs to select the best available model version.
+    *   [Implementation Plan](plans/phase_5/task_5_23_dynamic_image_model_discovery.md)
+*   [ ] **Task 5.24: Graceful Image Backend Fallbacks**
+    *   Implement fallback handling from OpenAI to Gemini Imagen (and vice-versa) when image generation fails due to credential or permission errors.
+    *   [Implementation Plan](plans/phase_5/task_5_24_graceful_image_backend_fallbacks.md)
 
 ### Interactive UI & Quality Enhancements
 *   [x] **Task 5.10: Visual Prompt Expansion for Character Consistency**
     *   Modify stanzas generation to produce parodic poems alongside character-consistent illustration prompts. Integrate prompts in the manifest and the markdown review loop.
     *   [Implementation Plan](plans/phase_5/task_5_10_visual_prompt_expansion.md)
-*   [ ] **Task 5.11: LLM-Driven Style & Character Seeds**
+*   [x] **Task 5.11: LLM-Driven Style & Character Seeds**
     *   Implement automated visual style and character profile generation as a dedicated preceding step of `brew`.
     *   Feed the generated style/character seed into the manuscript generator as prompt context to ensure stanzas and illustration prompts align.
     *   Configure a global character style reference flag (`--style`) to allow manual override.
     *   [Implementation Plan](plans/phase_5/task_5_11_global_style_character_seeds.md)
-*   [ ] **Task 5.12: Robust JSON Output Parsing**
+*   [x] **Task 5.12: Robust JSON Output Parsing**
     *   Implement an LLM response sanitization helper to strip markdown code blocks (e.g. ` ```json ... ``` `) and protect Pithos against parsing errors.
     *   [Implementation Plan](plans/phase_5/task_5_12_robust_json_parsing.md)
 *   [ ] **Task 5.13: Multi-Provider LLM Fallback & Retries**
@@ -182,12 +191,12 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
 *   [x] **Task 5.10: Visual Prompt Expansion for Character Consistency**
     *   Modify stanzas generation to produce parodic poems alongside character-consistent illustration prompts. Integrate prompts in the manifest and the markdown review loop.
     *   [Implementation Plan](plans/phase_5/task_5_10_visual_prompt_expansion.md)
-*   [ ] **Task 5.11: LLM-Driven Style & Character Seeds**
+*   [x] **Task 5.11: LLM-Driven Style & Character Seeds**
     *   Implement automated visual style and character profile generation as a dedicated preceding step of `brew`.
     *   Feed the generated style/character seed into the manuscript generator as prompt context to ensure stanzas and illustration prompts align.
     *   Configure a global character style reference flag (`--style`) to allow manual override.
     *   [Implementation Plan](plans/phase_5/task_5_11_global_style_character_seeds.md)
-*   [ ] **Task 5.12: Robust JSON Output Parsing**
+*   [x] **Task 5.12: Robust JSON Output Parsing**
     *   Implement an LLM response sanitization helper to strip markdown code blocks (e.g. ` ```json ... ``` `) and protect Pithos against parsing errors.
     *   [Implementation Plan](plans/phase_5/task_5_12_robust_json_parsing.md)
 *   [ ] **Task 5.13: Multi-Provider LLM Fallback & Retries**
