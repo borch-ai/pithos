@@ -1308,7 +1308,7 @@ func TestImportManuscriptFromMarkdown_Errors_Basic(t *testing.T) {
 	}
 
 	// 1. manuscript.md does not exist
-	changed, err := importManuscriptFromMarkdown(tmpDir, m)
+	changed, err := importManuscriptFromMarkdown(tmpDir, m, nil)
 	if err != nil {
 		t.Fatalf("expected no error for non-existent manuscript, got %v", err)
 	}
@@ -1321,7 +1321,7 @@ func TestImportManuscriptFromMarkdown_Errors_Basic(t *testing.T) {
 	if writeErr := os.WriteFile(manuscriptPath, []byte(""), 0600); writeErr != nil {
 		t.Fatalf("failed to write empty manuscript: %v", writeErr)
 	}
-	_, err = importManuscriptFromMarkdown(tmpDir, m)
+	_, err = importManuscriptFromMarkdown(tmpDir, m, nil)
 	if err == nil {
 		t.Error("expected error for empty manuscript file, got nil")
 	}
@@ -1331,7 +1331,7 @@ func TestImportManuscriptFromMarkdown_Errors_Basic(t *testing.T) {
 	if writeErr := os.WriteFile(manuscriptPath, []byte(invalidHeaders), 0600); writeErr != nil {
 		t.Fatalf("failed to write invalid headers: %v", writeErr)
 	}
-	_, err = importManuscriptFromMarkdown(tmpDir, m)
+	_, err = importManuscriptFromMarkdown(tmpDir, m, nil)
 	if err == nil {
 		t.Error("expected error for invalid page index format, got nil")
 	}
@@ -1341,7 +1341,7 @@ func TestImportManuscriptFromMarkdown_Errors_Basic(t *testing.T) {
 	if writeErr := os.WriteFile(manuscriptPath, []byte(trailingHeaders), 0600); writeErr != nil {
 		t.Fatalf("failed to write trailing headers: %v", writeErr)
 	}
-	_, err = importManuscriptFromMarkdown(tmpDir, m)
+	_, err = importManuscriptFromMarkdown(tmpDir, m, nil)
 	if err == nil {
 		t.Error("expected error for header with trailing text, got nil")
 	}
@@ -1365,7 +1365,7 @@ func TestImportManuscriptFromMarkdown_Errors_Validation(t *testing.T) {
 	if writeErr := os.WriteFile(manuscriptPath, []byte(mismatchPage), 0600); writeErr != nil {
 		t.Fatalf("failed to write mismatch page: %v", writeErr)
 	}
-	_, err = importManuscriptFromMarkdown(tmpDir, m)
+	_, err = importManuscriptFromMarkdown(tmpDir, m, nil)
 	if err == nil {
 		t.Error("expected error for page index mismatch, got nil")
 	}
@@ -1375,7 +1375,7 @@ func TestImportManuscriptFromMarkdown_Errors_Validation(t *testing.T) {
 	if writeErr := os.WriteFile(manuscriptPath, []byte(nonPositivePage), 0600); writeErr != nil {
 		t.Fatalf("failed to write non-positive page: %v", writeErr)
 	}
-	_, err = importManuscriptFromMarkdown(tmpDir, m)
+	_, err = importManuscriptFromMarkdown(tmpDir, m, nil)
 	if err == nil {
 		t.Error("expected error for non-positive page index, got nil")
 	}
@@ -1389,7 +1389,7 @@ func TestImportManuscriptFromMarkdown_Errors_Validation(t *testing.T) {
 	if writeErr := os.WriteFile(manuscriptPath, []byte(duplicatePage), 0600); writeErr != nil {
 		t.Fatalf("failed to write duplicate page manuscript: %v", writeErr)
 	}
-	_, err = importManuscriptFromMarkdown(tmpDir, m)
+	_, err = importManuscriptFromMarkdown(tmpDir, m, nil)
 	if err == nil {
 		t.Error("expected error for duplicate page index, got nil")
 	}
@@ -1399,7 +1399,7 @@ func TestImportManuscriptFromMarkdown_Errors_Validation(t *testing.T) {
 	if writeErr := os.WriteFile(manuscriptPath, []byte(missingPage), 0600); writeErr != nil {
 		t.Fatalf("failed to write missing page manuscript: %v", writeErr)
 	}
-	_, err = importManuscriptFromMarkdown(tmpDir, m)
+	_, err = importManuscriptFromMarkdown(tmpDir, m, nil)
 	if err == nil {
 		t.Error("expected error for missing page stanza, got nil")
 	}
@@ -1412,7 +1412,7 @@ func TestImportManuscriptFromMarkdown_Errors_Validation(t *testing.T) {
 	if writeErr := os.WriteFile(manuscriptPath, []byte(partialHeaders), 0600); writeErr != nil {
 		t.Fatalf("failed to write partial headers manuscript: %v", writeErr)
 	}
-	_, err = importManuscriptFromMarkdown(tmpDir, m)
+	_, err = importManuscriptFromMarkdown(tmpDir, m, nil)
 	if err == nil {
 		t.Error("expected error for page with ## Text but missing ## Prompt, got nil")
 	}
@@ -1453,7 +1453,7 @@ Prompt 2 edited prompt
 		t.Fatalf("failed to write manuscript.md: %v", writeErr)
 	}
 
-	changed, err := importManuscriptFromMarkdown(tmpDir, m)
+	changed, err := importManuscriptFromMarkdown(tmpDir, m, nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -1464,14 +1464,14 @@ Prompt 2 edited prompt
 	if m.Progress.Pages[0].Text != "Stanza 1 edited text" {
 		t.Errorf("expected page 1 text to be edited, got %q", m.Progress.Pages[0].Text)
 	}
-	if m.Progress.Pages[0].Status != manifest.StatusPending || m.Progress.Pages[0].ImagePath != "" {
+	if m.Progress.Pages[0].Status != manifest.StatusPending || m.Progress.Pages[0].ImagePath != "images/page_1.png" {
 		t.Errorf("expected page 1 status to be reset, got status %q path %q", m.Progress.Pages[0].Status, m.Progress.Pages[0].ImagePath)
 	}
 
 	if m.Progress.Pages[1].IllustrationPrompt != "Prompt 2 edited prompt" {
 		t.Errorf("expected page 2 prompt to be edited, got %q", m.Progress.Pages[1].IllustrationPrompt)
 	}
-	if m.Progress.Pages[1].Status != manifest.StatusPending || m.Progress.Pages[1].ImagePath != "" {
+	if m.Progress.Pages[1].Status != manifest.StatusPending || m.Progress.Pages[1].ImagePath != "images/page_2.png" {
 		t.Errorf("expected page 2 status to be reset, got status %q path %q", m.Progress.Pages[1].Status, m.Progress.Pages[1].ImagePath)
 	}
 
@@ -1492,7 +1492,7 @@ Stanza 2 original
 		t.Fatalf("failed to write manuscript.md: %v", writeErr)
 	}
 
-	changed, err = importManuscriptFromMarkdown(tmpDir, m)
+	changed, err = importManuscriptFromMarkdown(tmpDir, m, nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -1506,7 +1506,7 @@ Stanza 2 original
 	if m.Progress.Pages[0].IllustrationPrompt != "Prompt 1 original" {
 		t.Errorf("expected page 1 illustration prompt to be preserved, got %q", m.Progress.Pages[0].IllustrationPrompt)
 	}
-	if m.Progress.Pages[0].Status != manifest.StatusPending || m.Progress.Pages[0].ImagePath != "" {
+	if m.Progress.Pages[0].Status != manifest.StatusPending || m.Progress.Pages[0].ImagePath != "images/page_1.png" {
 		t.Errorf("expected page 1 status to be reset, got status %q path %q", m.Progress.Pages[0].Status, m.Progress.Pages[0].ImagePath)
 	}
 
@@ -1518,5 +1518,181 @@ Stanza 2 original
 	}
 	if m.Progress.Pages[1].Status != manifest.StatusCompleted {
 		t.Errorf("expected page 2 status to remain completed, got status %q", m.Progress.Pages[1].Status)
+	}
+}
+
+func setupSelectiveRedoTest(t *testing.T, theme string) (string, *manifest.Manifest, string) {
+	t.Helper()
+	tmpDir, err := os.MkdirTemp("", "pithos-brew-selective-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	dummySourceImage := filepath.Join(tmpDir, "source.png")
+	if writeErr := os.WriteFile(dummySourceImage, []byte("fake-image-bytes"), 0600); writeErr != nil {
+		t.Fatalf("failed to write source image: %v", writeErr)
+	}
+	optsInit := InitiateOptions{
+		OutputDir:       tmpDir,
+		Theme:           theme,
+		TargetPageCount: 3,
+	}
+	m, err := Initiate(optsInit)
+	if err != nil {
+		t.Fatalf("failed to initiate: %v", err)
+	}
+	m.Progress.ManuscriptGenerated = true
+	m.Progress.Pages = []manifest.PageState{
+		{PageIndex: 1, Status: manifest.StatusCompleted, ImagePath: "images/page_1.png", Text: "Stanza 1"},
+		{PageIndex: 2, Status: manifest.StatusCompleted, ImagePath: "images/page_2.png", Text: "Stanza 2"},
+		{PageIndex: 3, Status: manifest.StatusCompleted, ImagePath: "images/page_3.png", Text: "Stanza 3"},
+	}
+	if err := m.Save(); err != nil {
+		t.Fatalf("failed to save manifest: %v", err)
+	}
+	return tmpDir, m, dummySourceImage
+}
+
+func TestBrew_SelectivePageRedo(t *testing.T) {
+	tmpDir, _, dummySourceImage := setupSelectiveRedoTest(t, "Selective Redo Theme")
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	clientTransport, serverTransport := mcpsdk.NewInMemoryTransports()
+	_, cleanupMCP := setupMockImageGenServer(t, ctx, serverTransport, dummySourceImage)
+	defer cleanupMCP()
+
+	optsBrew := BrewOptions{
+		OutputDir:    tmpDir,
+		MCPTransport: clientTransport,
+		Pages:        []int{2},
+	}
+
+	imagesDir := filepath.Join(tmpDir, "images")
+	if mkdirErr := os.MkdirAll(imagesDir, 0750); mkdirErr != nil {
+		t.Fatalf("failed to create images dir: %v", mkdirErr)
+	}
+
+	page1ImgPath := filepath.Join(imagesDir, "page_1.png")
+	page2ImgPath := filepath.Join(imagesDir, "page_2.png")
+	page3ImgPath := filepath.Join(imagesDir, "page_3.png")
+
+	if writeErr1 := os.WriteFile(page1ImgPath, []byte("original-image-1"), 0600); writeErr1 != nil {
+		t.Fatalf("failed to write page 1 image: %v", writeErr1)
+	}
+	if writeErr2 := os.WriteFile(page2ImgPath, []byte("old-image-data"), 0600); writeErr2 != nil {
+		t.Fatalf("failed to write page 2 image: %v", writeErr2)
+	}
+	if writeErr3 := os.WriteFile(page3ImgPath, []byte("original-image-3"), 0600); writeErr3 != nil {
+		t.Fatalf("failed to write page 3 image: %v", writeErr3)
+	}
+
+	if brewErr := Brew(ctx, optsBrew); brewErr != nil {
+		t.Fatalf("Brew failed: %v", brewErr)
+	}
+
+	m2, loadErr := manifest.LoadManifest(filepath.Join(tmpDir, "manifest.json"))
+	if loadErr != nil {
+		t.Fatalf("failed to load manifest: %v", loadErr)
+	}
+
+	if m2.Progress.Pages[1].Status != manifest.StatusCompleted {
+		t.Errorf("expected Page 2 to be Completed, got %q", m2.Progress.Pages[1].Status)
+	}
+	if m2.Progress.Pages[0].Status != manifest.StatusCompleted || m2.Progress.Pages[2].Status != manifest.StatusCompleted {
+		t.Errorf("expected Page 1 and 3 to remain Completed")
+	}
+
+	// #nosec G304
+	content, readErr := os.ReadFile(page2ImgPath)
+	if readErr != nil {
+		t.Fatalf("failed to read page 2 image: %v", readErr)
+	}
+	if string(content) != "fake-image-bytes" {
+		t.Errorf("expected page 2 image content to be overwritten, got %q", string(content))
+	}
+
+	// Verify non-target pages remain unchanged
+	// #nosec G304
+	content1, readErr1 := os.ReadFile(page1ImgPath)
+	if readErr1 != nil {
+		t.Fatalf("failed to read page 1 image: %v", readErr1)
+	}
+	if string(content1) != "original-image-1" {
+		t.Errorf("expected page 1 image content to remain unchanged, got %q", string(content1))
+	}
+
+	// #nosec G304
+	content3, readErr3 := os.ReadFile(page3ImgPath)
+	if readErr3 != nil {
+		t.Fatalf("failed to read page 3 image: %v", readErr3)
+	}
+	if string(content3) != "original-image-3" {
+		t.Errorf("expected page 3 image content to remain unchanged, got %q", string(content3))
+	}
+}
+
+func TestBrew_SelectivePageRedo_Errors(t *testing.T) {
+	tmpDir, m, _ := setupSelectiveRedoTest(t, "Selective Redo Theme")
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	optsBrewInvalidPage := BrewOptions{
+		OutputDir: tmpDir,
+		Pages:     []int{4},
+	}
+	if err := Brew(ctx, optsBrewInvalidPage); err == nil {
+		t.Error("expected error for out of bounds page index, got nil")
+	} else if !strings.Contains(err.Error(), "page index 4 is out of bounds") {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	m.Progress.ManuscriptGenerated = false
+	if saveErr := m.Save(); saveErr != nil {
+		t.Fatalf("failed to save manifest: %v", saveErr)
+	}
+	optsBrewNoManuscript := BrewOptions{
+		OutputDir: tmpDir,
+		Pages:     []int{2},
+	}
+	if err := Brew(ctx, optsBrewNoManuscript); err == nil {
+		t.Error("expected error when manuscript is not generated, got nil")
+	} else if !strings.Contains(err.Error(), "cannot perform selective page redo before manuscript is generated") {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	m.Progress.ManuscriptGenerated = true
+	if saveErr := m.Save(); saveErr != nil {
+		t.Fatalf("failed to save manifest: %v", saveErr)
+	}
+
+	manuscriptContent := `<!-- review -->
+# Page 1
+<!-- prompt: New Prompt for Page 1 -->
+Stanza 1 Edited!
+
+# Page 2
+<!-- prompt: Stanza 2 prompt -->
+Stanza 2
+
+# Page 3
+<!-- prompt: Stanza 3 prompt -->
+Stanza 3
+`
+	if writeErr := os.WriteFile(filepath.Join(tmpDir, "manuscript.md"), []byte(manuscriptContent), 0600); writeErr != nil {
+		t.Fatalf("failed to write manuscript.md: %v", writeErr)
+	}
+
+	optsBrewOutsideEdits := BrewOptions{
+		OutputDir: tmpDir,
+		Pages:     []int{2},
+	}
+	if err := Brew(ctx, optsBrewOutsideEdits); err == nil {
+		t.Error("expected error when manuscript.md has edits outside selective page list, got nil")
+	} else if !strings.Contains(err.Error(), "not included in the selective page override list") {
+		t.Errorf("unexpected error: %v", err)
 	}
 }

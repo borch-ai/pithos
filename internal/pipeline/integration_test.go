@@ -340,3 +340,100 @@ backend = "openai"
 		config.Cfg = origCfg
 	}
 }
+
+//nolint:gocognit,funlen,nestif // Integration tests have multiple steps, complex checking blocks, and configurations
+func TestBrew_Integration_SelectivePageRedo(t *testing.T) {
+	tempDir := t.TempDir()
+	binaryPath := buildImageGenBinary(t, tempDir)
+
+	imageBytes := []byte("integration-selective-image-data")
+	downloadServer, openaiServer := setupMockOpenAIServer(t, imageBytes)
+	defer downloadServer.Close()
+	defer openaiServer.Close()
+
+	restoreConfig := configureTestEnvironment(t, tempDir, binaryPath, openaiServer.URL)
+	defer restoreConfig()
+
+	// 1. Initialize Pithos Workspace
+	optsInit := InitiateOptions{
+		OutputDir:       tempDir,
+		Theme:           "Integration Selective Theme",
+		TargetPageCount: 3,
+	}
+	m, err := Initiate(optsInit)
+	if err != nil {
+		t.Fatalf("failed to initiate book: %v", err)
+	}
+
+	// 2. Pre-populate stanzas to skip LLM text generation step
+	m.Progress.ManuscriptGenerated = true
+	m.Progress.Pages = []manifest.PageState{
+		{PageIndex: 1, Status: manifest.StatusCompleted, ImagePath: "images/page_1.png", Text: "Stanza 1"},
+		{PageIndex: 2, Status: manifest.StatusCompleted, ImagePath: "images/page_2.png", Text: "Stanza 2"},
+		{PageIndex: 3, Status: manifest.StatusCompleted, ImagePath: "images/page_3.png", Text: "Stanza 3"},
+	}
+	if saveErr := m.Save(); saveErr != nil {
+		t.Fatalf("failed to save manifest: %v", saveErr)
+	}
+
+	// Pre-create image files on disk
+	for _, p := range m.Progress.Pages {
+		fullImgPath := filepath.Join(tempDir, p.ImagePath)
+		if mkdirErr := os.MkdirAll(filepath.Dir(fullImgPath), 0750); mkdirErr != nil {
+			t.Fatal(mkdirErr)
+		}
+		if writeErr := os.WriteFile(fullImgPath, []byte("original-image-data"), 0600); writeErr != nil {
+			t.Fatal(writeErr)
+		}
+	}
+
+	// 3. Run Brew with Pages = []int{2} to regenerate Page 2
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	optsBrew := BrewOptions{
+		OutputDir: tempDir,
+		Pages:     []int{2},
+	}
+
+	err = Brew(ctx, optsBrew)
+	if err != nil {
+		t.Fatalf("Brew integration failed: %v", err)
+	}
+
+	// 4. Verify outputs:
+	// Reload manifest
+	m2, err := manifest.LoadManifest(filepath.Join(tempDir, "manifest.json"))
+	if err != nil {
+		t.Fatalf("failed to reload manifest: %v", err)
+	}
+
+	// Page 2 should be completed and updated with new image
+	if m2.Progress.Pages[1].Status != manifest.StatusCompleted {
+		t.Errorf("expected page 2 to be completed, got %q", m2.Progress.Pages[1].Status)
+	}
+	// #nosec G304
+	data2, err := os.ReadFile(filepath.Join(tempDir, m2.Progress.Pages[1].ImagePath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data2) != "integration-selective-image-data" {
+		t.Errorf("expected page 2 to have new image data, got %q", string(data2))
+	}
+
+	// Page 1 and Page 3 should remain completed and have their original image data
+	for _, pIdx := range []int{0, 2} {
+		p := m2.Progress.Pages[pIdx]
+		if p.Status != manifest.StatusCompleted {
+			t.Errorf("expected page %d to remain completed, got %q", p.PageIndex, p.Status)
+		}
+		// #nosec G304
+		data, err := os.ReadFile(filepath.Join(tempDir, p.ImagePath))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(data) != "original-image-data" {
+			t.Errorf("expected page %d to have original image data, got %q", p.PageIndex, string(data))
+		}
+	}
+}

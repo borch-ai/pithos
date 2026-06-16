@@ -29,6 +29,7 @@ type BrewOptions struct {
 	Style        string
 	Concurrency  int
 	Review       bool
+	Pages        []int
 	MCPTransport mcpsdk.Transport // For testing
 	LLM          LLMClient        // For testing
 	HTTPClient   *http.Client     // For testing
@@ -47,6 +48,16 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 	m, err := manifest.LoadManifest(manifestPath)
 	if err != nil {
 		return fmt.Errorf("failed to load manifest from %s: %w", manifestPath, err)
+	}
+
+	// Validate and apply target pages redo/reset
+	if len(opts.Pages) > 0 {
+		if err := resetManifestPages(m, opts.Pages); err != nil {
+			return err
+		}
+		if err := m.Save(); err != nil {
+			return fmt.Errorf("failed to save manifest after resetting target pages: %w", err)
+		}
 	}
 
 	// Apply overrides if specified
@@ -75,7 +86,7 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 	}
 	//nolint:nestif // Import block check nested conditions are clean but exceed nestif threshold
 	if m.Progress.ManuscriptGenerated && hasManuscript {
-		changed, importErr := importManuscriptFromMarkdown(opts.OutputDir, m)
+		changed, importErr := importManuscriptFromMarkdown(opts.OutputDir, m, opts.Pages)
 		if importErr != nil {
 			return importErr
 		}
@@ -153,6 +164,10 @@ func handleReviewCheckpoint(opts BrewOptions, m *manifest.Manifest, manuscriptPa
 func generateManuscript(ctx context.Context, m *manifest.Manifest, opts BrewOptions) error {
 	if m.Progress.ManuscriptGenerated {
 		return nil
+	}
+
+	if len(opts.Pages) > 0 {
+		return errors.New("cannot perform selective page redo before manuscript is generated")
 	}
 
 	theme := m.BookProperties.Theme
@@ -236,9 +251,20 @@ func generateManuscript(ctx context.Context, m *manifest.Manifest, opts BrewOpti
 
 //nolint:gocognit,funlen // Illustration loop handles MCP client lifecycle, style registration, and page checkpoint updates
 func generateIllustrations(ctx context.Context, m *manifest.Manifest, opts BrewOptions) error {
+	var allowedPages map[int]bool
+	if len(opts.Pages) > 0 {
+		allowedPages = make(map[int]bool, len(opts.Pages))
+		for _, pIdx := range opts.Pages {
+			allowedPages[pIdx] = true
+		}
+	}
+
 	var pendingPages []*manifest.PageState
 	for i := range m.Progress.Pages {
 		page := &m.Progress.Pages[i]
+		if allowedPages != nil && !allowedPages[page.PageIndex] {
+			continue
+		}
 		if page.Status != manifest.StatusCompleted || page.ImagePath == "" {
 			pendingPages = append(pendingPages, page)
 		}
@@ -586,7 +612,7 @@ func parseManuscriptLines(lines []string) ([]parsedPage, bool, error) {
 }
 
 //nolint:gocognit // import verification requires matching multiple states (index, text modifications)
-func importManuscriptFromMarkdown(outputDir string, m *manifest.Manifest) (bool, error) {
+func importManuscriptFromMarkdown(outputDir string, m *manifest.Manifest, pagesFilter []int) (bool, error) {
 	manuscriptPath := filepath.Join(outputDir, "manuscript.md")
 	//nolint:gosec // manuscriptPath is constructed in local CLI environment
 	data, err := os.ReadFile(manuscriptPath)
@@ -621,6 +647,19 @@ func importManuscriptFromMarkdown(outputDir string, m *manifest.Manifest) (bool,
 		return false, fmt.Errorf("manuscript.md contains %d stanzas, but manifest expects %d stanzas", len(seen), len(m.Progress.Pages))
 	}
 
+	// First pass: validate edits against the pagesFilter to fail fast before mutating
+	for _, pp := range parsedPages {
+		for _, page := range m.Progress.Pages {
+			if page.PageIndex == pp.index {
+				textChanged := page.Text != pp.text
+				promptChanged := pp.hasSubheaders && page.IllustrationPrompt != pp.prompt
+				if (textChanged || promptChanged) && !isPageAllowed(pp.index, pagesFilter) {
+					return false, fmt.Errorf("manuscript.md contains edits for page %d which is not included in the selective page override list: %v", pp.index, pagesFilter)
+				}
+			}
+		}
+	}
+
 	changed := false
 	for _, pp := range parsedPages {
 		found := false
@@ -632,15 +671,16 @@ func importManuscriptFromMarkdown(outputDir string, m *manifest.Manifest) (bool,
 				// a mixed-format file will have hasSubheaders==false and safely skip prompt updates.
 				promptChanged := pp.hasSubheaders && page.IllustrationPrompt != pp.prompt
 
-				if textChanged || promptChanged {
-					m.Progress.Pages[i].Text = pp.text
-					if pp.hasSubheaders {
-						m.Progress.Pages[i].IllustrationPrompt = pp.prompt
-					}
-					m.Progress.Pages[i].ImagePath = ""
-					m.Progress.Pages[i].Status = manifest.StatusPending
-					changed = true
+				if !textChanged && !promptChanged {
+					break
 				}
+
+				m.Progress.Pages[i].Text = pp.text
+				if pp.hasSubheaders {
+					m.Progress.Pages[i].IllustrationPrompt = pp.prompt
+				}
+				m.Progress.Pages[i].Status = manifest.StatusPending
+				changed = true
 				break
 			}
 		}
@@ -656,4 +696,36 @@ func importManuscriptFromMarkdown(outputDir string, m *manifest.Manifest) (bool,
 	}
 
 	return changed, nil
+}
+
+func resetManifestPages(m *manifest.Manifest, pages []int) error {
+	if !m.Progress.ManuscriptGenerated {
+		return errors.New("cannot perform selective page redo before manuscript is generated")
+	}
+	for _, pageNum := range pages {
+		found := false
+		for idx, page := range m.Progress.Pages {
+			if page.PageIndex == pageNum {
+				m.Progress.Pages[idx].Status = manifest.StatusPending
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("page index %d is out of bounds, book has %d pages", pageNum, len(m.Progress.Pages))
+		}
+	}
+	return nil
+}
+
+func isPageAllowed(pageIndex int, pagesFilter []int) bool {
+	if len(pagesFilter) == 0 {
+		return true
+	}
+	for _, p := range pagesFilter {
+		if p == pageIndex {
+			return true
+		}
+	}
+	return false
 }

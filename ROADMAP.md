@@ -66,10 +66,10 @@ Focus: Automated review tools, local critic hooks, metric instrumentation, and p
     *   Implement token usage and cost accounting within the LLM client wrapper and the MCP client wrapper.
     *   Save accumulated execution costs to the `manifest.json` state manifest file.
     *   [Implementation Plan](plans/phase_3/task_3_3_cost_accounting.md)
-*   [ ] **Task 3.4: Interactive Local Review Mode**
+*   [x] **Task 3.4: Interactive Local Review Mode**
     *   Implement an interactive mode that pauses execution after manuscript generation to let the user approve, edit, or regenerate generated stanzas in the terminal.
     *   [Implementation Plan](plans/phase_3/task_3_4_interactive_local_review.md)
-*   [ ] **Task 3.5: Selective Page Redo / Overrides**
+*   [x] **Task 3.5: Selective Page Redo / Overrides**
     *   Support selective regeneration of specific pages or stanzas in the `brew` command, allowing users to rerun the pipeline for only a subset of pages.
     *   [Implementation Plan](plans/phase_3/task_3_5_selective_page_redo.md)
 *   [x] **Task 3.6: Workspace Git Checkpoints**
@@ -168,6 +168,14 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
 *   [ ] **Task 5.8: EPUB / Digital Publication Export**
     *   Integrate with a standalone `pw-mcp-epub` MCP plugin to export the parodic manuscript and generated illustration assets into a valid EPUB file.
     *   [Implementation Plan](plans/phase_5/task_5_8_epub_digital_export.md)
+    *   [ ] **Task 5.8.1: Configuration and EPUB Plugin CLI Registration**
+        *   Add configuration settings in `config.go` for locating `pw-mcp-epub` binary and bind Viper keys.
+    *   [ ] **Task 5.8.2: Assembly Pipeline Integration**
+        *   Connect `pithos assemble` pipeline to launch the `pw-mcp-epub` client and call `compile_epub`.
+    *   [ ] **Task 5.8.3: E2E Subprocess Integration Test Suite**
+        *   Implement an integration test that builds `pw-mcp-epub` from powerword sibling directory and performs complete pipeline compile checks.
+    *   [ ] **Task 5.8.4: EPUB Standards Structural Validation**
+        *   Implement validation in the test suite to unpack the resulting `.epub` and verify strict compliance (uncompressed mimetype, container.xml, content.opf manifest, and toc.xhtml).
 *   [ ] **Task 5.9: Google Doc MCP Integration**
     *   Integrate with the `pw-mcp-gdoc` MCP plugin to export manuscripts to Google Docs for editing and import them back on resume.
     *   [Implementation Plan](plans/phase_5/task_5_9_gdoc_mcp_integration.md)
