@@ -230,6 +230,15 @@ func TestAssemble_Success(t *testing.T) {
 	if m2.AssetRegistry["interior_pdf"] == "" {
 		t.Error("expected interior_pdf asset to be registered, got empty")
 	}
+	if len(m2.Kiln.Milestones) != 2 || m2.Kiln.Milestones[0] != "initiate_complete" || m2.Kiln.Milestones[1] != "assemble_complete" {
+		t.Errorf("expected milestones [initiate_complete, assemble_complete], got %v", m2.Kiln.Milestones)
+	}
+	if m2.Kiln.InteriorPDFPath == "" {
+		t.Error("expected InteriorPDFPath to be set in Kiln sync data")
+	}
+	if m2.Kiln.InteriorPDFPath != m2.AssetRegistry["interior_pdf"] {
+		t.Errorf("expected Kiln InteriorPDFPath to match AssetRegistry, got %q vs %q", m2.Kiln.InteriorPDFPath, m2.AssetRegistry["interior_pdf"])
+	}
 }
 
 func TestAssemble_HardcoverValidation(t *testing.T) {

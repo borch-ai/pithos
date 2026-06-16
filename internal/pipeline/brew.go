@@ -112,6 +112,10 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 		return err
 	}
 
+	if err := m.AddMilestone("brew_complete"); err != nil {
+		return fmt.Errorf("failed to record brew_complete milestone: %w", err)
+	}
+
 	if err := Checkpoint(ctx, opts.OutputDir, "Completed illustration generation"); err != nil {
 		return err
 	}

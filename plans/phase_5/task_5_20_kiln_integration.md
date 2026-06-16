@@ -1,9 +1,9 @@
 # plan: Task 5.20: Kiln Foundry State Integration
 
-**Status:** Open (Issue #TBD)
+**Status:** Completed
 **Go Version:** 1.26.4
-**Date Completed:** —
-**Unit Test Coverage:** —
+**Date Completed:** 2026-06-16
+**Unit Test Coverage:** 91.3%
 
 Define and implement a stable state contract between the Pithos `manifest.json` and the Kiln Foundry. Pithos must write pipeline milestone markers that Kiln can read to update book status without directly coupling to Pithos internals. This is a prerequisite for Kiln Task 4.2 (Manifest Sync).
 

@@ -119,6 +119,15 @@ func Assemble(ctx context.Context, opts AssembleOptions) (*manifest.Manifest, er
 		return nil, fmt.Errorf("failed to register interior PDF asset: %w", err)
 	}
 
+	coverPDFPath := m.AssetRegistry["cover_pdf"]
+	if err := m.UpdatePDFPaths(pdfPath, coverPDFPath); err != nil {
+		return nil, fmt.Errorf("failed to update PDF paths in manifest: %w", err)
+	}
+
+	if err := m.AddMilestone("assemble_complete"); err != nil {
+		return nil, fmt.Errorf("failed to record assemble_complete milestone: %w", err)
+	}
+
 	if err := Checkpoint(ctx, opts.InputDir, "Compiled print layouts and PDFs"); err != nil {
 		return nil, err
 	}
