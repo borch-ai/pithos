@@ -256,7 +256,7 @@ func TestBrew_EndToEnd_Mocked(t *testing.T) {
 		t.Fatalf("failed to initiate book: %v", err)
 	}
 	mInit.BookProperties.CharacterProfile = "mock-character-profile"
-	if err := mInit.Save(); err != nil {
+	if err = mInit.Save(); err != nil {
 		t.Fatalf("failed to save manifest: %v", err)
 	}
 
@@ -604,7 +604,7 @@ func TestLLMProviderSelection_Gemini(t *testing.T) {
 	}
 	mInit.BookProperties.Style = "mock-style"
 	mInit.BookProperties.CharacterProfile = "mock-character-profile"
-	if err := mInit.Save(); err != nil {
+	if err = mInit.Save(); err != nil {
 		t.Fatalf("failed to save manifest: %v", err)
 	}
 
@@ -731,7 +731,7 @@ func TestLLMProviderSelection_OpenAI(t *testing.T) {
 	}
 	mInit.BookProperties.Style = "mock-style"
 	mInit.BookProperties.CharacterProfile = "mock-character-profile"
-	if err := mInit.Save(); err != nil {
+	if err = mInit.Save(); err != nil {
 		t.Fatalf("failed to save manifest: %v", err)
 	}
 
@@ -1035,7 +1035,7 @@ func TestBrew_TelemetryCustomPricing(t *testing.T) {
 	}
 	mInit.BookProperties.Style = "mock-style"
 	mInit.BookProperties.CharacterProfile = "mock-character-profile"
-	if err := mInit.Save(); err != nil {
+	if err = mInit.Save(); err != nil {
 		t.Fatalf("failed to save manifest: %v", err)
 	}
 
@@ -1733,8 +1733,8 @@ Stanza 3
 	}
 }
 
-func TestBrew_ReviewFlow_GuidesAndPageResets(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "pithos-review-guides-*")
+func TestBrew_ReviewFlow_GuidesExport(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos-review-guides-export-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -1751,17 +1751,17 @@ func TestBrew_ReviewFlow_GuidesAndPageResets(t *testing.T) {
 		{PageIndex: 1, Status: manifest.StatusCompleted, ImagePath: "images/page_1.png", Text: "Stanza 1 text", IllustrationPrompt: "Prompt 1"},
 		{PageIndex: 2, Status: manifest.StatusCompleted, ImagePath: "images/page_2.png", Text: "Stanza 2 text", IllustrationPrompt: "Prompt 2"},
 	}
-	if err := m.Save(); err != nil {
+	if err = m.Save(); err != nil {
 		t.Fatalf("failed to save manifest: %v", err)
 	}
 
-	// 1. Export to markdown and check comments are written correctly
 	err = exportManuscriptToMarkdown(tmpDir, m.BookProperties.Style, m.BookProperties.CharacterProfile, m.Progress.Pages)
 	if err != nil {
 		t.Fatalf("failed to export: %v", err)
 	}
 
 	manuscriptPath := filepath.Join(tmpDir, "manuscript.md")
+	//nolint:gosec
 	data, err := os.ReadFile(manuscriptPath)
 	if err != nil {
 		t.Fatalf("failed to read manuscript.md: %v", err)
@@ -1774,10 +1774,45 @@ func TestBrew_ReviewFlow_GuidesAndPageResets(t *testing.T) {
 	if !strings.Contains(content, "<!-- CharacterProfile: A chubby cat -->") {
 		t.Errorf("exported file missing CharacterProfile comment: %s", content)
 	}
+}
 
-	// 2. Modify Style comment and verify import triggers page reset & clears images
-	contentModified := strings.Replace(content, "<!-- Style: claymation style -->", "<!-- Style: sketch style -->", 1)
-	if err := os.WriteFile(manuscriptPath, []byte(contentModified), 0600); err != nil {
+func TestBrew_ReviewFlow_GuidesStyleReset(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos-review-guides-style-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	m := manifest.NewManifest(filepath.Join(tmpDir, "manifest.json"))
+	m.BookProperties = manifest.BookProperties{
+		Theme:            "Test Theme",
+		Style:            "claymation style",
+		CharacterProfile: "A chubby cat",
+		TargetPageCount:  2,
+	}
+	m.Progress.Pages = []manifest.PageState{
+		{PageIndex: 1, Status: manifest.StatusCompleted, ImagePath: "images/page_1.png", Text: "Stanza 1 text", IllustrationPrompt: "Prompt 1"},
+		{PageIndex: 2, Status: manifest.StatusCompleted, ImagePath: "images/page_2.png", Text: "Stanza 2 text", IllustrationPrompt: "Prompt 2"},
+	}
+	if err = m.Save(); err != nil {
+		t.Fatalf("failed to save manifest: %v", err)
+	}
+
+	err = exportManuscriptToMarkdown(tmpDir, m.BookProperties.Style, m.BookProperties.CharacterProfile, m.Progress.Pages)
+	if err != nil {
+		t.Fatalf("failed to export: %v", err)
+	}
+
+	manuscriptPath := filepath.Join(tmpDir, "manuscript.md")
+	//nolint:gosec
+	data, err := os.ReadFile(manuscriptPath)
+	if err != nil {
+		t.Fatalf("failed to read manuscript.md: %v", err)
+	}
+
+	contentModified := strings.Replace(string(data), "<!-- Style: claymation style -->", "<!-- Style: sketch style -->", 1)
+	//nolint:gosec
+	if err = os.WriteFile(manuscriptPath, []byte(contentModified), 0600); err != nil {
 		t.Fatalf("failed to write modified manuscript: %v", err)
 	}
 
@@ -1800,23 +1835,49 @@ func TestBrew_ReviewFlow_GuidesAndPageResets(t *testing.T) {
 			t.Errorf("expected page %d ImagePath to be cleared, got %q", p.PageIndex, p.ImagePath)
 		}
 	}
+}
 
-	// 3. Modify CharacterProfile comment and verify import triggers page reset
-	// Reset pages back to completed to test reset again
-	m.Progress.Pages[0].Status = manifest.StatusCompleted
-	m.Progress.Pages[0].ImagePath = "images/page_1.png"
-	m.Progress.Pages[1].Status = manifest.StatusCompleted
-	m.Progress.Pages[1].ImagePath = "images/page_2.png"
-	if err := m.Save(); err != nil {
+func TestBrew_ReviewFlow_GuidesCharacterProfileReset(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos-review-guides-char-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	m := manifest.NewManifest(filepath.Join(tmpDir, "manifest.json"))
+	m.BookProperties = manifest.BookProperties{
+		Theme:            "Test Theme",
+		Style:            "claymation style",
+		CharacterProfile: "A chubby cat",
+		TargetPageCount:  2,
+	}
+	m.Progress.Pages = []manifest.PageState{
+		{PageIndex: 1, Status: manifest.StatusCompleted, ImagePath: "images/page_1.png", Text: "Stanza 1 text", IllustrationPrompt: "Prompt 1"},
+		{PageIndex: 2, Status: manifest.StatusCompleted, ImagePath: "images/page_2.png", Text: "Stanza 2 text", IllustrationPrompt: "Prompt 2"},
+	}
+	if err = m.Save(); err != nil {
 		t.Fatalf("failed to save manifest: %v", err)
 	}
 
-	contentModified2 := strings.Replace(contentModified, "<!-- CharacterProfile: A chubby cat -->", "<!-- CharacterProfile: A skinny dog -->", 1)
-	if err := os.WriteFile(manuscriptPath, []byte(contentModified2), 0600); err != nil {
+	err = exportManuscriptToMarkdown(tmpDir, m.BookProperties.Style, m.BookProperties.CharacterProfile, m.Progress.Pages)
+	if err != nil {
+		t.Fatalf("failed to export: %v", err)
+	}
+
+	manuscriptPath := filepath.Join(tmpDir, "manuscript.md")
+	//nolint:gosec
+	data, err := os.ReadFile(manuscriptPath)
+	if err != nil {
+		t.Fatalf("failed to read manuscript.md: %v", err)
+	}
+
+	contentModified := strings.Replace(string(data), "<!-- CharacterProfile: A chubby cat -->", "<!-- CharacterProfile: A skinny dog -->", 1)
+	//nolint:gosec
+	if err = os.WriteFile(manuscriptPath, []byte(contentModified), 0600); err != nil {
 		t.Fatalf("failed to write modified manuscript: %v", err)
 	}
 
-	changed, err = importManuscriptFromMarkdown(tmpDir, m, nil)
+	changed, err := importManuscriptFromMarkdown(tmpDir, m, nil)
 	if err != nil {
 		t.Fatalf("failed to import modified manuscript: %v", err)
 	}

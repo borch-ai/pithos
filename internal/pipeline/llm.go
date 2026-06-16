@@ -141,19 +141,23 @@ func (a *PowerwordClientAdapter) GenerateStanzas(ctx context.Context, theme stri
 	return finalResp.Stanzas, finalResp.IllustrationPrompts, usage, nil
 }
 
-// cleanJSONText trims whitespace and strips markdown code blocks (e.g. ```json ... ```) from output text.
 func cleanJSONText(text string) string {
 	text = strings.TrimSpace(text)
-	if strings.HasPrefix(text, "```") {
-		// Find the first newline to strip the opening fence (e.g., ```json)
-		if idx := strings.Index(text, "\n"); idx != -1 {
-			text = text[idx+1:]
+	firstIdx := strings.Index(text, "```")
+	if firstIdx != -1 {
+		lastIdx := strings.LastIndex(text, "```")
+		if lastIdx != -1 && lastIdx > firstIdx {
+			contentStart := firstIdx + 3
+			if newlineIdx := strings.Index(text[contentStart:], "\n"); newlineIdx != -1 {
+				contentStart = contentStart + newlineIdx + 1
+			}
+			text = text[contentStart:lastIdx]
 		} else {
-			text = strings.TrimPrefix(text, "```")
-		}
-		// Strip the trailing fence if it exists
-		if strings.HasSuffix(text, "```") {
-			text = strings.TrimSuffix(text, "```")
+			contentStart := firstIdx + 3
+			if newlineIdx := strings.Index(text[contentStart:], "\n"); newlineIdx != -1 {
+				contentStart = contentStart + newlineIdx + 1
+			}
+			text = text[contentStart:]
 		}
 		text = strings.TrimSpace(text)
 	}

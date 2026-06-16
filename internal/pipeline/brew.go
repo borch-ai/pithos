@@ -615,7 +615,7 @@ func parseManuscriptLines(lines []string) (pages []parsedPage, style string, sty
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 
-		if strings.HasPrefix(trimmed, "<!--") && strings.HasSuffix(trimmed, "-->") {
+		if len(parsedPages) == 0 && currentIdx == 0 && strings.HasPrefix(trimmed, "<!--") && strings.HasSuffix(trimmed, "-->") {
 			commentContent := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(trimmed, "<!--"), "-->"))
 			if strings.HasPrefix(commentContent, "Style:") {
 				parsedStyle = strings.TrimSpace(strings.TrimPrefix(commentContent, "Style:"))
