@@ -194,6 +194,12 @@ func TestInitiate(t *testing.T) {
 	if m.BookProperties.TargetPageCount != 10 {
 		t.Errorf("expected TargetPageCount 10, got %d", m.BookProperties.TargetPageCount)
 	}
+	if m.Kiln.Version != 1 {
+		t.Errorf("expected Kiln.Version 1, got %d", m.Kiln.Version)
+	}
+	if len(m.Kiln.Milestones) != 1 || m.Kiln.Milestones[0] != "initiate_complete" {
+		t.Errorf("expected Kiln.Milestones [initiate_complete], got %v", m.Kiln.Milestones)
+	}
 }
 
 func TestInitiate_Errors(t *testing.T) {
@@ -231,6 +237,7 @@ func TestInitiate_Errors(t *testing.T) {
 	}
 }
 
+//nolint:funlen // End-to-end mocked brew verification involves extensive mock setup and output checking
 func TestBrew_EndToEnd_Mocked(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "pithos-brew-*")
 	if err != nil {
@@ -329,6 +336,11 @@ func TestBrew_EndToEnd_Mocked(t *testing.T) {
 		t.Error("expected unknown model usages telemetry to exist")
 	} else if mu.InputTokens != 1000 || mu.OutputTokens != 2000 || mu.CachedTokens != 500 {
 		t.Errorf("unexpected token usage: %+v", mu)
+	}
+
+	// Verify Kiln milestones
+	if len(m.Kiln.Milestones) != 2 || m.Kiln.Milestones[0] != "initiate_complete" || m.Kiln.Milestones[1] != "brew_complete" {
+		t.Errorf("expected milestones [initiate_complete, brew_complete], got %v", m.Kiln.Milestones)
 	}
 
 	// Verify that files were copied

@@ -94,6 +94,16 @@ func TestBrew_Integration_RealSubprocess(t *testing.T) {
 		t.Fatalf("failed to reload manifest: %v", err)
 	}
 
+	if len(m.Kiln.Milestones) != 2 || m.Kiln.Milestones[0] != "initiate_complete" || m.Kiln.Milestones[1] != "brew_complete" {
+		t.Errorf("expected milestones [initiate_complete, brew_complete] in integration test, got %v", m.Kiln.Milestones)
+	}
+	if m.Kiln.Version != 1 {
+		t.Errorf("expected Kiln version 1, got %d", m.Kiln.Version)
+	}
+	if m.Kiln.TotalCostUSD <= 0 {
+		t.Errorf("expected non-zero total cost in manifest.Kiln, got %f", m.Kiln.TotalCostUSD)
+	}
+
 	if len(m.Progress.Pages) != 3 {
 		t.Fatalf("expected 3 pages, got %d", len(m.Progress.Pages))
 	}
@@ -230,6 +240,13 @@ func TestBrew_Integration_ReviewFlow(t *testing.T) {
 	m, err := manifest.LoadManifest(filepath.Join(tempDir, "manifest.json"))
 	if err != nil {
 		t.Fatalf("failed to reload manifest: %v", err)
+	}
+
+	if len(m.Kiln.Milestones) != 2 || m.Kiln.Milestones[0] != "initiate_complete" || m.Kiln.Milestones[1] != "brew_complete" {
+		t.Errorf("expected milestones [initiate_complete, brew_complete] in integration test, got %v", m.Kiln.Milestones)
+	}
+	if m.Kiln.Version != 1 {
+		t.Errorf("expected Kiln version 1, got %d", m.Kiln.Version)
 	}
 
 	if m.Progress.Pages[1].Text != "Stanza 2 edited integration text" {
@@ -532,10 +549,7 @@ func TestAssemble_Integration_RealSubprocess(t *testing.T) {
 		t.Fatalf("Assemble integration test failed: %v", err)
 	}
 	if hasTypstInstalled {
-		interiorPDF := filepath.Join(tempDir, "interior.pdf")
-		if _, statErr := os.Stat(interiorPDF); os.IsNotExist(statErr) {
-			t.Error("expected interior.pdf to exist, but it was not found")
-		}
+		verifyAssembleOutputs(t, tempDir)
 	}
 	if !hasTypstInstalled {
 		if err == nil {
@@ -575,4 +589,23 @@ func buildTypstBinary(t *testing.T, tempDir string) string {
 	}
 
 	return binaryPath
+}
+
+func verifyAssembleOutputs(t *testing.T, tempDir string) {
+	t.Helper()
+	interiorPDF := filepath.Join(tempDir, "interior.pdf")
+	if _, statErr := os.Stat(interiorPDF); os.IsNotExist(statErr) {
+		t.Error("expected interior.pdf to exist, but it was not found")
+	}
+
+	m2, err := manifest.LoadManifest(filepath.Join(tempDir, "manifest.json"))
+	if err != nil {
+		t.Fatalf("failed to reload manifest in integration test: %v", err)
+	}
+	if len(m2.Kiln.Milestones) != 2 || m2.Kiln.Milestones[0] != "initiate_complete" || m2.Kiln.Milestones[1] != "assemble_complete" {
+		t.Errorf("expected milestones [initiate_complete, assemble_complete], got %v", m2.Kiln.Milestones)
+	}
+	if m2.Kiln.InteriorPDFPath == "" {
+		t.Error("expected Kiln interior PDF path to be populated")
+	}
 }

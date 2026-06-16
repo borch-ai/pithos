@@ -338,3 +338,98 @@ func TestUpdateTotalCost(t *testing.T) {
 		t.Errorf("expected TotalCostUSD %f, got %f", expectedCost, m.Telemetry.TotalCostUSD)
 	}
 }
+
+func TestKilnSyncSerialization(t *testing.T) {
+	m := NewManifest("")
+	m.Kiln = KilnSync{
+		Version:         1,
+		Milestones:      []string{"initiate_complete", "brew_complete"},
+		TotalCostUSD:    0.125,
+		InteriorPDFPath: "/some/interior.pdf",
+		CoverPDFPath:    "/some/cover.pdf",
+	}
+
+	data, err := json.Marshal(m)
+	if err != nil {
+		t.Fatalf("failed to marshal: %v", err)
+	}
+
+	var m2 Manifest
+	if err := json.Unmarshal(data, &m2); err != nil {
+		t.Fatalf("failed to unmarshal: %v", err)
+	}
+
+	if m2.Kiln.Version != 1 {
+		t.Errorf("expected Version 1, got %d", m2.Kiln.Version)
+	}
+	if len(m2.Kiln.Milestones) != 2 || m2.Kiln.Milestones[0] != "initiate_complete" || m2.Kiln.Milestones[1] != "brew_complete" {
+		t.Errorf("expected milestones [initiate_complete, brew_complete], got %v", m2.Kiln.Milestones)
+	}
+	if m2.Kiln.TotalCostUSD != 0.125 {
+		t.Errorf("expected TotalCostUSD 0.125, got %f", m2.Kiln.TotalCostUSD)
+	}
+	if m2.Kiln.InteriorPDFPath != "/some/interior.pdf" {
+		t.Errorf("expected InteriorPDFPath /some/interior.pdf, got %s", m2.Kiln.InteriorPDFPath)
+	}
+	if m2.Kiln.CoverPDFPath != "/some/cover.pdf" {
+		t.Errorf("expected CoverPDFPath /some/cover.pdf, got %s", m2.Kiln.CoverPDFPath)
+	}
+}
+
+func TestKilnSyncHelpers(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	manifestPath := filepath.Join(tmpDir, "manifest.json")
+	m := NewManifest(manifestPath)
+
+	if err := m.AddMilestone("initiate_complete"); err != nil {
+		t.Fatalf("AddMilestone failed: %v", err)
+	}
+	if len(m.Kiln.Milestones) != 1 || m.Kiln.Milestones[0] != "initiate_complete" {
+		t.Errorf("expected milestones [initiate_complete], got %v", m.Kiln.Milestones)
+	}
+
+	// Test duplicate prevention
+	if err := m.AddMilestone("initiate_complete"); err != nil {
+		t.Fatalf("AddMilestone failed: %v", err)
+	}
+	if len(m.Kiln.Milestones) != 1 {
+		t.Errorf("expected milestone to not be duplicated, got len %d", len(m.Kiln.Milestones))
+	}
+
+	if err := m.AddMilestone("brew_complete"); err != nil {
+		t.Fatalf("AddMilestone failed: %v", err)
+	}
+	if len(m.Kiln.Milestones) != 2 || m.Kiln.Milestones[1] != "brew_complete" {
+		t.Errorf("expected milestones [initiate_complete, brew_complete], got %v", m.Kiln.Milestones)
+	}
+
+	if err := m.UpdatePDFPaths("/path/interior.pdf", "/path/cover.pdf"); err != nil {
+		t.Fatalf("UpdatePDFPaths failed: %v", err)
+	}
+	if m.Kiln.InteriorPDFPath != "/path/interior.pdf" || m.Kiln.CoverPDFPath != "/path/cover.pdf" {
+		t.Errorf("expected pdf paths to be saved, got interior=%s, cover=%s", m.Kiln.InteriorPDFPath, m.Kiln.CoverPDFPath)
+	}
+}
+
+func TestUpdateTotalCostKilnSync(t *testing.T) {
+	m := NewManifest("")
+	m.Telemetry.ModelUsages["model-1"] = &telemetry.ModelUsage{InputTokens: 1000, OutputTokens: 2000, CachedTokens: 0}
+	m.Telemetry.ImageGenerations = 2
+
+	pricing := map[string]telemetry.ModelPricing{
+		"model-1":  {Input: 1.0, Output: 2.0},
+		"imagegen": {Input: 40000.0},
+	}
+
+	m.UpdateTotalCost(pricing)
+
+	expectedCost := 0.085
+	if m.Kiln.TotalCostUSD != expectedCost {
+		t.Errorf("expected Kiln.TotalCostUSD to match Telemetry.TotalCostUSD %f, got %f", expectedCost, m.Kiln.TotalCostUSD)
+	}
+}

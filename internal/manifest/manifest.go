@@ -79,6 +79,16 @@ type TelemetryMetrics struct {
 	TotalCostUSD     float64                          `json:"total_cost_usd"`
 }
 
+// KilnSync contains fields written by Pithos for consumption by Kiln.
+// Kiln reads these fields; it never writes to this struct.
+type KilnSync struct {
+	Version         int      `json:"kiln_sync_version"`
+	Milestones      []string `json:"kiln_milestones"`
+	TotalCostUSD    float64  `json:"total_cost_usd"`
+	InteriorPDFPath string   `json:"interior_pdf_path,omitempty"`
+	CoverPDFPath    string   `json:"cover_pdf_path,omitempty"`
+}
+
 // Manifest is the root structure serving as the checkpoint state file.
 type Manifest struct {
 	mu sync.RWMutex
@@ -90,6 +100,7 @@ type Manifest struct {
 	AssetRegistry  map[string]string `json:"asset_registry"`
 	KDPLayout      KDPLayout         `json:"kdp_layout"`
 	Telemetry      TelemetryMetrics  `json:"telemetry"`
+	Kiln           KilnSync          `json:"kiln"`
 }
 
 // NewManifest instantiates a new Manifest with initialized fields.
@@ -102,6 +113,10 @@ func NewManifest(path string) *Manifest {
 		},
 		Telemetry: TelemetryMetrics{
 			ModelUsages: make(map[string]*telemetry.ModelUsage),
+		},
+		Kiln: KilnSync{
+			Version:    1,
+			Milestones: make([]string, 0),
 		},
 	}
 }
@@ -129,8 +144,54 @@ func LoadManifest(path string) (*Manifest, error) {
 	if m.Telemetry.ModelUsages == nil {
 		m.Telemetry.ModelUsages = make(map[string]*telemetry.ModelUsage)
 	}
+	if m.Kiln.Milestones == nil {
+		m.Kiln.Milestones = make([]string, 0)
+	}
+	if m.Kiln.Version == 0 {
+		m.Kiln.Version = 1
+	}
 
 	return &m, nil
+}
+
+// AddMilestone appends a pipeline milestone to the Kiln status tracking if not already present.
+func (m *Manifest) AddMilestone(milestone string) error {
+	m.mu.Lock()
+	if m.Kiln.Milestones == nil {
+		m.Kiln.Milestones = make([]string, 0)
+	}
+	exists := false
+	for _, ms := range m.Kiln.Milestones {
+		if ms == milestone {
+			exists = true
+			break
+		}
+	}
+	if !exists {
+		m.Kiln.Milestones = append(m.Kiln.Milestones, milestone)
+	}
+	m.mu.Unlock()
+	return m.Save()
+}
+
+// UpdatePDFPaths updates the interior and cover PDF absolute paths in Kiln status.
+// Paths are converted to absolute paths using filepath.Abs if they are relative.
+func (m *Manifest) UpdatePDFPaths(interiorPath, coverPath string) error {
+	m.mu.Lock()
+	if interiorPath != "" {
+		if abs, err := filepath.Abs(interiorPath); err == nil {
+			interiorPath = abs
+		}
+		m.Kiln.InteriorPDFPath = interiorPath
+	}
+	if coverPath != "" {
+		if abs, err := filepath.Abs(coverPath); err == nil {
+			coverPath = abs
+		}
+		m.Kiln.CoverPDFPath = coverPath
+	}
+	m.mu.Unlock()
+	return m.Save()
 }
 
 // FilePath returns the file path of the manifest.
@@ -367,4 +428,5 @@ func (m *Manifest) updateTotalCostLocked(pricing map[string]telemetry.ModelPrici
 	}
 
 	m.Telemetry.TotalCostUSD = llmCost + float64(m.Telemetry.ImageGenerations)*imageCost
+	m.Kiln.TotalCostUSD = m.Telemetry.TotalCostUSD
 }

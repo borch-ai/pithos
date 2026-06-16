@@ -57,6 +57,8 @@ func Initiate(opts InitiateOptions) (*manifest.Manifest, error) {
 		Format:          opts.Format,
 		TargetPageCount: opts.TargetPageCount,
 	}
+	m.Kiln.Version = 1
+	m.Kiln.Milestones = []string{"initiate_complete"}
 
 	if err := m.Save(); err != nil {
 		return nil, fmt.Errorf("failed to save initial manifest.json: %w", err)
