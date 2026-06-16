@@ -554,9 +554,16 @@ func TestAssemble_ManuscriptStatError(t *testing.T) {
 		t.Fatalf("failed to create symlink: %v", symlinkErr)
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	clientKDP, serverKDP := mcpsdk.NewInMemoryTransports()
+	_, cleanupKDP := setupMockKDPMathServer(t, ctx, serverKDP)
+	defer cleanupKDP()
+
 	optsAssemble := AssembleOptions{
-		InputDir: tmpDir,
+		InputDir:         tmpDir,
+		KDPMathTransport: clientKDP,
 	}
 
 	_, err = Assemble(ctx, optsAssemble)
