@@ -160,6 +160,55 @@ func handleReviewCheckpoint(opts BrewOptions, m *manifest.Manifest, manuscriptPa
 	return fmt.Errorf("%w: manuscript is available at %s. Edit the file, then run brew without --review to generate illustrations", ErrReviewPause, manuscriptPath)
 }
 
+func setupLLMClient(opts BrewOptions) (LLMClient, error) {
+	switch {
+	case opts.LLM != nil:
+		return opts.LLM, nil
+	case config.Cfg != nil && config.Cfg.API.GeminiKey != "":
+		pwClient, err := newPowerwordLLMClient("gemini-2.5-flash", config.Cfg.API.GeminiKey, "", opts.HTTPClient)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create gemini client: %w", err)
+		}
+		return &PowerwordClientAdapter{client: pwClient, modelName: "gemini-2.5-flash"}, nil
+	case config.Cfg != nil && config.Cfg.API.OpenAIKey != "":
+		pwClient, err := newPowerwordLLMClient("gpt-4o", "", config.Cfg.API.OpenAIKey, opts.HTTPClient)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create openai client: %w", err)
+		}
+		return &PowerwordClientAdapter{client: pwClient, modelName: "gpt-4o"}, nil
+	default:
+		return nil, errors.New("neither Gemini nor OpenAI API key is configured")
+	}
+}
+
+func generateAndRecordVisualGuides(ctx context.Context, m *manifest.Manifest, theme string, llmClient LLMClient, opts BrewOptions) error {
+	styleVal, charProfileVal, guideUsage, err := llmClient.GenerateVisualGuides(ctx, theme)
+	if err != nil {
+		return fmt.Errorf("failed to generate visual style/character guides: %w", err)
+	}
+
+	var modelName string
+	switch client := llmClient.(type) {
+	case *PowerwordClientAdapter:
+		modelName = client.modelName
+	default:
+		modelName = "unknown"
+	}
+	var pricing map[string]telemetry.ModelPricing
+	if config.Cfg != nil {
+		pricing = config.Cfg.Pricing
+	}
+	m.RecordLLMUsage(modelName, guideUsage, pricing)
+
+	if m.BookProperties.Style == "" {
+		m.BookProperties.Style = styleVal
+	}
+	if m.BookProperties.CharacterProfile == "" {
+		m.BookProperties.CharacterProfile = charProfileVal
+	}
+	return nil
+}
+
 //nolint:funlen // Manuscript generation pipeline step handles LLM client setup, text generation, and recording telemetry
 func generateManuscript(ctx context.Context, m *manifest.Manifest, opts BrewOptions) error {
 	if m.Progress.ManuscriptGenerated {
@@ -181,50 +230,14 @@ func generateManuscript(ctx context.Context, m *manifest.Manifest, opts BrewOpti
 		m.BookProperties.TargetPageCount = 15
 	}
 
-	var llmClient LLMClient
-	switch {
-	case opts.LLM != nil:
-		llmClient = opts.LLM
-	case config.Cfg != nil && config.Cfg.API.GeminiKey != "":
-		pwClient, err := newPowerwordLLMClient("gemini-2.5-flash", config.Cfg.API.GeminiKey, "", opts.HTTPClient)
-		if err != nil {
-			return fmt.Errorf("failed to create gemini client: %w", err)
-		}
-		llmClient = &PowerwordClientAdapter{client: pwClient, modelName: "gemini-2.5-flash"}
-	case config.Cfg != nil && config.Cfg.API.OpenAIKey != "":
-		pwClient, err := newPowerwordLLMClient("gpt-4o", "", config.Cfg.API.OpenAIKey, opts.HTTPClient)
-		if err != nil {
-			return fmt.Errorf("failed to create openai client: %w", err)
-		}
-		llmClient = &PowerwordClientAdapter{client: pwClient, modelName: "gpt-4o"}
-	default:
-		return errors.New("neither Gemini nor OpenAI API key is configured")
+	llmClient, err := setupLLMClient(opts)
+	if err != nil {
+		return err
 	}
 
 	if m.BookProperties.Style == "" || m.BookProperties.CharacterProfile == "" {
-		styleVal, charProfileVal, guideUsage, err := llmClient.GenerateVisualGuides(ctx, theme)
-		if err != nil {
-			return fmt.Errorf("failed to generate visual style/character guides: %w", err)
-		}
-
-		var modelName string
-		switch client := llmClient.(type) {
-		case *PowerwordClientAdapter:
-			modelName = client.modelName
-		default:
-			modelName = "unknown"
-		}
-		var pricing map[string]telemetry.ModelPricing
-		if config.Cfg != nil {
-			pricing = config.Cfg.Pricing
-		}
-		m.RecordLLMUsage(modelName, guideUsage, pricing)
-
-		if m.BookProperties.Style == "" {
-			m.BookProperties.Style = styleVal
-		}
-		if m.BookProperties.CharacterProfile == "" {
-			m.BookProperties.CharacterProfile = charProfileVal
+		if err = generateAndRecordVisualGuides(ctx, m, theme, llmClient, opts); err != nil {
+			return err
 		}
 	}
 
@@ -661,6 +674,40 @@ func parseManuscriptLines(lines []string) (pages []parsedPage, style string, sty
 }
 
 //nolint:gocognit // import verification requires matching multiple states (index, text modifications)
+func validateManuscriptEdits(parsedPages []parsedPage, m *manifest.Manifest, pagesFilter []int) error {
+	seen := make(map[int]bool)
+	for _, pp := range parsedPages {
+		if seen[pp.index] {
+			return fmt.Errorf("duplicate page index %d in manuscript.md", pp.index)
+		}
+		seen[pp.index] = true
+	}
+
+	if len(seen) != len(m.Progress.Pages) {
+		return fmt.Errorf("manuscript.md contains %d stanzas, but manifest expects %d stanzas", len(seen), len(m.Progress.Pages))
+	}
+
+	// First pass: validate edits against the pagesFilter to fail fast before mutating
+	for _, pp := range parsedPages {
+		found := false
+		for _, page := range m.Progress.Pages {
+			if page.PageIndex == pp.index {
+				found = true
+				textChanged := page.Text != pp.text
+				promptChanged := pp.hasSubheaders && page.IllustrationPrompt != pp.prompt
+				if (textChanged || promptChanged) && !isPageAllowed(pp.index, pagesFilter) {
+					return fmt.Errorf("manuscript.md contains edits for page %d which is not included in the selective page override list: %v", pp.index, pagesFilter)
+				}
+			}
+		}
+		if !found {
+			return fmt.Errorf("parsed page index %d does not exist in manifest", pp.index)
+		}
+	}
+	return nil
+}
+
+//nolint:gocognit // import verification requires matching multiple states (index, text modifications)
 func importManuscriptFromMarkdown(outputDir string, m *manifest.Manifest, pagesFilter []int) (bool, error) {
 	manuscriptPath := filepath.Join(outputDir, "manuscript.md")
 	//nolint:gosec // manuscriptPath is constructed in local CLI environment
@@ -684,29 +731,8 @@ func importManuscriptFromMarkdown(outputDir string, m *manifest.Manifest, pagesF
 		return false, fmt.Errorf("no stanzas parsed from manuscript.md")
 	}
 
-	seen := make(map[int]bool)
-	for _, pp := range parsedPages {
-		if seen[pp.index] {
-			return false, fmt.Errorf("duplicate page index %d in manuscript.md", pp.index)
-		}
-		seen[pp.index] = true
-	}
-
-	if len(seen) != len(m.Progress.Pages) {
-		return false, fmt.Errorf("manuscript.md contains %d stanzas, but manifest expects %d stanzas", len(seen), len(m.Progress.Pages))
-	}
-
-	// First pass: validate edits against the pagesFilter to fail fast before mutating
-	for _, pp := range parsedPages {
-		for _, page := range m.Progress.Pages {
-			if page.PageIndex == pp.index {
-				textChanged := page.Text != pp.text
-				promptChanged := pp.hasSubheaders && page.IllustrationPrompt != pp.prompt
-				if (textChanged || promptChanged) && !isPageAllowed(pp.index, pagesFilter) {
-					return false, fmt.Errorf("manuscript.md contains edits for page %d which is not included in the selective page override list: %v", pp.index, pagesFilter)
-				}
-			}
-		}
+	if err := validateManuscriptEdits(parsedPages, m, pagesFilter); err != nil {
+		return false, err
 	}
 
 	changed := false
@@ -724,13 +750,9 @@ func importManuscriptFromMarkdown(outputDir string, m *manifest.Manifest, pagesF
 	}
 
 	for _, pp := range parsedPages {
-		found := false
 		for i, page := range m.Progress.Pages {
 			if page.PageIndex == pp.index {
-				found = true
 				textChanged := page.Text != pp.text
-				// pp.hasSubheaders is tracked per-page by parsePageBlock, so legacy-format pages in
-				// a mixed-format file will have hasSubheaders==false and safely skip prompt updates.
 				promptChanged := pp.hasSubheaders && page.IllustrationPrompt != pp.prompt
 
 				if !textChanged && !promptChanged {
@@ -745,9 +767,6 @@ func importManuscriptFromMarkdown(outputDir string, m *manifest.Manifest, pagesF
 				changed = true
 				break
 			}
-		}
-		if !found {
-			return false, fmt.Errorf("parsed page index %d does not exist in manifest", pp.index)
 		}
 	}
 
