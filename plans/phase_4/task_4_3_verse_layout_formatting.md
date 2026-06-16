@@ -3,7 +3,7 @@
 **Status:** Completed
 **Go Version:** 1.26.4
 **Date Completed:** 2026-06-16
-**Unit Test Coverage:** 91.40%
+**Unit Test Coverage:** 91.50%
 
 Preserve stanza verse line breaks in Typst layouts instead of collapsing them into paragraphs. Parody stanzas are written in structured rhythm (AABB/ABAB) and must keep their line breaks to render as poetry.
 
