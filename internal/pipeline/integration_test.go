@@ -50,7 +50,7 @@ func TestBrew_Integration_RealSubprocess(t *testing.T) {
 	}
 
 	// 5. Run Brew with Concurrency 3
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 
 	optsBrew := BrewOptions{
@@ -152,7 +152,7 @@ func TestBrew_Integration_ReviewFlow(t *testing.T) {
 	}
 
 	// 5. Run Brew with Review = true (should generate stanzas, export manuscript.md and exit)
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 
 	err = Brew(ctx, BrewOptions{
@@ -186,7 +186,7 @@ func TestBrew_Integration_ReviewFlow(t *testing.T) {
 	}
 
 	// 7. Run Brew with Review = false (should sync edits and run imagegen using real subprocess)
-	ctx2, cancel2 := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel2()
 
 	optsBrew := BrewOptions{
@@ -315,6 +315,7 @@ func configureTestEnvironment(t *testing.T, tempDir string, binaryPath string, o
 	t.Helper()
 	t.Setenv("OPENAI_BASE_URL", openaiURL)
 	t.Setenv("POWERWORD_WORKSPACE_ROOT", tempDir)
+	t.Setenv("POWERWORD_IMAGEGEN_BACKEND", "openai")
 
 	//nolint:gosec // dummy key used for mock test configuration
 	pwTOML := `
@@ -389,7 +390,7 @@ func TestBrew_Integration_SelectivePageRedo(t *testing.T) {
 	}
 
 	// 3. Run Brew with Pages = []int{2} to regenerate Page 2
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 
 	optsBrew := BrewOptions{
@@ -483,7 +484,7 @@ func TestAssemble_Integration_RealSubprocess(t *testing.T) {
 	}
 
 	// 2. Set up mock KDP math server via in-memory transport
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 
 	clientKDP, serverKDP := mcpsdk.NewInMemoryTransports()

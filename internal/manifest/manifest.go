@@ -32,10 +32,11 @@ type PageState struct {
 
 // BookProperties holds high-level configurations of the book.
 type BookProperties struct {
-	Theme           string `json:"theme"`
-	Style           string `json:"style"`
-	Format          string `json:"format"`
-	TargetPageCount int    `json:"target_page_count"`
+	Theme            string `json:"theme"`
+	Style            string `json:"style"`
+	CharacterProfile string `json:"character_profile"`
+	Format           string `json:"format"`
+	TargetPageCount  int    `json:"target_page_count"`
 }
 
 // Progress tracks the completion state of various pipeline stages.

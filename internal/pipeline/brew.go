@@ -153,11 +153,60 @@ func handleReviewCheckpoint(opts BrewOptions, m *manifest.Manifest, manuscriptPa
 		return fmt.Errorf("failed to check manuscript.md status for review: %w", statErr)
 	}
 	if os.IsNotExist(statErr) {
-		if exportErr := exportManuscriptToMarkdown(opts.OutputDir, m.Progress.Pages); exportErr != nil {
+		if exportErr := exportManuscriptToMarkdown(opts.OutputDir, m.BookProperties.Style, m.BookProperties.CharacterProfile, m.Progress.Pages); exportErr != nil {
 			return exportErr
 		}
 	}
 	return fmt.Errorf("%w: manuscript is available at %s. Edit the file, then run brew without --review to generate illustrations", ErrReviewPause, manuscriptPath)
+}
+
+func setupLLMClient(opts BrewOptions) (LLMClient, error) {
+	switch {
+	case opts.LLM != nil:
+		return opts.LLM, nil
+	case config.Cfg != nil && config.Cfg.API.GeminiKey != "":
+		pwClient, err := newPowerwordLLMClient("gemini-2.5-flash", config.Cfg.API.GeminiKey, "", opts.HTTPClient)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create gemini client: %w", err)
+		}
+		return &PowerwordClientAdapter{client: pwClient, modelName: "gemini-2.5-flash"}, nil
+	case config.Cfg != nil && config.Cfg.API.OpenAIKey != "":
+		pwClient, err := newPowerwordLLMClient("gpt-4o", "", config.Cfg.API.OpenAIKey, opts.HTTPClient)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create openai client: %w", err)
+		}
+		return &PowerwordClientAdapter{client: pwClient, modelName: "gpt-4o"}, nil
+	default:
+		return nil, errors.New("neither Gemini nor OpenAI API key is configured")
+	}
+}
+
+func generateAndRecordVisualGuides(ctx context.Context, m *manifest.Manifest, theme string, llmClient LLMClient, opts BrewOptions) error {
+	styleVal, charProfileVal, guideUsage, err := llmClient.GenerateVisualGuides(ctx, theme)
+	if err != nil {
+		return fmt.Errorf("failed to generate visual style/character guides: %w", err)
+	}
+
+	var modelName string
+	switch client := llmClient.(type) {
+	case *PowerwordClientAdapter:
+		modelName = client.modelName
+	default:
+		modelName = "unknown"
+	}
+	var pricing map[string]telemetry.ModelPricing
+	if config.Cfg != nil {
+		pricing = config.Cfg.Pricing
+	}
+	m.RecordLLMUsage(modelName, guideUsage, pricing)
+
+	if m.BookProperties.Style == "" {
+		m.BookProperties.Style = styleVal
+	}
+	if m.BookProperties.CharacterProfile == "" {
+		m.BookProperties.CharacterProfile = charProfileVal
+	}
+	return nil
 }
 
 //nolint:funlen // Manuscript generation pipeline step handles LLM client setup, text generation, and recording telemetry
@@ -181,27 +230,18 @@ func generateManuscript(ctx context.Context, m *manifest.Manifest, opts BrewOpti
 		m.BookProperties.TargetPageCount = 15
 	}
 
-	var llmClient LLMClient
-	switch {
-	case opts.LLM != nil:
-		llmClient = opts.LLM
-	case config.Cfg != nil && config.Cfg.API.GeminiKey != "":
-		pwClient, err := newPowerwordLLMClient("gemini-2.5-flash", config.Cfg.API.GeminiKey, "", opts.HTTPClient)
-		if err != nil {
-			return fmt.Errorf("failed to create gemini client: %w", err)
-		}
-		llmClient = &PowerwordClientAdapter{client: pwClient, modelName: "gemini-2.5-flash"}
-	case config.Cfg != nil && config.Cfg.API.OpenAIKey != "":
-		pwClient, err := newPowerwordLLMClient("gpt-4o", "", config.Cfg.API.OpenAIKey, opts.HTTPClient)
-		if err != nil {
-			return fmt.Errorf("failed to create openai client: %w", err)
-		}
-		llmClient = &PowerwordClientAdapter{client: pwClient, modelName: "gpt-4o"}
-	default:
-		return errors.New("neither Gemini nor OpenAI API key is configured")
+	llmClient, err := setupLLMClient(opts)
+	if err != nil {
+		return err
 	}
 
-	stanzas, prompts, tokenUsage, err := llmClient.GenerateStanzas(ctx, theme, pageCount)
+	if m.BookProperties.Style == "" || m.BookProperties.CharacterProfile == "" {
+		if err = generateAndRecordVisualGuides(ctx, m, theme, llmClient, opts); err != nil {
+			return err
+		}
+	}
+
+	stanzas, prompts, tokenUsage, err := llmClient.GenerateStanzas(ctx, theme, pageCount, m.BookProperties.Style, m.BookProperties.CharacterProfile)
 	if err != nil {
 		return fmt.Errorf("manuscript text generation failed: %w", err)
 	}
@@ -458,9 +498,18 @@ func copyFile(src, dst string) error {
 	return out.Sync()
 }
 
-func exportManuscriptToMarkdown(outputDir string, pages []manifest.PageState) error {
+func sanitizeCommentText(text string) string {
+	text = strings.TrimSpace(text)
+	text = strings.ReplaceAll(text, "\n", " ")
+	return strings.ReplaceAll(text, "-->", "--")
+}
+
+func exportManuscriptToMarkdown(outputDir string, style, charProfile string, pages []manifest.PageState) error {
 	var sb strings.Builder
 	sb.WriteString("<!-- PITHOS MANUSCRIPT REVIEW -->\n")
+	fmt.Fprintf(&sb, "<!-- Style: %s -->\n", sanitizeCommentText(style))
+	fmt.Fprintf(&sb, "<!-- CharacterProfile: %s -->\n", sanitizeCommentText(charProfile))
+	sb.WriteString("<!-- Edit the stanzas, prompts, and global style/character guides above. -->\n")
 	sb.WriteString("<!-- Each page block begins with a '# Page N' header, followed by two subsections: -->\n")
 	sb.WriteString("<!-- '## Text' — the stanza/prose to edit, and '## Prompt' — the illustration prompt to edit. -->\n")
 	sb.WriteString("<!-- Do not change any '# Page N' or '## Text'/'## Prompt' headers themselves. -->\n")
@@ -559,14 +608,33 @@ func parsePageBlock(index int, lines []string) (parsedPage, bool, error) {
 }
 
 //nolint:gocognit // parsing manuscript lines requires multi-pass state machine for blocks and subheaders
-func parseManuscriptLines(lines []string) ([]parsedPage, bool, error) {
+func parseManuscriptLines(lines []string) (pages []parsedPage, style string, styleOk bool, charProfile string, charProfileOk bool, hasSubheaders bool, err error) {
 	var parsedPages []parsedPage
 	var currentIdx int
 	var currentLines []string
 	hasSubheadersAny := false
+	var parsedStyle string
+	var parsedStyleOk bool
+	var parsedCharProfile string
+	var parsedCharProfileOk bool
 
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
+
+		if len(parsedPages) == 0 && currentIdx == 0 && strings.HasPrefix(trimmed, "<!--") && strings.HasSuffix(trimmed, "-->") {
+			commentContent := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(trimmed, "<!--"), "-->"))
+			if strings.HasPrefix(commentContent, "Style:") {
+				parsedStyle = strings.TrimSpace(strings.TrimPrefix(commentContent, "Style:"))
+				parsedStyleOk = true
+				continue
+			}
+			if strings.HasPrefix(commentContent, "CharacterProfile:") {
+				parsedCharProfile = strings.TrimSpace(strings.TrimPrefix(commentContent, "CharacterProfile:"))
+				parsedCharProfileOk = true
+				continue
+			}
+		}
+
 		if !strings.HasPrefix(trimmed, "# Page ") {
 			if currentIdx > 0 {
 				currentLines = append(currentLines, line)
@@ -577,7 +645,7 @@ func parseManuscriptLines(lines []string) ([]parsedPage, bool, error) {
 		if currentIdx > 0 {
 			pPage, hasSubs, err := parsePageBlock(currentIdx, currentLines)
 			if err != nil {
-				return nil, false, err
+				return nil, "", false, "", false, false, err
 			}
 			if hasSubs {
 				hasSubheadersAny = true
@@ -589,10 +657,10 @@ func parseManuscriptLines(lines []string) ([]parsedPage, bool, error) {
 		header := strings.TrimPrefix(trimmed, "# Page ")
 		idx, err := strconv.Atoi(header)
 		if err != nil {
-			return nil, false, fmt.Errorf("failed to parse page header %q: %w", line, err)
+			return nil, "", false, "", false, false, fmt.Errorf("failed to parse page header %q: %w", line, err)
 		}
 		if idx <= 0 {
-			return nil, false, fmt.Errorf("invalid page index %d in header %q: must be positive", idx, line)
+			return nil, "", false, "", false, false, fmt.Errorf("invalid page index %d in header %q: must be positive", idx, line)
 		}
 		currentIdx = idx
 	}
@@ -600,7 +668,7 @@ func parseManuscriptLines(lines []string) ([]parsedPage, bool, error) {
 	if currentIdx > 0 {
 		pPage, hasSubs, err := parsePageBlock(currentIdx, currentLines)
 		if err != nil {
-			return nil, false, err
+			return nil, "", false, "", false, false, err
 		}
 		if hasSubs {
 			hasSubheadersAny = true
@@ -608,7 +676,41 @@ func parseManuscriptLines(lines []string) ([]parsedPage, bool, error) {
 		parsedPages = append(parsedPages, pPage)
 	}
 
-	return parsedPages, hasSubheadersAny, nil
+	return parsedPages, parsedStyle, parsedStyleOk, parsedCharProfile, parsedCharProfileOk, hasSubheadersAny, nil
+}
+
+//nolint:gocognit // import verification requires matching multiple states (index, text modifications)
+func validateManuscriptEdits(parsedPages []parsedPage, m *manifest.Manifest, pagesFilter []int) error {
+	seen := make(map[int]bool)
+	for _, pp := range parsedPages {
+		if seen[pp.index] {
+			return fmt.Errorf("duplicate page index %d in manuscript.md", pp.index)
+		}
+		seen[pp.index] = true
+	}
+
+	if len(seen) != len(m.Progress.Pages) {
+		return fmt.Errorf("manuscript.md contains %d stanzas, but manifest expects %d stanzas", len(seen), len(m.Progress.Pages))
+	}
+
+	// First pass: validate edits against the pagesFilter to fail fast before mutating
+	for _, pp := range parsedPages {
+		found := false
+		for _, page := range m.Progress.Pages {
+			if page.PageIndex == pp.index {
+				found = true
+				textChanged := page.Text != pp.text
+				promptChanged := pp.hasSubheaders && page.IllustrationPrompt != pp.prompt
+				if (textChanged || promptChanged) && !isPageAllowed(pp.index, pagesFilter) {
+					return fmt.Errorf("manuscript.md contains edits for page %d which is not included in the selective page override list: %v", pp.index, pagesFilter)
+				}
+			}
+		}
+		if !found {
+			return fmt.Errorf("parsed page index %d does not exist in manifest", pp.index)
+		}
+	}
+	return nil
 }
 
 //nolint:gocognit // import verification requires matching multiple states (index, text modifications)
@@ -626,7 +728,7 @@ func importManuscriptFromMarkdown(outputDir string, m *manifest.Manifest, pagesF
 	content := strings.ReplaceAll(string(data), "\r\n", "\n")
 	lines := strings.Split(content, "\n")
 
-	parsedPages, _, err := parseManuscriptLines(lines)
+	parsedPages, parsedStyle, styleOk, parsedCharProfile, charProfileOk, _, err := parseManuscriptLines(lines)
 	if err != nil {
 		return false, err
 	}
@@ -635,40 +737,28 @@ func importManuscriptFromMarkdown(outputDir string, m *manifest.Manifest, pagesF
 		return false, fmt.Errorf("no stanzas parsed from manuscript.md")
 	}
 
-	seen := make(map[int]bool)
-	for _, pp := range parsedPages {
-		if seen[pp.index] {
-			return false, fmt.Errorf("duplicate page index %d in manuscript.md", pp.index)
-		}
-		seen[pp.index] = true
-	}
-
-	if len(seen) != len(m.Progress.Pages) {
-		return false, fmt.Errorf("manuscript.md contains %d stanzas, but manifest expects %d stanzas", len(seen), len(m.Progress.Pages))
-	}
-
-	// First pass: validate edits against the pagesFilter to fail fast before mutating
-	for _, pp := range parsedPages {
-		for _, page := range m.Progress.Pages {
-			if page.PageIndex == pp.index {
-				textChanged := page.Text != pp.text
-				promptChanged := pp.hasSubheaders && page.IllustrationPrompt != pp.prompt
-				if (textChanged || promptChanged) && !isPageAllowed(pp.index, pagesFilter) {
-					return false, fmt.Errorf("manuscript.md contains edits for page %d which is not included in the selective page override list: %v", pp.index, pagesFilter)
-				}
-			}
-		}
+	if err := validateManuscriptEdits(parsedPages, m, pagesFilter); err != nil {
+		return false, err
 	}
 
 	changed := false
+	styleChanged := false
+	if styleOk && parsedStyle != m.BookProperties.Style {
+		m.BookProperties.Style = parsedStyle
+		styleChanged = true
+		changed = true
+	}
+	charProfileChanged := false
+	if charProfileOk && parsedCharProfile != m.BookProperties.CharacterProfile {
+		m.BookProperties.CharacterProfile = parsedCharProfile
+		charProfileChanged = true
+		changed = true
+	}
+
 	for _, pp := range parsedPages {
-		found := false
 		for i, page := range m.Progress.Pages {
 			if page.PageIndex == pp.index {
-				found = true
 				textChanged := page.Text != pp.text
-				// pp.hasSubheaders is tracked per-page by parsePageBlock, so legacy-format pages in
-				// a mixed-format file will have hasSubheaders==false and safely skip prompt updates.
 				promptChanged := pp.hasSubheaders && page.IllustrationPrompt != pp.prompt
 
 				if !textChanged && !promptChanged {
@@ -684,8 +774,12 @@ func importManuscriptFromMarkdown(outputDir string, m *manifest.Manifest, pagesF
 				break
 			}
 		}
-		if !found {
-			return false, fmt.Errorf("parsed page index %d does not exist in manifest", pp.index)
+	}
+
+	if styleChanged || charProfileChanged {
+		for i := range m.Progress.Pages {
+			m.Progress.Pages[i].Status = manifest.StatusPending
+			m.Progress.Pages[i].ImagePath = ""
 		}
 	}
 

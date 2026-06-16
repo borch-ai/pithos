@@ -17,7 +17,8 @@ import (
 
 // LLMClient defines the interface for generating stanzas using an LLM.
 type LLMClient interface {
-	GenerateStanzas(ctx context.Context, theme string, count int) ([]string, []string, telemetry.TokenUsage, error)
+	GenerateVisualGuides(ctx context.Context, theme string) (string, string, telemetry.TokenUsage, error)
+	GenerateStanzas(ctx context.Context, theme string, count int, style string, characterProfile string) ([]string, []string, telemetry.TokenUsage, error)
 }
 
 // PowerwordClientAdapter wraps a powerword LLMClient.
@@ -32,22 +33,82 @@ type stanzasResponse struct {
 	IllustrationPrompts []string `json:"illustration_prompts"`
 }
 
-// GenerateStanzas queries the powerword LLMClient to generate parodic stanzas based on a theme.
-func (a *PowerwordClientAdapter) GenerateStanzas(ctx context.Context, theme string, count int) ([]string, []string, telemetry.TokenUsage, error) {
+// visualGuidesResponse is the JSON format for Level 1 & Level 2 visual guide generation.
+type visualGuidesResponse struct {
+	StyleSeed        string `json:"style_seed"`
+	CharacterProfile string `json:"character_profile"`
+}
+
+// GenerateVisualGuides generates global visual style and character consistency profile.
+func (a *PowerwordClientAdapter) GenerateVisualGuides(ctx context.Context, theme string) (string, string, telemetry.TokenUsage, error) {
+	if a == nil || a.client == nil {
+		return "", "", telemetry.TokenUsage{}, errors.New("underlying powerword client is nil")
+	}
+	prompt := fmt.Sprintf(
+		"You are an expert children's book illustrator and art director. "+
+			"Based on the theme %q, generate the visual style guide and character profile for a parodic children's book.\n"+
+			"Return the output in JSON format with two keys:\n"+
+			"1. 'style_seed': General art style medium, rendering style, lighting, and palette (e.g., claymation style, vibrant cinematic lighting, shallow depth of field).\n"+
+			"2. 'character_profile': Persistent visual properties and description of the main character(s) (e.g., clothing colors, physical features, accessories) to ensure visual consistency.",
+		theme,
+	)
+
+	messages := []llm.Message{
+		{
+			Role:    llm.RoleUser,
+			Content: prompt,
+		},
+	}
+
+	msg, err := a.client.Generate(ctx, messages, nil, llm.WithResponseSchema(visualGuidesResponse{}))
+	if err != nil {
+		return "", "", telemetry.TokenUsage{}, fmt.Errorf("llm generate visual guides error: %w", err)
+	}
+
+	if msg == nil || msg.Content == "" {
+		return "", "", telemetry.TokenUsage{}, errors.New("empty response from llm client for visual guides")
+	}
+
+	cleanedContent := cleanJSONText(msg.Content)
+
+	var finalResp visualGuidesResponse
+	if err := json.Unmarshal([]byte(cleanedContent), &finalResp); err != nil {
+		return "", "", telemetry.TokenUsage{}, fmt.Errorf("failed to parse visual guides json from llm response: %w (raw content: %s)", err, truncateString(msg.Content, 200))
+	}
+
+	var usage telemetry.TokenUsage
+	if msg.Usage != nil {
+		usage = *msg.Usage
+	}
+
+	styleSeed := strings.TrimSpace(finalResp.StyleSeed)
+	characterProfile := strings.TrimSpace(finalResp.CharacterProfile)
+	if styleSeed == "" {
+		return "", "", telemetry.TokenUsage{}, errors.New("llm returned an empty style_seed")
+	}
+	if characterProfile == "" {
+		return "", "", telemetry.TokenUsage{}, errors.New("llm returned an empty character_profile")
+	}
+
+	return styleSeed, characterProfile, usage, nil
+}
+
+// GenerateStanzas queries the powerword LLMClient to generate parodic stanzas based on a theme, incorporating the global style and character guides.
+func (a *PowerwordClientAdapter) GenerateStanzas(ctx context.Context, theme string, count int, style string, characterProfile string) ([]string, []string, telemetry.TokenUsage, error) {
 	if a == nil || a.client == nil {
 		return nil, nil, telemetry.TokenUsage{}, errors.New("underlying powerword client is nil")
 	}
 	prompt := fmt.Sprintf(
 		"Write a parodic children's book poem in strict rhythmic meter about the theme: %q. "+
 			"The poem must have exactly %d stanzas. "+
-			"Additionally, you must define a consistent visual character style and description for the characters "+
-			"in the book (e.g., specific clothing, hair color, and features) to avoid character drift. "+
+			"The global art style for the book is: %q. "+
+			"The main character(s) profile is: %q. "+
 			"For each stanza, generate a detailed visual description (illustration prompt) that describes the scene's "+
-			"action, setting, and integrates the consistent character details. "+
+			"action, setting, and integrates the consistent character details from the character profile above. "+
 			"Return the output in JSON format with two keys: "+
 			"1. 'stanzas': an array of %d strings, where each element is one stanza representing one page of the book. "+
 			"2. 'illustration_prompts': an array of %d strings, where each element is the detailed illustration prompt for the corresponding stanza.",
-		theme, count, count, count,
+		theme, count, style, characterProfile, count, count,
 	)
 
 	messages := []llm.Message{
@@ -66,8 +127,10 @@ func (a *PowerwordClientAdapter) GenerateStanzas(ctx context.Context, theme stri
 		return nil, nil, telemetry.TokenUsage{}, errors.New("empty response from llm client")
 	}
 
+	cleanedContent := cleanJSONText(msg.Content)
+
 	var finalResp stanzasResponse
-	if err := json.Unmarshal([]byte(msg.Content), &finalResp); err != nil {
+	if err := json.Unmarshal([]byte(cleanedContent), &finalResp); err != nil {
 		return nil, nil, telemetry.TokenUsage{}, fmt.Errorf("failed to parse stanzas json from llm response: %w (raw content: %s)", err, truncateString(msg.Content, 200))
 	}
 
@@ -85,6 +148,29 @@ func (a *PowerwordClientAdapter) GenerateStanzas(ctx context.Context, theme stri
 	}
 
 	return finalResp.Stanzas, finalResp.IllustrationPrompts, usage, nil
+}
+
+func cleanJSONText(text string) string {
+	text = strings.TrimSpace(text)
+	firstIdx := strings.Index(text, "```")
+	if firstIdx == -1 {
+		return text
+	}
+
+	lastIdx := strings.LastIndex(text, "```")
+	if lastIdx == -1 || lastIdx <= firstIdx {
+		contentStart := firstIdx + 3
+		if newlineIdx := strings.Index(text[contentStart:], "\n"); newlineIdx != -1 {
+			contentStart = contentStart + newlineIdx + 1
+		}
+		return strings.TrimSpace(text[contentStart:])
+	}
+
+	contentStart := firstIdx + 3
+	if newlineIdx := strings.Index(text[contentStart:], "\n"); newlineIdx != -1 {
+		contentStart = contentStart + newlineIdx + 1
+	}
+	return strings.TrimSpace(text[contentStart:lastIdx])
 }
 
 // newPowerwordLLMClient creates a powerword LLMClient configured for either Gemini or OpenAI

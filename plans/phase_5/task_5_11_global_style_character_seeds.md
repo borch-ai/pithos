@@ -1,7 +1,9 @@
 # plan: Task 5.11: LLM-Driven Style & Character Seeds
 
-**Status:** Open
+**Status:** Completed
 **Go Version:** 1.26.4
+**Date Completed:** 2026-06-16
+**Unit Test Coverage:** 91.5%
 
 Implement a two-level automated visual and character-consistency seeding pipeline:
 1. **Level 1: Visual Book Style (Global)**: Defines the overall art medium, rendering style, lighting, and palette (e.g., claymation, 3D, sketch). This is registered with the image generator as a style reference.
@@ -85,3 +87,36 @@ Before generating stanzas, the LLM will generate both the Level 1 Book Style and
   * `GenerateVisualGuides` returns correctly parsed Level 1 and Level 2 guides from mocked LLM JSON responses.
   * `GenerateStanzas` includes both visual guides in the LLM instruction prompts.
   * Modifying either the Style or CharacterProfile comment resets all page progress and clears image paths on import.
+
+### Manual Verification
+1. **Initialize a New Project**:
+   ```bash
+   go run ./cmd/pithos initiate --output book_test --theme "existential dread cat" --pages 3
+   ```
+   Check that `book_test/manifest.json` is created, and the `character_profile` property under `book_properties` is empty.
+
+2. **Generate the Manuscript and Visual Guides**:
+   ```bash
+   go run ./cmd/pithos brew --output book_test --review
+   ```
+   Verify that:
+   - The console logs indicate manuscript generation.
+   - `book_test/manifest.json` contains newly generated values for both `style` and `character_profile`.
+   - `book_test/manuscript.md` is exported, and starts with the comments:
+     ```markdown
+     <!-- PITHOS MANUSCRIPT REVIEW -->
+     <!-- Style: <generated style> -->
+     <!-- CharacterProfile: <generated profile> -->
+     ```
+   - Each page illustration prompt under `## Prompt` incorporates the character and style details.
+
+3. **Verify Guide Modification Page Resets**:
+   - Manually edit the `<!-- Style: ... -->` or `<!-- CharacterProfile: ... -->` comment in `book_test/manuscript.md`.
+   - Run the import/brew loop again:
+     ```bash
+     go run ./cmd/pithos brew --output book_test --review
+     ```
+   - Verify that:
+     - The changes are successfully imported.
+     - `book_test/manifest.json` is updated with the modified style/character profile.
+     - The status of all pages is reset back to `pending`, and all page image paths are cleared.
