@@ -188,39 +188,6 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
 *   [ ] **Task 5.9: Google Doc MCP Integration**
     *   Integrate with the `pw-mcp-gdoc` MCP plugin to export manuscripts to Google Docs for editing and import them back on resume.
     *   [Implementation Plan](plans/phase_5/task_5_9_gdoc_mcp_integration.md)
-*   [x] **Task 5.10: Visual Prompt Expansion for Character Consistency**
-    *   Modify stanzas generation to produce parodic poems alongside character-consistent illustration prompts. Integrate prompts in the manifest and the markdown review loop.
-    *   [Implementation Plan](plans/phase_5/task_5_10_visual_prompt_expansion.md)
-*   [x] **Task 5.11: LLM-Driven Style & Character Seeds**
-    *   Implement automated visual style and character profile generation as a dedicated preceding step of `brew`.
-    *   Feed the generated style/character seed into the manuscript generator as prompt context to ensure stanzas and illustration prompts align.
-    *   Configure a global character style reference flag (`--style`) to allow manual override.
-    *   [Implementation Plan](plans/phase_5/task_5_11_global_style_character_seeds.md)
-*   [x] **Task 5.12: Robust JSON Output Parsing**
-    *   Implement an LLM response sanitization helper to strip markdown code blocks (e.g. ` ```json ... ``` `) and protect Pithos against parsing errors.
-    *   [Implementation Plan](plans/phase_5/task_5_12_robust_json_parsing.md)
-*   [ ] **Task 5.13: Multi-Provider LLM Fallback & Retries**
-    *   Implement dynamic retries with exponential backoff and automatic provider switching (e.g., fall back to OpenAI if Gemini fails) to avoid rate limit halts in headless runs.
-    *   [Implementation Plan](plans/phase_5/task_5_13_multi_provider_fallback.md)
-*   [ ] **Task 5.14: Bubbletea TUI-Based Interactive Review Loop**
-    *   Replace the raw file-editing loop with an interactive terminal review dashboard, enabling users to edit stanzas, customize prompts, and trigger select regeneration.
-    *   [Implementation Plan](plans/phase_5/task_5_14_bubbletea_tui_review.md)
-*   [ ] **Task 5.15: Multi-Model Illustration Variations & Selection**
-    *   Generate illustration variations in parallel using multiple configured image models.
-    *   Support manual variation selection via markdown reviews and hotkeys in the interactive TUI dashboard.
-    *   [Implementation Plan](plans/phase_5/task_5_15_multi_model_image_variations.md)
-*   [ ] **Task 5.16: Inline Terminal Graphics Previews in TUI**
-    *   Integrate terminal image rendering protocols (Kitty, Sixel) within the Bubbletea review TUI to display visual illustration previews directly in the console.
-    *   [Implementation Plan](plans/phase_5/task_5_16_inline_terminal_previews.md)
-*   [ ] **Task 5.17: LLM-Driven Stanza Refinement & Feedback Loop**
-    *   Implement selective stanza regeneration based on user text feedback prompts during review, allowing the LLM to rewrite individual stanzas interactively.
-    *   [Implementation Plan](plans/phase_5/task_5_17_llm_stanza_refinement.md)
-*   [ ] **Task 5.18: Automated Cover Art & Title Layout Generator**
-    *   Automate cover generation by prompting the LLM for cover art matching the style guide, brewing the assets, and compiling KDP-conforming cover wraps.
-    *   [Implementation Plan](plans/phase_5/task_5_18_automated_cover_generator.md)
-*   [ ] **Task 5.19: Interactive Web-Based Book Preview (HTML/CSS)**
-    *   Generate a static web-based preview folder containing an interactive flipbook player to visually review books locally in any browser.
-    *   [Implementation Plan](plans/phase_5/task_5_19_web_book_preview.md)
 
 ---
 
