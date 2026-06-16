@@ -194,6 +194,12 @@ func TestAssemble_Success(t *testing.T) {
 		t.Fatalf("Assemble failed: %v", err)
 	}
 
+	// Verify manuscript.md was exported
+	manuscriptPath := filepath.Join(tmpDir, "manuscript.md")
+	if _, statErr := os.Stat(manuscriptPath); os.IsNotExist(statErr) {
+		t.Error("expected manuscript.md to be automatically exported during Assemble, but it was not found")
+	}
+
 	// Reload manifest and check KDP layout details
 	m2, err := manifest.LoadManifest(filepath.Join(tmpDir, "manifest.json"))
 	if err != nil {

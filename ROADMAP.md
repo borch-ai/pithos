@@ -90,7 +90,7 @@ Focus: Turning raw text and image assets into valid, print-ready files.
 *   [x] **Task 4.2: Typst PDF Layout Assembly**
     *   Integrate with a standalone `pw-mcp-typst` MCP plugin to compile the book manuscript stanzas and generated page illustrations into a print-ready PDF file.
     *   [Implementation Plan](plans/phase_4/task_4_2_typst_pdf_assembly.md)
-*   [ ] **Task 4.3: Verse Layout Formatting**
+*   [x] **Task 4.3: Verse Layout Formatting**
     *   Format stanza line breaks in Typst layouts instead of collapsing them into paragraphs.
     *   [Implementation Plan](plans/phase_4/task_4_3_verse_layout_formatting.md)
 *   [ ] **Task 4.4: Mixed Layout Templates**
