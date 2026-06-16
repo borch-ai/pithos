@@ -16,28 +16,11 @@ Implement automatic, graceful fallbacks between image generation backends (e.g.,
 
 ## Proposed Changes
 
-### 1. Powerword Repository (MCP Server changes)
+### External Dependencies (Powerword MCP Plugin)
+- Update the `imagegen_generate` MCP tool in `pw-mcp-imagegen` (Powerword) to accept an optional `backend` string argument for backend overrides.
+- *Note: Code changes within the Powerword repository will be tracked under its own separate implementation plan.*
 
-#### [MODIFY] [main.go](file://../../../powerword/cmd/pw-mcp-imagegen/main.go)
-- Update `imagegen_generate` MCP tool input schema to accept an optional `backend` string parameter:
-  ```json
-  "backend": {
-      "type": "string",
-      "description": "Optional override for the image generation backend (e.g. 'openai', 'google', 'midjourney')"
-  }
-  ```
-- Unmarshal and pass the `backend` argument to `service.GenerateImage`.
-
-#### [MODIFY] [imagegen.go](file://../../../powerword/internal/plugins/imagegen/imagegen.go)
-- Update the signature of `GenerateImage` to accept the `backend` override:
-  ```go
-  func (s *ImageGenService) GenerateImage(ctx context.Context, prompt string, size string, styleID string, backendOverride string) (string, string, error)
-  ```
-- If `backendOverride` is specified, use it in place of the configured default `s.cfg.Plugins.ImageGen.Backend`.
-
----
-
-### 2. Pithos Repository (CLI client changes)
+### Pithos CLI
 
 #### [MODIFY] [brew.go](file://../../internal/pipeline/brew.go)
 - Wrap the `imagegen_generate` MCP tool call in a retry/fallback handler.
@@ -46,8 +29,6 @@ Implement automatic, graceful fallbacks between image generation backends (e.g.,
   - Check if the alternative backend (e.g. Google Gemini if OpenAI failed, or OpenAI if Google failed) has credentials set in Pithos/Powerword config.
   - Log a console warning: `"Primary imagegen backend failed with credential/model error. Attempting fallback to [Backend]..."`
   - Retry the tool invocation with the `backend` argument set to the fallback provider.
-
----
 
 ## Verification Plan
 
