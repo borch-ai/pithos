@@ -24,7 +24,10 @@ var brewCmd = &cobra.Command{
 	Short: "Generates the manuscript and stanza illustrations",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		var pages []int
-		if brewPagesStr != "" {
+		if cmd.Flags().Changed("pages") {
+			if brewPagesStr == "" {
+				return errors.New("pages flag is empty; please specify comma-separated page numbers to regenerate")
+			}
 			parts := strings.Split(brewPagesStr, ",")
 			for _, part := range parts {
 				part = strings.TrimSpace(part)
@@ -39,6 +42,9 @@ var brewCmd = &cobra.Command{
 					return fmt.Errorf("page numbers must be positive: %d", val)
 				}
 				pages = append(pages, val)
+			}
+			if len(pages) == 0 {
+				return errors.New("no valid page numbers parsed from pages flag")
 			}
 		}
 

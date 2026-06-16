@@ -1464,14 +1464,14 @@ Prompt 2 edited prompt
 	if m.Progress.Pages[0].Text != "Stanza 1 edited text" {
 		t.Errorf("expected page 1 text to be edited, got %q", m.Progress.Pages[0].Text)
 	}
-	if m.Progress.Pages[0].Status != manifest.StatusPending || m.Progress.Pages[0].ImagePath != "" {
+	if m.Progress.Pages[0].Status != manifest.StatusPending || m.Progress.Pages[0].ImagePath != "images/page_1.png" {
 		t.Errorf("expected page 1 status to be reset, got status %q path %q", m.Progress.Pages[0].Status, m.Progress.Pages[0].ImagePath)
 	}
 
 	if m.Progress.Pages[1].IllustrationPrompt != "Prompt 2 edited prompt" {
 		t.Errorf("expected page 2 prompt to be edited, got %q", m.Progress.Pages[1].IllustrationPrompt)
 	}
-	if m.Progress.Pages[1].Status != manifest.StatusPending || m.Progress.Pages[1].ImagePath != "" {
+	if m.Progress.Pages[1].Status != manifest.StatusPending || m.Progress.Pages[1].ImagePath != "images/page_2.png" {
 		t.Errorf("expected page 2 status to be reset, got status %q path %q", m.Progress.Pages[1].Status, m.Progress.Pages[1].ImagePath)
 	}
 
@@ -1506,7 +1506,7 @@ Stanza 2 original
 	if m.Progress.Pages[0].IllustrationPrompt != "Prompt 1 original" {
 		t.Errorf("expected page 1 illustration prompt to be preserved, got %q", m.Progress.Pages[0].IllustrationPrompt)
 	}
-	if m.Progress.Pages[0].Status != manifest.StatusPending || m.Progress.Pages[0].ImagePath != "" {
+	if m.Progress.Pages[0].Status != manifest.StatusPending || m.Progress.Pages[0].ImagePath != "images/page_1.png" {
 		t.Errorf("expected page 1 status to be reset, got status %q path %q", m.Progress.Pages[0].Status, m.Progress.Pages[0].ImagePath)
 	}
 
@@ -1522,6 +1522,7 @@ Stanza 2 original
 }
 
 func setupSelectiveRedoTest(t *testing.T, theme string) (string, *manifest.Manifest, string) {
+	t.Helper()
 	tmpDir, err := os.MkdirTemp("", "pithos-brew-selective-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)

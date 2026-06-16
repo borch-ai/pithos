@@ -251,20 +251,19 @@ func generateManuscript(ctx context.Context, m *manifest.Manifest, opts BrewOpti
 
 //nolint:gocognit,funlen // Illustration loop handles MCP client lifecycle, style registration, and page checkpoint updates
 func generateIllustrations(ctx context.Context, m *manifest.Manifest, opts BrewOptions) error {
+	var allowedPages map[int]bool
+	if len(opts.Pages) > 0 {
+		allowedPages = make(map[int]bool, len(opts.Pages))
+		for _, pIdx := range opts.Pages {
+			allowedPages[pIdx] = true
+		}
+	}
+
 	var pendingPages []*manifest.PageState
 	for i := range m.Progress.Pages {
 		page := &m.Progress.Pages[i]
-		if len(opts.Pages) > 0 {
-			found := false
-			for _, pIdx := range opts.Pages {
-				if page.PageIndex == pIdx {
-					found = true
-					break
-				}
-			}
-			if !found {
-				continue
-			}
+		if allowedPages != nil && !allowedPages[page.PageIndex] {
+			continue
 		}
 		if page.Status != manifest.StatusCompleted || page.ImagePath == "" {
 			pendingPages = append(pendingPages, page)
@@ -648,6 +647,19 @@ func importManuscriptFromMarkdown(outputDir string, m *manifest.Manifest, pagesF
 		return false, fmt.Errorf("manuscript.md contains %d stanzas, but manifest expects %d stanzas", len(seen), len(m.Progress.Pages))
 	}
 
+	// First pass: validate edits against the pagesFilter to fail fast before mutating
+	for _, pp := range parsedPages {
+		for _, page := range m.Progress.Pages {
+			if page.PageIndex == pp.index {
+				textChanged := page.Text != pp.text
+				promptChanged := pp.hasSubheaders && page.IllustrationPrompt != pp.prompt
+				if (textChanged || promptChanged) && !isPageAllowed(pp.index, pagesFilter) {
+					return false, fmt.Errorf("manuscript.md contains edits for page %d which is not included in the selective page override list: %v", pp.index, pagesFilter)
+				}
+			}
+		}
+	}
+
 	changed := false
 	for _, pp := range parsedPages {
 		found := false
@@ -663,14 +675,10 @@ func importManuscriptFromMarkdown(outputDir string, m *manifest.Manifest, pagesF
 					break
 				}
 
-				if !isPageAllowed(pp.index, pagesFilter) {
-					return false, fmt.Errorf("manuscript.md contains edits for page %d which is not included in the selective page override list: %v", pp.index, pagesFilter)
-				}
 				m.Progress.Pages[i].Text = pp.text
 				if pp.hasSubheaders {
 					m.Progress.Pages[i].IllustrationPrompt = pp.prompt
 				}
-				m.Progress.Pages[i].ImagePath = ""
 				m.Progress.Pages[i].Status = manifest.StatusPending
 				changed = true
 				break
@@ -699,7 +707,6 @@ func resetManifestPages(m *manifest.Manifest, pages []int) error {
 		for idx, page := range m.Progress.Pages {
 			if page.PageIndex == pageNum {
 				m.Progress.Pages[idx].Status = manifest.StatusPending
-				m.Progress.Pages[idx].ImagePath = ""
 				found = true
 				break
 			}
