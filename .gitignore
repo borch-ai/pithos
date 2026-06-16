@@ -24,6 +24,7 @@ bin/
 generated_images/
 .pithos-local-cache/
 .pithos.toml
+.powerword/
 
 
 # IDEs
