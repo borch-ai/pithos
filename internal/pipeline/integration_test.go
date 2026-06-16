@@ -16,6 +16,7 @@ import (
 	"github.com/borch-ai/pithos/internal/config"
 	"github.com/borch-ai/pithos/internal/manifest"
 	"github.com/borch-ai/powerword/pkg/gitutil"
+	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 //nolint:gocognit,funlen,nestif // Integration tests have multiple steps, complex checking blocks, and configurations
@@ -436,4 +437,141 @@ func TestBrew_Integration_SelectivePageRedo(t *testing.T) {
 			t.Errorf("expected page %d to have original image data, got %q", p.PageIndex, string(data))
 		}
 	}
+}
+
+//nolint:gocognit,funlen // Integration tests have multiple setup configurations, assertions, and checks
+func TestAssemble_Integration_RealSubprocess(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("POWERWORD_WORKSPACE_ROOT", tempDir)
+	typstBinaryPath := buildTypstBinary(t, tempDir)
+
+	// Configure environment: point TypstPath to our built binary.
+	origCfg := config.Cfg
+	config.Cfg = &config.Config{
+		MCP: config.MCPConfig{
+			TypstPath:   typstBinaryPath,
+			KDPMathPath: "pw-mcp-kdp-math",
+		},
+		API: config.APIConfig{
+			GeminiKey: "mock-gemini-key",
+		},
+	}
+	defer func() {
+		config.Cfg = origCfg
+	}()
+
+	// 1. Initialize Pithos Workspace
+	optsInit := InitiateOptions{
+		OutputDir:       tempDir,
+		Theme:           "Integration Assemble Theme",
+		TargetPageCount: 3,
+	}
+	m, err := Initiate(optsInit)
+	if err != nil {
+		t.Fatalf("failed to initiate book: %v", err)
+	}
+
+	// Pre-populate stanzas to skip LLM text generation step
+	m.Progress.ManuscriptGenerated = true
+	m.Progress.Pages = []manifest.PageState{
+		{PageIndex: 1, Status: manifest.StatusPending, Text: "Line 1\nLine 2\nLine 3\nLine 4"},
+		{PageIndex: 2, Status: manifest.StatusPending, Text: "Stanza 2"},
+		{PageIndex: 3, Status: manifest.StatusPending, Text: "Stanza 3"},
+	}
+	if saveErr := m.Save(); saveErr != nil {
+		t.Fatalf("failed to save manifest: %v", saveErr)
+	}
+
+	// 2. Set up mock KDP math server via in-memory transport
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	clientKDP, serverKDP := mcpsdk.NewInMemoryTransports()
+	_, cleanupKDP := setupMockKDPMathServer(t, ctx, serverKDP)
+	defer cleanupKDP()
+
+	// 3. Verify that manuscript.md does NOT exist initially
+	manuscriptPath := filepath.Join(tempDir, "manuscript.md")
+	if _, statErr := os.Stat(manuscriptPath); !os.IsNotExist(statErr) {
+		t.Fatal("expected manuscript.md NOT to exist before Assemble is run")
+	}
+
+	// 4. Run Assemble with KDP Math Mocked, but Typst running as a real subprocess
+	optsAssemble := AssembleOptions{
+		InputDir:         tempDir,
+		Format:           "paperback",
+		Bleed:            true,
+		KDPMathTransport: clientKDP,
+	}
+
+	// Check if typst command is installed on the host system.
+	hasTypstInstalled := false
+	if _, lookErr := exec.LookPath("typst"); lookErr == nil {
+		hasTypstInstalled = true
+	}
+
+	_, err = Assemble(ctx, optsAssemble)
+
+	// Check that manuscript.md was indeed auto-exported before the compile tool was called
+	if _, statErr := os.Stat(manuscriptPath); os.IsNotExist(statErr) {
+		t.Error("expected manuscript.md to be automatically exported during Assemble, but it is missing")
+	} else {
+		// Verify content: single newlines inside stanzas exist in the exported file
+		//nolint:gosec // manuscriptPath is constructed in temp test directory
+		content, readErr := os.ReadFile(manuscriptPath)
+		if readErr != nil {
+			t.Fatalf("failed to read manuscript.md: %v", readErr)
+		}
+		if !strings.Contains(string(content), "Line 1\nLine 2") {
+			t.Errorf("expected manuscript.md to preserve line breaks, got:\n%s", string(content))
+		}
+	}
+
+	if hasTypstInstalled && err != nil {
+		t.Fatalf("Assemble integration test failed: %v", err)
+	}
+	if hasTypstInstalled {
+		interiorPDF := filepath.Join(tempDir, "interior.pdf")
+		if _, statErr := os.Stat(interiorPDF); os.IsNotExist(statErr) {
+			t.Error("expected interior.pdf to exist, but it was not found")
+		}
+	}
+	if !hasTypstInstalled {
+		if err == nil {
+			t.Error("expected Assemble to fail without typst installed, but it succeeded")
+		} else if !strings.Contains(err.Error(), "interior compilation failed") && !strings.Contains(err.Error(), "failed to compile Typst interior") {
+			t.Errorf("unexpected error without typst installed: %v", err)
+		}
+		t.Logf("typst not installed locally, verified subprocess started up and threw expected error: %v", err)
+	}
+}
+
+func buildTypstBinary(t *testing.T, tempDir string) string {
+	t.Helper()
+	binaryPath := filepath.Join(tempDir, "pw-mcp-typst")
+	siblingPath := "../../../powerword/cmd/pw-mcp-typst"
+
+	if _, statErr := os.Stat(siblingPath); statErr != nil {
+		path, err := exec.LookPath("pw-mcp-typst")
+		if err != nil {
+			t.Skip("pw-mcp-typst binary not found and sibling powerword repo not found")
+		}
+		t.Logf("Using existing system pw-mcp-typst binary: %s", path)
+		return path
+	}
+
+	t.Logf("Building pw-mcp-typst from sibling repository: %s", siblingPath)
+	absBinary, err := filepath.Abs(binaryPath)
+	if err != nil {
+		t.Fatalf("failed to get absolute binary path: %v", err)
+	}
+
+	//nolint:gosec // siblingPath and binaryPath are constructed inside test dir
+	cmd := exec.CommandContext(context.Background(), "go", "build", "-o", absBinary, ".")
+	cmd.Dir = siblingPath
+	if buildErr := cmd.Run(); buildErr != nil {
+		t.Fatalf("failed to build pw-mcp-typst: %v", buildErr)
+	}
+
+	return binaryPath
 }

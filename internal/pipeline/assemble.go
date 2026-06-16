@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -127,6 +128,17 @@ func Assemble(ctx context.Context, opts AssembleOptions) (*manifest.Manifest, er
 
 func compileInteriorPDF(ctx context.Context, opts AssembleOptions, m *manifest.Manifest) (string, error) {
 	manuscriptPath := filepath.Join(opts.InputDir, "manuscript.md")
+	if _, err := os.Stat(manuscriptPath); err != nil {
+		if !os.IsNotExist(err) {
+			return "", fmt.Errorf("failed to check manuscript.md status: %w", err)
+		}
+		if len(m.Progress.Pages) == 0 {
+			return "", errors.New("cannot assemble book: manuscript.md is missing and no pages are generated in the manifest")
+		}
+		if exportErr := exportManuscriptToMarkdown(opts.InputDir, m.Progress.Pages); exportErr != nil {
+			return "", fmt.Errorf("failed to export manuscript.md: %w", exportErr)
+		}
+	}
 	imagesDir := filepath.Join(opts.InputDir, "images")
 	outputPath := filepath.Join(opts.InputDir, "interior.pdf")
 

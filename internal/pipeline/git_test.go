@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/borch-ai/pithos/internal/manifest"
 	"github.com/borch-ai/powerword/pkg/gitutil"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -380,9 +381,20 @@ func TestCheckpoint_AssembleError(t *testing.T) {
 		Theme:           "Theme",
 		TargetPageCount: 75, // hardcover minimum
 	}
-	_, err := Initiate(optsInit)
+	m, err := Initiate(optsInit)
 	if err != nil {
 		t.Fatalf("failed to initiate: %v", err)
+	}
+
+	m.Progress.Pages = make([]manifest.PageState, 75)
+	for i := 0; i < 75; i++ {
+		m.Progress.Pages[i] = manifest.PageState{
+			PageIndex: i + 1,
+			Status:    manifest.StatusCompleted,
+		}
+	}
+	if saveErr := m.Save(); saveErr != nil {
+		t.Fatalf("failed to save manifest: %v", saveErr)
 	}
 
 	// Mock git commit to fail

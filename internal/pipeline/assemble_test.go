@@ -158,12 +158,14 @@ func TestAssemble_Success(t *testing.T) {
 		t.Fatalf("Initiate failed: %v", err)
 	}
 
-	// Populate mock pages in manifest
+	// Populate mock pages in manifest with content to verify export structure
 	m.Progress.Pages = make([]manifest.PageState, 80)
 	for i := 0; i < 80; i++ {
 		m.Progress.Pages[i] = manifest.PageState{
-			PageIndex: i + 1,
-			Status:    manifest.StatusCompleted,
+			PageIndex:          i + 1,
+			Status:             manifest.StatusCompleted,
+			Text:               "Stanza content text",
+			IllustrationPrompt: "Illustration prompt details",
 		}
 	}
 	if saveErr := m.Save(); saveErr != nil {
@@ -192,6 +194,22 @@ func TestAssemble_Success(t *testing.T) {
 	_, err = Assemble(ctx, optsAssemble)
 	if err != nil {
 		t.Fatalf("Assemble failed: %v", err)
+	}
+
+	// Verify manuscript.md was exported and has correct structure/content
+	manuscriptPath := filepath.Join(tmpDir, "manuscript.md")
+	if _, statErr := os.Stat(manuscriptPath); os.IsNotExist(statErr) {
+		t.Error("expected manuscript.md to be automatically exported during Assemble, but it was not found")
+	} else {
+		//nolint:gosec // manuscriptPath is constructed in temp test directory
+		contentBytes, readErr := os.ReadFile(manuscriptPath)
+		if readErr != nil {
+			t.Fatalf("failed to read manuscript.md: %v", readErr)
+		}
+		content := string(contentBytes)
+		if !strings.Contains(content, "# Page 1") || !strings.Contains(content, "Stanza content text") || !strings.Contains(content, "Illustration prompt details") {
+			t.Errorf("manuscript.md did not contain expected content: %s", content)
+		}
 	}
 
 	// Reload manifest and check KDP layout details
@@ -515,6 +533,99 @@ func TestAssemble_TypstError(t *testing.T) {
 	if err == nil {
 		t.Error("expected error when Typst compilation fails, got nil")
 	} else if !strings.Contains(err.Error(), "interior compilation failed") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestAssemble_ManuscriptStatError(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos-assemble-stat-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	// Initiate manifest
+	optsInit := InitiateOptions{
+		OutputDir:       tmpDir,
+		Theme:           "Parody Theme",
+		TargetPageCount: 3,
+	}
+	m, err := Initiate(optsInit)
+	if err != nil {
+		t.Fatalf("Initiate failed: %v", err)
+	}
+
+	m.Progress.Pages = make([]manifest.PageState, 3)
+	if saveErr := m.Save(); saveErr != nil {
+		t.Fatalf("failed to save manifest: %v", saveErr)
+	}
+
+	manuscriptPath := filepath.Join(tmpDir, "manuscript.md")
+	// Create a symlink loop (manuscript.md points to itself) to force os.Stat to fail
+	if symlinkErr := os.Symlink("manuscript.md", manuscriptPath); symlinkErr != nil {
+		t.Skipf("skipping test: symlink creation is not supported on this platform/environment: %v", symlinkErr)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	clientKDP, serverKDP := mcpsdk.NewInMemoryTransports()
+	_, cleanupKDP := setupMockKDPMathServer(t, ctx, serverKDP)
+	defer cleanupKDP()
+
+	optsAssemble := AssembleOptions{
+		InputDir:         tmpDir,
+		KDPMathTransport: clientKDP,
+	}
+
+	_, err = Assemble(ctx, optsAssemble)
+	if err == nil {
+		t.Error("expected error when os.Stat fails on manuscript.md with symlink loop, got nil")
+	} else if !strings.Contains(err.Error(), "failed to check manuscript.md status") {
+		t.Errorf("expected error to contain 'failed to check manuscript.md status', got: %v", err)
+	}
+}
+
+func TestAssemble_MissingManuscriptNoPagesError(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos-assemble-missing-manuscript-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	// Initiate manifest
+	optsInit := InitiateOptions{
+		OutputDir:       tmpDir,
+		Theme:           "Parody Theme",
+		TargetPageCount: 3,
+	}
+	m, err := Initiate(optsInit)
+	if err != nil {
+		t.Fatalf("Initiate failed: %v", err)
+	}
+
+	// Make sure pages are empty
+	m.Progress.Pages = nil
+	if saveErr := m.Save(); saveErr != nil {
+		t.Fatalf("failed to save manifest: %v", saveErr)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	clientKDP, serverKDP := mcpsdk.NewInMemoryTransports()
+	_, cleanupKDP := setupMockKDPMathServer(t, ctx, serverKDP)
+	defer cleanupKDP()
+
+	optsAssemble := AssembleOptions{
+		InputDir:         tmpDir,
+		KDPMathTransport: clientKDP,
+	}
+
+	_, err = Assemble(ctx, optsAssemble)
+	if err == nil {
+		t.Error("expected error when manuscript.md is missing and manifest has no pages, got nil")
+	} else if !strings.Contains(err.Error(), "manuscript.md is missing and no pages are generated in the manifest") {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
