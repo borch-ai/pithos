@@ -315,6 +315,7 @@ func configureTestEnvironment(t *testing.T, tempDir string, binaryPath string, o
 	t.Helper()
 	t.Setenv("OPENAI_BASE_URL", openaiURL)
 	t.Setenv("POWERWORD_WORKSPACE_ROOT", tempDir)
+	t.Setenv("POWERWORD_IMAGEGEN_BACKEND", "openai")
 
 	//nolint:gosec // dummy key used for mock test configuration
 	pwTOML := `
