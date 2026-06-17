@@ -159,7 +159,6 @@ func DiagnoseMCPPlugins(ctx context.Context) []DiagnosticItem {
 		// Try connection handshake
 		handshakeCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 		err := client.Start(handshakeCtx)
-		cancel()
 
 		if err != nil {
 			status := StatusFail
@@ -180,6 +179,7 @@ func DiagnoseMCPPlugins(ctx context.Context) []DiagnosticItem {
 			})
 			_ = client.Stop()
 		}
+		cancel()
 	}
 
 	return items

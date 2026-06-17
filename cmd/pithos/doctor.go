@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/borch-ai/pithos/internal/pipeline"
 	"github.com/spf13/cobra"
@@ -13,6 +14,25 @@ var doctorCmd = &cobra.Command{
 	Long:  `doctor executes a series of validation tests to ensure configuration files are loaded, API keys are valid, and native MCP plugin executables can be resolved and connected.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
+		useColor := isTTY()
+
+		var (
+			green  = ""
+			red    = ""
+			yellow = ""
+			gray   = ""
+			bold   = ""
+			reset  = ""
+		)
+		if useColor {
+			green = "\033[32m"
+			red = "\033[31m"
+			yellow = "\033[33m"
+			gray = "\033[90m"
+			bold = "\033[1m"
+			reset = "\033[0m"
+		}
+
 		fmt.Println("🏺 Running Pithos Preflight Diagnostics...")
 		fmt.Println("--------------------------------------------------")
 
@@ -22,28 +42,36 @@ var doctorCmd = &cobra.Command{
 			var statusStr string
 			switch item.Status {
 			case pipeline.StatusOk:
-				statusStr = "\033[32m[✔] OK     \033[0m"
+				statusStr = fmt.Sprintf("%s[✔] OK     %s", green, reset)
 			case pipeline.StatusFail:
-				statusStr = "\033[31m[✘] FAIL   \033[0m"
+				statusStr = fmt.Sprintf("%s[✘] FAIL   %s", red, reset)
 			case pipeline.StatusWarning:
-				statusStr = "\033[33m[!] WARN   \033[0m"
+				statusStr = fmt.Sprintf("%s[!] WARN   %s", yellow, reset)
 			case pipeline.StatusSkip:
-				statusStr = "\033[90m[-] SKIP   \033[0m"
+				statusStr = fmt.Sprintf("%s[-] SKIP   %s", gray, reset)
 			default:
 				statusStr = fmt.Sprintf("[%s]", item.Status)
 			}
 
-			fmt.Printf("%s \033[1m%-40s\033[0m %s\n", statusStr, item.Name+":", item.Message)
+			fmt.Printf("%s %s%-40s%s %s\n", statusStr, bold, item.Name+":", reset, item.Message)
 		}
 
 		fmt.Println("--------------------------------------------------")
 		if hasFailure {
-			return fmt.Errorf("\033[31m\033[1mDiagnostics FAILED. Please resolve the errors above before running Pithos pipelines.\033[0m")
+			return fmt.Errorf("%s%sDiagnostics FAILED. Please resolve the errors above before running Pithos pipelines.%s", red, bold, reset)
 		}
 
-		fmt.Println("\033[32m\033[1mAll checks passed successfully! Pithos is ready.\033[0m")
+		fmt.Printf("%s%sAll checks passed successfully! Pithos is ready.%s\n", green, bold, reset)
 		return nil
 	},
+}
+
+func isTTY() bool {
+	fi, err := os.Stdout.Stat()
+	if err != nil {
+		return false
+	}
+	return fi.Mode()&os.ModeCharDevice != 0
 }
 
 func init() {
