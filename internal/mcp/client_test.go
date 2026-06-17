@@ -40,7 +40,7 @@ func TestResolveBinaryPath(t *testing.T) {
 			ImageGenPath: "/config/imagegen",
 			KDPMathPath:  "/config/kdpmath",
 			SEOPath:      "/config/seo",
-			VideoPath:    "/config/video",
+			ViralPath:    "/config/viral",
 		},
 	}
 
@@ -51,7 +51,7 @@ func TestResolveBinaryPath(t *testing.T) {
 		{PluginImageGen, "/config/imagegen"},
 		{PluginKDPMath, "/config/kdpmath"},
 		{PluginSEO, "/config/seo"},
-		{PluginVideo, "/config/video"},
+		{PluginViral, "/config/viral"},
 		{PluginType("unknown"), "unknown"},
 	}
 

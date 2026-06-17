@@ -6,7 +6,7 @@
 imagegen_path = "/usr/local/bin/pw-mcp-imagegen"
 kdp_math_path = "/usr/local/bin/pw-mcp-kdp-math"
 seo_path = "/usr/local/bin/pw-mcp-seo"
-video_path = "/usr/local/bin/pw-mcp-video"
+viral_path = "/usr/local/bin/pw-mcp-viral"
 
 [telemetry]
 # WebRTC / Firebase dashboard parameters for remote pipeline monitoring

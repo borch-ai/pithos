@@ -115,7 +115,7 @@ func DiagnoseMCPPlugins(ctx context.Context) []DiagnosticItem {
 		{mcp.PluginImageGen, "Image Generation Plugin (pw-mcp-imagegen)", true},
 		{mcp.PluginKDPMath, "KDP Mathematics Plugin (pw-mcp-kdp-math)", true},
 		{mcp.PluginSEO, "SEO Metadata Plugin (pw-mcp-seo)", false},
-		{mcp.PluginVideo, "Video Generation Plugin (pw-mcp-video)", false},
+		{mcp.PluginViral, "Viral Promotional/Video Plugin (pw-mcp-viral)", false},
 		{mcp.PluginTypst, "Typst Compiler Plugin (pw-mcp-typst)", true},
 		{mcp.PluginCloud, "Cloud Storage Plugin (pw-mcp-cloud)", false},
 	}

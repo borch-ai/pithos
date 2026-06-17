@@ -85,7 +85,7 @@ func TestDoctor_SuccessFlow(t *testing.T) {
 			ImageGenPath: os.Args[0], // executable that is guaranteed to exist
 			KDPMathPath:  os.Args[0],
 			SEOPath:      os.Args[0],
-			VideoPath:    os.Args[0],
+			ViralPath:    os.Args[0],
 			TypstPath:    os.Args[0],
 			CloudPath:    os.Args[0],
 		},
@@ -133,7 +133,7 @@ func TestDoctor_FailuresAndSkips(t *testing.T) {
 			ImageGenPath: "", // trigger missing path/LookPath failure
 			KDPMathPath:  "/nonexistent/kdp-math",
 			SEOPath:      os.Args[0],
-			VideoPath:    os.Args[0],
+			ViralPath:    os.Args[0],
 			TypstPath:    os.Args[0],
 			CloudPath:    os.Args[0],
 		},

@@ -22,8 +22,8 @@ const (
 	PluginKDPMath PluginType = "pw-mcp-kdp-math"
 	// PluginSEO represents the Amazon SEO/metadata plugin.
 	PluginSEO PluginType = "pw-mcp-seo"
-	// PluginVideo represents the video asset generation plugin.
-	PluginVideo PluginType = "pw-mcp-video"
+	// PluginViral represents the viral promotional/video plugin.
+	PluginViral PluginType = "pw-mcp-viral"
 	// PluginTypst represents the Typst compilation plugin.
 	PluginTypst PluginType = "pw-mcp-typst"
 	// PluginCloud represents the cloud storage/orchestrator plugin.
@@ -81,8 +81,8 @@ func (pc *PluginClient) ResolveBinaryPath() string {
 		return config.Cfg.MCP.KDPMathPath
 	case PluginSEO:
 		return config.Cfg.MCP.SEOPath
-	case PluginVideo:
-		return config.Cfg.MCP.VideoPath
+	case PluginViral:
+		return config.Cfg.MCP.ViralPath
 	case PluginTypst:
 		return config.Cfg.MCP.TypstPath
 	case PluginCloud:
