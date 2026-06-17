@@ -13,7 +13,9 @@ func TestLoadConfig_Defaults(t *testing.T) {
 	_ = os.Unsetenv("PITHOS_MCP_IMAGEGEN_PATH")
 	_ = os.Unsetenv("PITHOS_MCP_KDP_MATH_PATH")
 	_ = os.Unsetenv("PITHOS_MCP_SEO_PATH")
-	_ = os.Unsetenv("PITHOS_MCP_VIDEO_PATH")
+	_ = os.Unsetenv("PITHOS_MCP_VIRAL_PATH")
+	_ = os.Unsetenv("PITHOS_MCP_TYPST_PATH")
+	_ = os.Unsetenv("PITHOS_MCP_CLOUD_PATH")
 
 	// Load with empty string config path to trigger fallback/warning and defaults
 	cfg, err := LoadConfig("")
@@ -30,8 +32,14 @@ func TestLoadConfig_Defaults(t *testing.T) {
 	if cfg.MCP.SEOPath != "pw-mcp-seo" {
 		t.Errorf("expected default SEOPath 'pw-mcp-seo', got: '%s'", cfg.MCP.SEOPath)
 	}
-	if cfg.MCP.VideoPath != "pw-mcp-video" {
-		t.Errorf("expected default VideoPath 'pw-mcp-video', got: '%s'", cfg.MCP.VideoPath)
+	if cfg.MCP.ViralPath != "pw-mcp-viral" {
+		t.Errorf("expected default ViralPath 'pw-mcp-viral', got: '%s'", cfg.MCP.ViralPath)
+	}
+	if cfg.MCP.TypstPath != "pw-mcp-typst" {
+		t.Errorf("expected default TypstPath 'pw-mcp-typst', got: '%s'", cfg.MCP.TypstPath)
+	}
+	if cfg.MCP.CloudPath != "pw-mcp-cloud" {
+		t.Errorf("expected default CloudPath 'pw-mcp-cloud', got: '%s'", cfg.MCP.CloudPath)
 	}
 }
 
@@ -63,7 +71,7 @@ func TestLoadConfig_ValidFile(t *testing.T) {
 imagegen_path = "` + dummyImagegen + `"
 kdp_math_path = ""
 seo_path = ""
-video_path = ""
+viral_path = ""
 
 [api]
 gemini_key = "test-gemini-key"

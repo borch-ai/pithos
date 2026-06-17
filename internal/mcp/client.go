@@ -22,10 +22,12 @@ const (
 	PluginKDPMath PluginType = "pw-mcp-kdp-math"
 	// PluginSEO represents the Amazon SEO/metadata plugin.
 	PluginSEO PluginType = "pw-mcp-seo"
-	// PluginVideo represents the video asset generation plugin.
-	PluginVideo PluginType = "pw-mcp-video"
+	// PluginViral represents the viral promotional/video plugin.
+	PluginViral PluginType = "pw-mcp-viral"
 	// PluginTypst represents the Typst compilation plugin.
 	PluginTypst PluginType = "pw-mcp-typst"
+	// PluginCloud represents the cloud storage/orchestrator plugin.
+	PluginCloud PluginType = "pw-mcp-cloud"
 )
 
 // PluginClient handles connection lifecycle and requests to a specific MCP server.
@@ -60,12 +62,12 @@ func (pc *PluginClient) SetTransport(t mcpsdk.Transport) {
 	pc.transport = t
 }
 
-// resolveBinaryPath determines the executable path to run for this plugin.
+// ResolveBinaryPath determines the executable path to run for this plugin.
 // Fallback path resolution prioritizes:
 // 1. Explicitly configured binaryPath passed during client creation.
 // 2. config.Cfg path if config is initialized.
 // 3. Fallback to default plugin type string (e.g. system PATH resolution).
-func (pc *PluginClient) resolveBinaryPath() string {
+func (pc *PluginClient) ResolveBinaryPath() string {
 	if pc.binaryPath != "" {
 		return pc.binaryPath
 	}
@@ -79,10 +81,12 @@ func (pc *PluginClient) resolveBinaryPath() string {
 		return config.Cfg.MCP.KDPMathPath
 	case PluginSEO:
 		return config.Cfg.MCP.SEOPath
-	case PluginVideo:
-		return config.Cfg.MCP.VideoPath
+	case PluginViral:
+		return config.Cfg.MCP.ViralPath
 	case PluginTypst:
 		return config.Cfg.MCP.TypstPath
+	case PluginCloud:
+		return config.Cfg.MCP.CloudPath
 	default:
 		return string(pc.pluginType)
 	}
@@ -97,7 +101,7 @@ func (pc *PluginClient) Start(ctx context.Context) error {
 		return nil
 	}
 
-	binary := pc.resolveBinaryPath()
+	binary := pc.ResolveBinaryPath()
 	if binary == "" {
 		return fmt.Errorf("no binary path configured or resolved")
 	}

@@ -19,12 +19,27 @@ import (
 type LLMClient interface {
 	GenerateVisualGuides(ctx context.Context, theme string) (string, string, telemetry.TokenUsage, error)
 	GenerateStanzas(ctx context.Context, theme string, count int, style string, characterProfile string) ([]string, []string, telemetry.TokenUsage, error)
+	Ping(ctx context.Context) error
 }
 
 // PowerwordClientAdapter wraps a powerword LLMClient.
 type PowerwordClientAdapter struct {
 	client    llm.LLMClient
 	modelName string
+}
+
+func (a *PowerwordClientAdapter) Ping(ctx context.Context) error {
+	if a == nil || a.client == nil {
+		return errors.New("underlying powerword client is nil")
+	}
+	messages := []llm.Message{
+		{
+			Role:    llm.RoleUser,
+			Content: "Ping",
+		},
+	}
+	_, err := a.client.Generate(ctx, messages, nil)
+	return err
 }
 
 // stanzasResponse is the uniform JSON format we expect from the LLM.
@@ -172,6 +187,8 @@ func cleanJSONText(text string) string {
 	}
 	return strings.TrimSpace(text[contentStart:lastIdx])
 }
+
+var newLLMClientFunc = newPowerwordLLMClient
 
 // newPowerwordLLMClient creates a powerword LLMClient configured for either Gemini or OpenAI
 // with optional HTTP client override (primarily for test mocking).

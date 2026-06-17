@@ -19,8 +19,8 @@ var testImpl = &mcpsdk.Implementation{
 func TestResolveBinaryPath(t *testing.T) {
 	// 1. With explicit binaryPath
 	pc := NewPluginClientWithBinary(PluginImageGen, "/path/to/explicit")
-	if pc.resolveBinaryPath() != "/path/to/explicit" {
-		t.Errorf("expected explicit path, got %q", pc.resolveBinaryPath())
+	if pc.ResolveBinaryPath() != "/path/to/explicit" {
+		t.Errorf("expected explicit path, got %q", pc.ResolveBinaryPath())
 	}
 
 	// Save global config and restore after test
@@ -30,8 +30,8 @@ func TestResolveBinaryPath(t *testing.T) {
 	// 2. With nil config
 	config.Cfg = nil
 	pc2 := NewPluginClient(PluginKDPMath)
-	if pc2.resolveBinaryPath() != string(PluginKDPMath) {
-		t.Errorf("expected default name, got %q", pc2.resolveBinaryPath())
+	if pc2.ResolveBinaryPath() != string(PluginKDPMath) {
+		t.Errorf("expected default name, got %q", pc2.ResolveBinaryPath())
 	}
 
 	// 3. With config populated
@@ -40,7 +40,7 @@ func TestResolveBinaryPath(t *testing.T) {
 			ImageGenPath: "/config/imagegen",
 			KDPMathPath:  "/config/kdpmath",
 			SEOPath:      "/config/seo",
-			VideoPath:    "/config/video",
+			ViralPath:    "/config/viral",
 		},
 	}
 
@@ -51,14 +51,14 @@ func TestResolveBinaryPath(t *testing.T) {
 		{PluginImageGen, "/config/imagegen"},
 		{PluginKDPMath, "/config/kdpmath"},
 		{PluginSEO, "/config/seo"},
-		{PluginVideo, "/config/video"},
+		{PluginViral, "/config/viral"},
 		{PluginType("unknown"), "unknown"},
 	}
 
 	for _, tt := range tests {
 		pc := NewPluginClient(tt.pType)
-		if pc.resolveBinaryPath() != tt.expected {
-			t.Errorf("for %s: expected %q, got %q", tt.pType, tt.expected, pc.resolveBinaryPath())
+		if pc.ResolveBinaryPath() != tt.expected {
+			t.Errorf("for %s: expected %q, got %q", tt.pType, tt.expected, pc.ResolveBinaryPath())
 		}
 	}
 }

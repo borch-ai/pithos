@@ -107,13 +107,13 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
     *   Integrate Firebase/WebRTC signaling to connect the Pithos process to the Lamplighter Android app.
     *   Implement interactive approval checkpoints (e.g., pausing the pipeline to wait for a human to approve the cover art on their phone) backed by state manifest updates.
     *   [Implementation Plan](plans/phase_5/task_5_1_lamplighter_integration.md)
-*   [ ] **Task 5.20: Kiln Foundry State Integration**
+*   [x] **Task 5.20: Kiln Foundry State Integration**
     *   Implement the state contract by writing pipeline milestone updates (`initiate_complete`, `brew_complete`, `assemble_complete`) and accumulated costs to the Pithos workspace manifest (`manifest.json`), which Kiln reads to sync book status.
     *   [Implementation Plan](plans/phase_5/task_5_20_kiln_integration.md)
 *   [ ] **Task 5.21: Character Invariant Injection**
     *   Inject visual invariant descriptors to preserve character consistency in generated illustration prompts.
     *   [Implementation Plan](plans/phase_5/task_5_21_character_invariant_injection.md)
-*   [ ] **Task 5.22: Preflight Diagnostic Subcommand (`pithos doctor`)**
+*   [x] **Task 5.22: Preflight Diagnostic Subcommand (`pithos doctor`)**
     *   Implement a `doctor` subcommand to run connectivity, credential, and backend health checks for all configured MCP plugins.
     *   [Implementation Plan](plans/phase_5/task_5_22_preflight_diagnostics_doctor.md)
 *   [ ] **Task 5.23: Dynamic Image Model Discovery**

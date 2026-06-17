@@ -28,8 +28,9 @@ type MCPConfig struct {
 	ImageGenPath string `mapstructure:"imagegen_path"`
 	KDPMathPath  string `mapstructure:"kdp_math_path"`
 	SEOPath      string `mapstructure:"seo_path"`
-	VideoPath    string `mapstructure:"video_path"`
+	ViralPath    string `mapstructure:"viral_path"`
 	TypstPath    string `mapstructure:"typst_path"`
+	CloudPath    string `mapstructure:"cloud_path"`
 }
 
 // APIConfig holds API keys for LLM and content services.
@@ -57,8 +58,9 @@ func LoadConfig(cfgFile string) (*Config, error) {
 	v.SetDefault("mcp.imagegen_path", "")
 	v.SetDefault("mcp.kdp_math_path", "")
 	v.SetDefault("mcp.seo_path", "")
-	v.SetDefault("mcp.video_path", "")
+	v.SetDefault("mcp.viral_path", "")
 	v.SetDefault("mcp.typst_path", "")
+	v.SetDefault("mcp.cloud_path", "")
 	v.SetDefault("api.gemini_key", "")
 	v.SetDefault("api.openai_key", "")
 	v.SetDefault("telemetry.lamplighter_enabled", false)
@@ -144,12 +146,17 @@ func finalizeLoad(v *viper.Viper) (*Config, error) {
 		errs = append(errs, err.Error())
 	}
 
-	rawConfig.MCP.VideoPath, err = validateOrFallbackPath(rawConfig.MCP.VideoPath, "pw-mcp-video")
+	rawConfig.MCP.ViralPath, err = validateOrFallbackPath(rawConfig.MCP.ViralPath, "pw-mcp-viral")
 	if err != nil {
 		errs = append(errs, err.Error())
 	}
 
 	rawConfig.MCP.TypstPath, err = validateOrFallbackPath(rawConfig.MCP.TypstPath, "pw-mcp-typst")
+	if err != nil {
+		errs = append(errs, err.Error())
+	}
+
+	rawConfig.MCP.CloudPath, err = validateOrFallbackPath(rawConfig.MCP.CloudPath, "pw-mcp-cloud")
 	if err != nil {
 		errs = append(errs, err.Error())
 	}
