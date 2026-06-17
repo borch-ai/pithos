@@ -58,7 +58,8 @@ var doctorCmd = &cobra.Command{
 
 		fmt.Println("--------------------------------------------------")
 		if hasFailure {
-			return fmt.Errorf("%s%sDiagnostics FAILED. Please resolve the errors above before running Pithos pipelines.%s", red, bold, reset)
+			fmt.Printf("%s%sDiagnostics FAILED. Please resolve the errors above before running Pithos pipelines.%s\n", red, bold, reset)
+			return fmt.Errorf("diagnostics failed")
 		}
 
 		fmt.Printf("%s%sAll checks passed successfully! Pithos is ready.%s\n", green, bold, reset)
