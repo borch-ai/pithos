@@ -239,3 +239,19 @@ func TestDoctor_LLMPingFailure(t *testing.T) {
 		t.Error("expected Gemini API Handshake check to be present in results")
 	}
 }
+
+func TestDoctor_DiagnoseMCPPlugins_NilConfig(t *testing.T) {
+	origCfg := config.Cfg
+	config.Cfg = nil
+	defer func() { config.Cfg = origCfg }()
+
+	mcpItems := DiagnoseMCPPlugins(context.Background())
+	if len(mcpItems) != 0 {
+		t.Errorf("expected 0 items when config is nil, got %d", len(mcpItems))
+	}
+
+	llmItems := DiagnoseLLMConnection(context.Background())
+	if len(llmItems) != 0 {
+		t.Errorf("expected 0 items when config is nil, got %d", len(llmItems))
+	}
+}
