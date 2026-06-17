@@ -173,6 +173,7 @@ func TestInitiate(t *testing.T) {
 		Style:           "water color",
 		Format:          "paperback",
 		TargetPageCount: 10,
+		TrimSize:        "6x9",
 	}
 
 	m, err := Initiate(opts)
@@ -198,11 +199,28 @@ func TestInitiate(t *testing.T) {
 	if m.BookProperties.TargetPageCount != 10 {
 		t.Errorf("expected TargetPageCount 10, got %d", m.BookProperties.TargetPageCount)
 	}
+	if m.BookProperties.TrimSize != "6x9" {
+		t.Errorf("expected TrimSize '6x9', got %q", m.BookProperties.TrimSize)
+	}
 	if m.Kiln.Version != 1 {
 		t.Errorf("expected Kiln.Version 1, got %d", m.Kiln.Version)
 	}
 	if len(m.Kiln.Milestones) != 1 || m.Kiln.Milestones[0] != "initiate_complete" {
 		t.Errorf("expected Kiln.Milestones [initiate_complete], got %v", m.Kiln.Milestones)
+	}
+
+	// Test default TrimSize
+	optsDefault := InitiateOptions{
+		OutputDir:       t.TempDir(),
+		Theme:           "Default Trim",
+		TargetPageCount: 10,
+	}
+	mDefault, err := Initiate(optsDefault)
+	if err != nil {
+		t.Fatalf("Default Initiate failed: %v", err)
+	}
+	if mDefault.BookProperties.TrimSize != "8.5x8.5" {
+		t.Errorf("expected default TrimSize '8.5x8.5', got %q", mDefault.BookProperties.TrimSize)
 	}
 }
 
@@ -1931,6 +1949,31 @@ func TestBrew_ReviewFlow_GuidesCharacterProfileReset(t *testing.T) {
 		}
 		if p.ImagePath != "" {
 			t.Errorf("expected page %d ImagePath to be cleared, got %q", p.PageIndex, p.ImagePath)
+		}
+	}
+}
+
+func TestGetBestImageSize(t *testing.T) {
+	tests := []struct {
+		trimSize string
+		expected string
+	}{
+		{"8.5x8.5", "1024x1024"},
+		{"6x9", "1024x1792"},
+		{"11x8.5", "1792x1024"},
+		{"invalid", "1024x1024"},
+		{"", "1024x1024"},
+		{"0x0", "1024x1024"},
+		{"-6x9", "1024x1024"},
+		{"6x-9", "1024x1024"},
+		{"abcxdef", "1024x1024"},
+		{"6xinvalid", "1024x1024"},
+	}
+
+	for _, tc := range tests {
+		actual := getBestImageSize(tc.trimSize)
+		if actual != tc.expected {
+			t.Errorf("getBestImageSize(%q) = %q; want %q", tc.trimSize, actual, tc.expected)
 		}
 	}
 }

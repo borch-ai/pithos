@@ -9,11 +9,12 @@ import (
 )
 
 var (
-	initiateOutput string
-	initiateTheme  string
-	initiateStyle  string
-	initiateFormat string
-	initiatePages  int
+	initiateOutput   string
+	initiateTheme    string
+	initiateStyle    string
+	initiateFormat   string
+	initiatePages    int
+	initiateTrimSize string
 )
 
 var initiateCmd = &cobra.Command{
@@ -26,6 +27,7 @@ var initiateCmd = &cobra.Command{
 			Style:           initiateStyle,
 			Format:          initiateFormat,
 			TargetPageCount: initiatePages,
+			TrimSize:        initiateTrimSize,
 		}
 		m, err := pipeline.Initiate(opts)
 		if err != nil {
@@ -42,5 +44,6 @@ func init() {
 	initiateCmd.Flags().StringVar(&initiateStyle, "style", "", "Style reference for illustrations (supporting Midjourney sref format)")
 	initiateCmd.Flags().StringVar(&initiateFormat, "format", "paperback", "KDP print format (paperback or hardcover)")
 	initiateCmd.Flags().IntVar(&initiatePages, "pages", 15, "Target page count of the book")
+	initiateCmd.Flags().StringVar(&initiateTrimSize, "trim-size", "8.5x8.5", "Trim size of the book (e.g. 6x9, 8.5x8.5)")
 	rootCmd.AddCommand(initiateCmd)
 }

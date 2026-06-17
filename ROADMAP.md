@@ -12,8 +12,8 @@ Pithos is the **book factory** of the Borch-AI publishing stack. It is a determi
 - **Downstream**: Pithos invokes `pw-mcp-imagegen`, `pw-mcp-kdp-math`, `pw-mcp-typst` (pending) from the Powerword MCP plugin network.
 - **Monitoring**: **Lamplighter** (Pithos Phase 5.1) provides mobile approval checkpoints during long brew/assemble runs.
 
-> [!IMPORTANT]
-> **The core functional deliverable of this tool is Task 4.2 (Typst PDF Layout Assembly) and Task 5.20 (Kiln Foundry State Integration)**. All Phase 6 work is frozen until Tasks 4.2 and 5.20 ship.
+> [!NOTE]
+> **Core Deliverables Achieved**: Both Task 4.2 (Typst PDF Layout Assembly) and Task 5.20 (Kiln Foundry State Integration) have shipped. Phase 6 work is now defrosted and open for development.
 
 ---
 
@@ -140,6 +140,7 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
     *   [Implementation Plan](plans/phase_5/task_5_13_multi_provider_fallback.md)
 *   [ ] **Task 5.14: Bubbletea TUI-Based Interactive Review Loop**
     *   Replace the raw file-editing loop with an interactive terminal review dashboard, enabling users to edit stanzas, customize prompts, and trigger select regeneration.
+    *   [ ] **Task 5.14.1: TUI & Web Preview Sync**: Automatically regenerate `data.js` and refresh the web previewer workspace upon TUI-based stanzas or illustration updates to allow live-reloading.
     *   [Implementation Plan](plans/phase_5/task_5_14_bubbletea_tui_review.md)
 *   [ ] **Task 5.15: Multi-Model Illustration Variations & Selection**
     *   Generate illustration variations in parallel using multiple configured image models.
@@ -153,9 +154,13 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
     *   [Implementation Plan](plans/phase_5/task_5_17_llm_stanza_refinement.md)
 *   [ ] **Task 5.18: Automated Cover Art & Title Layout Generator**
     *   Automate cover generation by prompting the LLM for cover art matching the style guide, brewing the assets, and compiling KDP-conforming cover wraps.
+    *   [ ] **Task 5.18.1: Cover Wrap Visualizer**: Integrate the cover wrap layout (front, back, spine, safety zones) directly into the web previewer to verify cover wrap margins visually.
     *   [Implementation Plan](plans/phase_5/task_5_18_automated_cover_generator.md)
-*   [ ] **Task 5.19: Interactive Web-Based Book Preview (HTML/CSS)**
+*   [x] **Task 5.19: Interactive Web-Based Book Preview (HTML/CSS)**
     *   Generate a static web-based preview folder containing an interactive flipbook player to visually review books locally in any browser.
+    *   [x] **Task 5.19.1: Dynamic Image Scaling & Aspect Ratios**: Added `--trim-size` support to match generated illustrations and layout dimensions dynamically.
+    *   [x] **Task 5.19.2: Gutter margins, alternating creases, and print guidelines overlay**.
+    *   [x] **Task 5.19.3: Dynamic Geometry Parameter Binding**: Drive print safety boundaries in the HTML previewer directly from `pw-mcp-kdp-math` outputs in `manifest.json` instead of using client-side estimations.
     *   [Implementation Plan](plans/phase_5/task_5_19_web_book_preview.md)
 
 ### Speculative & Dependency Management
@@ -183,8 +188,8 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
         *   Connect `pithos assemble` pipeline to launch the `pw-mcp-epub` client and call `compile_epub`.
     *   [ ] **Task 5.8.3: E2E Subprocess Integration Test Suite**
         *   Implement an integration test that builds `pw-mcp-epub` from powerword sibling directory and performs complete pipeline compile checks.
-    *   [ ] **Task 5.8.4: EPUB Standards Structural Validation**
-        *   Implement validation in the test suite to unpack the resulting `.epub` and verify strict compliance (uncompressed mimetype, container.xml, content.opf manifest, and toc.xhtml).
+    *   [ ] **Task 5.8.4: EPUB Standards Structural Validation & Epubcheck**
+        *   Implement validation in the test suite to unpack the resulting `.epub` and verify strict compliance (uncompressed mimetype, container.xml, content.opf manifest, and toc.xhtml) as well as integrating automated `epubcheck` validation.
 *   [ ] **Task 5.9: Google Doc MCP Integration**
     *   Integrate with the `pw-mcp-gdoc` MCP plugin to export manuscripts to Google Docs for editing and import them back on resume.
     *   [Implementation Plan](plans/phase_5/task_5_9_gdoc_mcp_integration.md)
@@ -193,8 +198,8 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
 
 ## Phase 6: Speculative — Long-Form & Serious Publishing
 
-> [!WARNING]
-> **This entire phase is frozen until Pithos Tasks 4.2 (Typst PDF Layout Assembly) and 5.20 (Kiln Foundry State Integration) are complete.** The scope below represents a potential future direction — evolving Pithos from a children's book factory into a general-purpose publishing pipeline. This is a distinct product pivot, not a natural extension of the current mission. Do not begin any Phase 6 task without an explicit product decision to expand scope.
+> [WARNING]
+> **This phase is defrosted as Tasks 4.2 and 5.20 are now complete.** The scope below represents a potential future direction — evolving Pithos from a children's book factory into a general-purpose publishing pipeline. This is a distinct product pivot, not a natural extension of the current mission. Do not begin any Phase 6 task without an explicit product decision to expand scope.
 
 Focus: Evolving Pithos into a modular, outline-driven book generation tool for technical writing, self-help, and novels.
 

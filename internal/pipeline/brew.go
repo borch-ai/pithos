@@ -120,6 +120,13 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 		return err
 	}
 
+	if previewErr := GenerateWebPreview(opts.OutputDir, m); previewErr != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to generate web preview: %v\n", previewErr)
+	} else {
+		previewPath := filepath.Join(opts.OutputDir, "web_preview", "preview.html")
+		fmt.Printf("\nWeb preview generated: open file://%s in your browser to flip through the book!\n\n", previewPath)
+	}
+
 	// Log telemetry summary
 	tracker := telemetry.NewUsageTracker()
 	for model, usage := range m.Telemetry.ModelUsages {
@@ -161,6 +168,14 @@ func handleReviewCheckpoint(opts BrewOptions, m *manifest.Manifest, manuscriptPa
 			return exportErr
 		}
 	}
+
+	if previewErr := GenerateWebPreview(opts.OutputDir, m); previewErr != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to generate web preview: %v\n", previewErr)
+	} else {
+		previewPath := filepath.Join(opts.OutputDir, "web_preview", "preview.html")
+		fmt.Printf("\nWeb preview generated: open file://%s in your browser to flip through the book!\n\n", previewPath)
+	}
+
 	return fmt.Errorf("%w: manuscript is available at %s. Edit the file, then run brew without --review to generate illustrations", ErrReviewPause, manuscriptPath)
 }
 
@@ -379,7 +394,8 @@ Loop:
 			if prompt == "" {
 				prompt = p.Text
 			}
-			imgPath, err := generateSingleImage(ctx, mcpClient, p.PageIndex, prompt, styleID, opts.OutputDir)
+			imageSize := getBestImageSize(m.BookProperties.TrimSize)
+			imgPath, err := generateSingleImage(ctx, mcpClient, p.PageIndex, prompt, styleID, opts.OutputDir, imageSize)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error generating image for page %d: %v\n", p.PageIndex, err)
 				// Revert to pending
@@ -441,10 +457,13 @@ func registerStyleProfile(ctx context.Context, mcpClient *mcp.PluginClient, styl
 	return styleID, nil
 }
 
-func generateSingleImage(ctx context.Context, mcpClient *mcp.PluginClient, pageIndex int, pageText string, styleID string, outputDir string) (string, error) {
+func generateSingleImage(ctx context.Context, mcpClient *mcp.PluginClient, pageIndex int, pageText string, styleID string, outputDir string, imageSize string) (string, error) {
+	if imageSize == "" {
+		imageSize = "1024x1024"
+	}
 	generateArgs := map[string]interface{}{
 		"prompt": pageText,
-		"size":   "1024x1024",
+		"size":   imageSize,
 	}
 	if styleID != "" {
 		generateArgs["style_id"] = styleID
@@ -826,4 +845,29 @@ func isPageAllowed(pageIndex int, pagesFilter []int) bool {
 		}
 	}
 	return false
+}
+
+func getBestImageSize(trimSize string) string {
+	parts := strings.Split(strings.ToLower(trimSize), "x")
+	if len(parts) != 2 {
+		return "1024x1024"
+	}
+	var w, h float64
+	if _, err := fmt.Sscanf(parts[0], "%f", &w); err != nil {
+		return "1024x1024"
+	}
+	if _, err := fmt.Sscanf(parts[1], "%f", &h); err != nil {
+		return "1024x1024"
+	}
+	if w <= 0 || h <= 0 {
+		return "1024x1024"
+	}
+	switch {
+	case w == h:
+		return "1024x1024"
+	case w < h:
+		return "1024x1792"
+	default:
+		return "1792x1024"
+	}
 }

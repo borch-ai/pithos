@@ -37,6 +37,7 @@ type BookProperties struct {
 	CharacterProfile string `json:"character_profile"`
 	Format           string `json:"format"`
 	TargetPageCount  int    `json:"target_page_count"`
+	TrimSize         string `json:"trim_size,omitempty"`
 }
 
 // Progress tracks the completion state of various pipeline stages.

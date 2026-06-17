@@ -76,6 +76,13 @@ func Assemble(ctx context.Context, opts AssembleOptions) (*manifest.Manifest, er
 		return nil, fmt.Errorf("hardcover validation failed: page count %d is less than the KDP hardcover minimum limit of 75 pages", pageCount)
 	}
 
+	if opts.TrimSize == "" {
+		opts.TrimSize = m.BookProperties.TrimSize
+	}
+	if opts.TrimSize == "" {
+		opts.TrimSize = "6x9"
+	}
+
 	geom, err := fetchGeometry(ctx, opts, pageCount, format)
 	if err != nil {
 		return nil, err
@@ -90,6 +97,7 @@ func Assemble(ctx context.Context, opts AssembleOptions) (*manifest.Manifest, er
 
 	// 4. Update manifest.json with calculated dimensions
 	m.BookProperties.Format = format
+	m.BookProperties.TrimSize = opts.TrimSize
 	m.KDPLayout = manifest.KDPLayout{
 		SpineWidth:           geom.SpineWidthInches,
 		MarginSize:           marginVal,
@@ -128,6 +136,11 @@ func Assemble(ctx context.Context, opts AssembleOptions) (*manifest.Manifest, er
 
 	if err := m.AddMilestone("assemble_complete"); err != nil {
 		return nil, fmt.Errorf("failed to record assemble_complete milestone: %w", err)
+	}
+
+	// Regenerate web preview with updated KDP layout calculations
+	if previewErr := GenerateWebPreview(opts.InputDir, m); previewErr != nil {
+		return nil, fmt.Errorf("failed to regenerate web preview: %w", previewErr)
 	}
 
 	if err := Checkpoint(ctx, opts.InputDir, "Compiled print layouts and PDFs"); err != nil {

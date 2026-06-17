@@ -47,6 +47,14 @@ Automate parodic book cover generation by creating a unified workflow that queri
   - Construct layout instructions combining front cover art (`images/cover.png`), spine geometry, title texts, and back cover text blurb.
   - Compile the layout instructions into a print-ready full cover PDF wrapper (e.g., using `pw-mcp-typst`).
 
+### Web Previewer
+
+#### [MODIFY] [preview.go](file://../../internal/pipeline/preview.go) (and web templates)
+- Add cover wrap support to the generated static web preview:
+  * If `CoverImagePath` is present in the manifest, render a cover wrap view (front cover, spine, back cover).
+  * Draw safety guidelines (wrap-around margin, spine boundaries) dynamically in the HTML/CSS/JS frontend using dimensions calculated from the KDP math output stored in `manifest.json`.
+  * Add a toggle button in `preview.html` to switch between page preview and cover wrap preview.
+
 ---
 
 ## Verification Plan
