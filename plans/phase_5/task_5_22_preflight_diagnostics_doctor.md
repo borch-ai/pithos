@@ -30,10 +30,10 @@ This task implements a preflight connection diagnostic subcommand (`pithos docto
 - Performed the following checks:
   1. **Configuration Integrity:** Check if the config file was loaded, displaying loaded values.
   2. **Credential Audits:** Verify `PITHOS_API_GEMINI_KEY` (or `api.gemini_key`) and `PITHOS_API_OPENAI_KEY` (or `api.openai_key`) configuration.
-  3. **MCP Binary Check:** Iterate through configured binary paths (`pw-mcp-imagegen`, `pw-mcp-kdp-math`, `pw-mcp-seo`, `pw-mcp-video`, `pw-mcp-typst`, `pw-mcp-cloud`) and verify if they are executable via `exec.LookPath`.
+  3. **MCP Binary Check:** Iterate through configured binary paths (`pw-mcp-imagegen`, `pw-mcp-kdp-math`, `pw-mcp-seo`, `pw-mcp-viral`, `pw-mcp-typst`, `pw-mcp-cloud`) and verify if they are executable via `exec.LookPath`.
   4. **MCP Connection Handshake:** For each found binary, initialize a temporary `PluginClient`, call `Start` to verify stdio communication, and call `Stop`.
   5. **LLM Connection Handshake:** If LLM keys are configured, instantiate a lightweight adapter client and execute a basic ping prompt (e.g. `say 'pong'`) to verify remote network access.
-- Non-critical plugins (`pw-mcp-seo`, `pw-mcp-video`, and `pw-mcp-cloud`) are reported as warnings instead of hard failures.
+- Non-critical plugins (`pw-mcp-seo`, `pw-mcp-viral`, and `pw-mcp-cloud`) are reported as warnings instead of hard failures.
 
 ### Testing
 
