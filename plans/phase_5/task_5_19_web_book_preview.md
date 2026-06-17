@@ -38,7 +38,7 @@ Implement an automated static HTML/CSS/JS web preview builder. When Pithos compl
 
 ### Future Roadmap Extensions
 
-#### [OPEN] Dynamic Geometry Parameter Binding (Task 5.19.3)
+#### [COMPLETED] Dynamic Geometry Parameter Binding (Task 5.19.3)
 - Refactor print safety guide drawing in `preview.js` to draw lines dynamically based on precise dimensions calculated by `pw-mcp-kdp-math` and stored inside `manifest.json`, rather than estimating safety margins purely client-side.
 
 ---

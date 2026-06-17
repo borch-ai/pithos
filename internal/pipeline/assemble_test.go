@@ -791,11 +791,8 @@ func TestAssemble_GenerateWebPreviewError(t *testing.T) {
 	}
 
 	_, err = Assemble(ctx, optsAssemble)
-	if err == nil {
-		t.Fatal("expected Assemble to fail due to web preview generation error, but it succeeded")
-	}
-	if !strings.Contains(err.Error(), "failed to regenerate web preview") {
-		t.Errorf("expected error to contain 'failed to regenerate web preview', got: %v", err)
+	if err != nil {
+		t.Fatalf("expected Assemble to succeed even if web preview generation fails, but got error: %v", err)
 	}
 }
 

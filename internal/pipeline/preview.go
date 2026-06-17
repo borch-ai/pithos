@@ -62,10 +62,10 @@ type previewData struct {
 }
 
 func generateDataJS(m *manifest.Manifest) (string, error) {
-	m.Progress.Pages = append([]manifest.PageState(nil), m.Progress.Pages...) // read copy
+	manifestPages := m.Progress.Pages
 
-	pages := make([]previewPage, len(m.Progress.Pages))
-	for i, p := range m.Progress.Pages {
+	pages := make([]previewPage, len(manifestPages))
+	for i, p := range manifestPages {
 		imgPath := p.ImagePath
 		if imgPath != "" {
 			imgPath = "../" + imgPath
@@ -102,9 +102,6 @@ const htmlTemplate = `<!DOCTYPE html>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pithos Book Previewer</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="preview.css">
 </head>
 <body>
@@ -202,7 +199,7 @@ const cssTemplate = `/* Reset & Base Styles */
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   background-color: #0d0e12;
   color: #c9d1d9;
   height: 100vh;
@@ -236,7 +233,7 @@ body {
 }
 
 .logo {
-  font-family: 'Outfit', sans-serif;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 24px;
   font-weight: 700;
   color: #e6edf3;
@@ -254,7 +251,7 @@ body {
 }
 
 .meta-section h3, .navigation-section h3 {
-  font-family: 'Outfit', sans-serif;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 1.2px;
@@ -383,7 +380,7 @@ body {
 }
 
 .workspace-header h1 {
-  font-family: 'Outfit', sans-serif;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 18px;
   font-weight: 600;
   color: #e6edf3;
@@ -649,7 +646,7 @@ body {
 }
 
 .stanza-text {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: Georgia, serif;
   font-size: 14px;
   line-height: 1.45;
   font-weight: 500;
@@ -717,7 +714,7 @@ body {
 }
 
 .placeholder-badge {
-  font-family: 'Outfit', sans-serif;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 11px;
   font-weight: 600;
   color: #8c7b6d;
@@ -741,7 +738,7 @@ body {
 }
 
 .stanza-text-print {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: Georgia, serif;
   font-size: 15px;
   line-height: 1.45;
   text-align: center;
@@ -788,6 +785,15 @@ body {
 `
 
 const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
+  if (typeof bookData === 'undefined') {
+    console.error('bookData is not defined. Make sure data.js is loaded.');
+    const pageContainer = document.getElementById('page-container');
+    if (pageContainer) {
+      pageContainer.innerHTML = '<div class="page"><div class="pending-layout"><div class="stanza-text-print">Error: bookData is not defined. data.js may have failed to load.</div></div></div>';
+    }
+    return;
+  }
+
   // 1. Initial configuration mapping
   const metaTheme = document.getElementById('meta-theme');
   const metaTrim = document.getElementById('meta-trim');
@@ -796,14 +802,12 @@ const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
   const metaCharacter = document.getElementById('meta-character');
   const bookTitle = document.getElementById('book-title');
 
-  if (typeof bookData !== 'undefined') {
-    metaTheme.textContent = bookData.theme || 'Not Set';
-    metaTrim.textContent = bookData.trimSize || 'Not Set';
-    metaFormat.textContent = bookData.format || 'Not Set';
-    metaStyle.textContent = bookData.style || 'Not Set';
-    metaCharacter.textContent = bookData.characterProfile || 'Not Set';
-    bookTitle.textContent = (bookData.theme ? bookData.theme + ' - Preview' : 'Interactive Book Preview');
-  }
+  metaTheme.textContent = bookData.theme || 'Not Set';
+  metaTrim.textContent = bookData.trimSize || 'Not Set';
+  metaFormat.textContent = bookData.format || 'Not Set';
+  metaStyle.textContent = bookData.style || 'Not Set';
+  metaCharacter.textContent = bookData.characterProfile || 'Not Set';
+  bookTitle.textContent = (bookData.theme ? bookData.theme + ' - Preview' : 'Interactive Book Preview');
 
   // 2. Build pages and list elements
   const pageContainer = document.getElementById('page-container');
@@ -847,8 +851,8 @@ const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
   }
 
   const hasBleed = bleedInches > 0;
-  const pageW = trimWidth + (hasBleed ? 0.125 : 0);
-  const pageH = trimHeight + (hasBleed ? 0.25 : 0);
+  const pageW = trimWidth + (hasBleed ? bleedInches : 0);
+  const pageH = trimHeight + (hasBleed ? (2 * bleedInches) : 0);
 
   const maxW = 700;
   const maxH = 700;
@@ -869,9 +873,9 @@ const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
   pageContainer.style.height = Math.round(finalH) + 'px';
 
   const pxPerInch = finalW / pageW;
-  const padTopPx = Math.round(((hasBleed ? 0.125 : 0) + safetyOutside) * pxPerInch);
-  const padBottomPx = Math.round(((hasBleed ? 0.125 : 0) + safetyOutside) * pxPerInch);
-  const padOutsidePx = Math.round(((hasBleed ? 0.125 : 0) + safetyOutside) * pxPerInch);
+  const padTopPx = Math.round(((hasBleed ? bleedInches : 0) + safetyOutside) * pxPerInch);
+  const padBottomPx = Math.round(((hasBleed ? bleedInches : 0) + safetyOutside) * pxPerInch);
+  const padOutsidePx = Math.round(((hasBleed ? bleedInches : 0) + safetyOutside) * pxPerInch);
   const padInsidePx = Math.round(safetyInside * pxPerInch);
 
   // Helper to generate print guides
@@ -879,10 +883,10 @@ const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
     const guideContainer = document.createElement('div');
     guideContainer.className = 'print-guide';
 
-    const topCut = hasBleed ? (0.125 / pageH) * 100 : 0;
-    const bottomCut = hasBleed ? (0.125 / pageH) * 100 : 0;
-    const leftCut = (hasBleed && !isRecto) ? (0.125 / pageW) * 100 : 0;
-    const rightCut = (hasBleed && isRecto) ? (0.125 / pageW) * 100 : 0;
+    const topCut = hasBleed ? (bleedInches / pageH) * 100 : 0;
+    const bottomCut = hasBleed ? (bleedInches / pageH) * 100 : 0;
+    const leftCut = (hasBleed && !isRecto) ? (bleedInches / pageW) * 100 : 0;
+    const rightCut = (hasBleed && isRecto) ? (bleedInches / pageW) * 100 : 0;
 
     // Cut box line
     const cutLine = document.createElement('div');
@@ -963,7 +967,12 @@ const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
       if (page.illustrationPrompt) {
         const promptEl = document.createElement('div');
         promptEl.className = 'prompt-overlay';
-        promptEl.innerHTML = '<div class="prompt-title">Prompt Reference</div>' + page.illustrationPrompt;
+        const titleEl = document.createElement('div');
+        titleEl.className = 'prompt-title';
+        titleEl.textContent = 'Prompt Reference';
+        promptEl.appendChild(titleEl);
+        const textNode = document.createTextNode(page.illustrationPrompt);
+        promptEl.appendChild(textNode);
         inner.appendChild(promptEl);
       }
 

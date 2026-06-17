@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -124,7 +125,11 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 		fmt.Fprintf(os.Stderr, "Warning: failed to generate web preview: %v\n", previewErr)
 	} else {
 		previewPath := filepath.Join(opts.OutputDir, "web_preview", "preview.html")
-		fmt.Printf("\nWeb preview generated: open file://%s in your browser to flip through the book!\n\n", previewPath)
+		u := &url.URL{
+			Scheme: "file",
+			Path:   filepath.ToSlash(previewPath),
+		}
+		fmt.Printf("\nWeb preview generated: open %s in your browser to flip through the book!\n\n", u.String())
 	}
 
 	// Log telemetry summary
@@ -173,7 +178,11 @@ func handleReviewCheckpoint(opts BrewOptions, m *manifest.Manifest, manuscriptPa
 		fmt.Fprintf(os.Stderr, "Warning: failed to generate web preview: %v\n", previewErr)
 	} else {
 		previewPath := filepath.Join(opts.OutputDir, "web_preview", "preview.html")
-		fmt.Printf("\nWeb preview generated: open file://%s in your browser to flip through the book!\n\n", previewPath)
+		u := &url.URL{
+			Scheme: "file",
+			Path:   filepath.ToSlash(previewPath),
+		}
+		fmt.Printf("\nWeb preview generated: open %s in your browser to flip through the book!\n\n", u.String())
 	}
 
 	return fmt.Errorf("%w: manuscript is available at %s. Edit the file, then run brew without --review to generate illustrations", ErrReviewPause, manuscriptPath)

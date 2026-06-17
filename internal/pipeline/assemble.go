@@ -140,7 +140,7 @@ func Assemble(ctx context.Context, opts AssembleOptions) (*manifest.Manifest, er
 
 	// Regenerate web preview with updated KDP layout calculations
 	if previewErr := GenerateWebPreview(opts.InputDir, m); previewErr != nil {
-		return nil, fmt.Errorf("failed to regenerate web preview: %w", previewErr)
+		fmt.Fprintf(os.Stderr, "Warning: failed to regenerate web preview: %v\n", previewErr)
 	}
 
 	if err := Checkpoint(ctx, opts.InputDir, "Compiled print layouts and PDFs"); err != nil {

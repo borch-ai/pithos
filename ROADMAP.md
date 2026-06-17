@@ -198,7 +198,7 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
 
 ## Phase 6: Speculative — Long-Form & Serious Publishing
 
-> [WARNING]
+> [!WARNING]
 > **This phase is defrosted as Tasks 4.2 and 5.20 are now complete.** The scope below represents a potential future direction — evolving Pithos from a children's book factory into a general-purpose publishing pipeline. This is a distinct product pivot, not a natural extension of the current mission. Do not begin any Phase 6 task without an explicit product decision to expand scope.
 
 Focus: Evolving Pithos into a modular, outline-driven book generation tool for technical writing, self-help, and novels.
