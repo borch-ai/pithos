@@ -42,6 +42,12 @@ This task implements a preflight connection diagnostic subcommand (`pithos docto
 - Verified that correct diagnostics are reported when a binary is missing or LLM call fails.
 - Maintained target unit test coverage >= 91.2%.
 
+### Build & Installation
+
+#### [MODIFY] [Makefile](file://../../Makefile)
+- Added `install` target to compile and install Pithos globally using `go install ./cmd/pithos`.
+- Added `install` to `.PHONY`.
+
 ---
 
 ## Verification Plan
