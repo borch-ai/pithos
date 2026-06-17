@@ -14,6 +14,8 @@ func TestLoadConfig_Defaults(t *testing.T) {
 	_ = os.Unsetenv("PITHOS_MCP_KDP_MATH_PATH")
 	_ = os.Unsetenv("PITHOS_MCP_SEO_PATH")
 	_ = os.Unsetenv("PITHOS_MCP_VIRAL_PATH")
+	_ = os.Unsetenv("PITHOS_MCP_TYPST_PATH")
+	_ = os.Unsetenv("PITHOS_MCP_CLOUD_PATH")
 
 	// Load with empty string config path to trigger fallback/warning and defaults
 	cfg, err := LoadConfig("")
@@ -32,6 +34,12 @@ func TestLoadConfig_Defaults(t *testing.T) {
 	}
 	if cfg.MCP.ViralPath != "pw-mcp-viral" {
 		t.Errorf("expected default ViralPath 'pw-mcp-viral', got: '%s'", cfg.MCP.ViralPath)
+	}
+	if cfg.MCP.TypstPath != "pw-mcp-typst" {
+		t.Errorf("expected default TypstPath 'pw-mcp-typst', got: '%s'", cfg.MCP.TypstPath)
+	}
+	if cfg.MCP.CloudPath != "pw-mcp-cloud" {
+		t.Errorf("expected default CloudPath 'pw-mcp-cloud', got: '%s'", cfg.MCP.CloudPath)
 	}
 }
 
