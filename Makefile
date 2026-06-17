@@ -1,4 +1,4 @@
-.PHONY: all build test test-integration clean lint fmt tidy check-coverage vuln install-hooks
+.PHONY: all build install test test-integration clean lint fmt tidy check-coverage vuln install-hooks
 
 # Go parameters
 GOCMD=go
@@ -21,6 +21,10 @@ build:
 	@echo "Building $(BINARY_NAME)..."
 	@mkdir -p $(BIN_DIR)
 	$(GOBUILD) -o $(BIN_DIR)/$(BINARY_NAME) $(MAIN_PATH)
+
+install:
+	@echo "Installing $(BINARY_NAME)..."
+	$(GOCMD) install $(MAIN_PATH)
 
 test:
 	@echo "Running tests..."
