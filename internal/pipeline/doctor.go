@@ -107,6 +107,10 @@ func DiagnoseCredentials() []DiagnosticItem {
 // DiagnoseMCPPlugins checks if MCP plugin binaries are executable and if they handshake successfully.
 func DiagnoseMCPPlugins(ctx context.Context) []DiagnosticItem {
 	var items []DiagnosticItem
+	if config.Cfg == nil {
+		return items
+	}
+
 	plugins := []struct {
 		pType      mcp.PluginType
 		name       string
@@ -167,6 +171,7 @@ func DiagnoseMCPPlugins(ctx context.Context) []DiagnosticItem {
 				Status:  status,
 				Message: fmt.Sprintf("Handshake failed for binary %q: %v", binaryPath, err),
 			})
+			_ = client.Stop() // Best effort cleanup to avoid subprocess leak
 		} else {
 			items = append(items, DiagnosticItem{
 				Name:    p.name,
