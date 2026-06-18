@@ -110,7 +110,7 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
 *   [x] **Task 5.20: Kiln Foundry State Integration**
     *   Implement the state contract by writing pipeline milestone updates (`initiate_complete`, `brew_complete`, `assemble_complete`) and accumulated costs to the Pithos workspace manifest (`manifest.json`), which Kiln reads to sync book status.
     *   [Implementation Plan](plans/phase_5/task_5_20_kiln_integration.md)
-*   [ ] **Task 5.21: Character Invariant Injection**
+*   [x] **Task 5.21: Character Invariant Injection**
     *   Inject visual invariant descriptors to preserve character consistency in generated illustration prompts.
     *   [Implementation Plan](plans/phase_5/task_5_21_character_invariant_injection.md)
 *   [x] **Task 5.22: Preflight Diagnostic Subcommand (`pithos doctor`)**
@@ -122,6 +122,10 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
 *   [ ] **Task 5.24: Graceful Image Backend Fallbacks**
     *   Implement fallback handling from OpenAI to Gemini Imagen (and vice-versa) when image generation fails due to credential or permission errors.
     *   [Implementation Plan](plans/phase_5/task_5_24_graceful_image_backend_fallbacks.md)
+*   [ ] **Task 5.25: Opt-in Brainstorming during Initiate**
+    *   Add a `--brainstorm` boolean flag to the `pithos initiate` command. If set, this flag initializes the LLM client using configured credentials and prompts the LLM to generate the `style_seed` and `character_profile` immediately, saving the drafts to the created manifest file.
+    *   [Implementation Plan](plans/phase_5/task_5_25_opt_in_initiate_brainstorming.md)
+
 
 ### Interactive UI & Quality Enhancements
 *   [x] **Task 5.10: Visual Prompt Expansion for Character Consistency**

@@ -28,16 +28,19 @@ type PageState struct {
 	ImagePath          string     `json:"image_path,omitempty"`
 	Text               string     `json:"text,omitempty"`
 	IllustrationPrompt string     `json:"illustration_prompt,omitempty"`
+	CharacterWeight    *int       `json:"character_weight,omitempty"`
 }
 
 // BookProperties holds high-level configurations of the book.
 type BookProperties struct {
-	Theme            string `json:"theme"`
-	Style            string `json:"style"`
-	CharacterProfile string `json:"character_profile"`
-	Format           string `json:"format"`
-	TargetPageCount  int    `json:"target_page_count"`
-	TrimSize         string `json:"trim_size,omitempty"`
+	Theme                 string `json:"theme"`
+	Style                 string `json:"style"`
+	CharacterProfile      string `json:"character_profile"`
+	Format                string `json:"format"`
+	TargetPageCount       int    `json:"target_page_count"`
+	TrimSize              string `json:"trim_size,omitempty"`
+	CharacterReferenceURL string `json:"character_reference_url,omitempty"`
+	CharacterWeight       int    `json:"character_weight,omitempty"`
 }
 
 // Progress tracks the completion state of various pipeline stages.
@@ -106,7 +109,7 @@ type Manifest struct {
 
 // NewManifest instantiates a new Manifest with initialized fields.
 func NewManifest(path string) *Manifest {
-	return &Manifest{
+	m := &Manifest{
 		filePath:      path,
 		AssetRegistry: make(map[string]string),
 		Progress: Progress{
@@ -120,6 +123,8 @@ func NewManifest(path string) *Manifest {
 			Milestones: make([]string, 0),
 		},
 	}
+	m.BookProperties.CharacterWeight = 100
+	return m
 }
 
 // LoadManifest reads a manifest from a file, parses it, and returns the Manifest pointer.
@@ -150,6 +155,9 @@ func LoadManifest(path string) (*Manifest, error) {
 	}
 	if m.Kiln.Version == 0 {
 		m.Kiln.Version = 1
+	}
+	if m.BookProperties.CharacterWeight == 0 {
+		m.BookProperties.CharacterWeight = 100
 	}
 
 	return &m, nil

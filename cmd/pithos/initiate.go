@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/borch-ai/pithos/internal/pipeline"
@@ -21,8 +22,27 @@ var initiateCmd = &cobra.Command{
 	Use:   "initiate",
 	Short: "Scaffolds a new book project directory and manifest",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		outputDir := initiateOutput
+		if !cmd.Flags().Changed("output") {
+			// User did not provide --output, resolve unique output dir under books/book
+			resolvedBase := pipeline.ResolveBookPath(outputDir)
+			outputDir = pipeline.GetUniqueOutputDir(resolvedBase)
+		} else {
+			// User explicitly provided --output. If it exists, ask for confirmation
+			resolvedDir := pipeline.ResolveBookPath(outputDir)
+			if _, err := os.Stat(resolvedDir); err == nil {
+				confirm, err := pipeline.ConfirmOverwrite(os.Stdin, os.Stdout, resolvedDir)
+				if err != nil {
+					return err
+				}
+				if !confirm {
+					return fmt.Errorf("initiation cancelled: directory %s already exists and manifest overwrite was declined", resolvedDir)
+				}
+			}
+		}
+
 		opts := pipeline.InitiateOptions{
-			OutputDir:       initiateOutput,
+			OutputDir:       outputDir,
 			Theme:           initiateTheme,
 			Style:           initiateStyle,
 			Format:          initiateFormat,

@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -160,6 +161,37 @@ func setupMockImageGenServer(t *testing.T, ctx context.Context, serverTransport 
 	}
 }
 
+func setupMockCloudTransport(t *testing.T, ctx context.Context, returnedURL string) (mcpsdk.Transport, func()) {
+	t.Helper()
+	clientTransport, serverTransport := mcpsdk.NewInMemoryTransports()
+	server := mcpsdk.NewServer(&mcpsdk.Implementation{
+		Name:    "mock-cloud-server",
+		Version: "1.0.0",
+	}, nil)
+
+	server.AddTool(&mcpsdk.Tool{
+		Name: "cloud_upload_file",
+		InputSchema: map[string]any{
+			"type": "object",
+		},
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		return &mcpsdk.CallToolResult{
+			Content: []mcpsdk.Content{
+				&mcpsdk.TextContent{Text: returnedURL},
+			},
+		}, nil
+	})
+
+	serverSession, err := server.Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return clientTransport, func() {
+		_ = serverSession.Close()
+	}
+}
+
 func TestInitiate(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "pithos-initiate-*")
 	if err != nil {
@@ -259,7 +291,7 @@ func TestInitiate_Errors(t *testing.T) {
 	}
 }
 
-//nolint:funlen // End-to-end mocked brew verification involves extensive mock setup and output checking
+//nolint:funlen,gocognit // End-to-end mocked brew verification involves extensive mock setup and output checking
 func TestBrew_EndToEnd_Mocked(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "pithos-brew-*")
 	if err != nil {
@@ -297,6 +329,9 @@ func TestBrew_EndToEnd_Mocked(t *testing.T) {
 	_, cleanupMCP := setupMockImageGenServer(t, ctx, serverTransport, dummySourceImage)
 	defer cleanupMCP()
 
+	cloudClientTransport, cloudCleanup := setupMockCloudTransport(t, ctx, "http://example.com/uploaded_character.png")
+	defer cloudCleanup()
+
 	mockStanzas := []string{"Stanza 1 text", "Stanza 2 text"}
 	mockLLMClient := &mockLLM{
 		stanzas: mockStanzas,
@@ -309,11 +344,12 @@ func TestBrew_EndToEnd_Mocked(t *testing.T) {
 
 	// Run Brew
 	optsBrew := BrewOptions{
-		OutputDir:    tmpDir,
-		Theme:        "Overridden Theme",
-		Style:        "new-style --sref http://example.com/new.png",
-		MCPTransport: clientTransport,
-		LLM:          mockLLMClient,
+		OutputDir:         tmpDir,
+		Theme:             "Overridden Theme",
+		Style:             "new-style --sref http://example.com/new.png",
+		MCPTransport:      clientTransport,
+		CloudMCPTransport: cloudClientTransport,
+		LLM:               mockLLMClient,
 	}
 
 	err = Brew(ctx, optsBrew)
@@ -332,6 +368,12 @@ func TestBrew_EndToEnd_Mocked(t *testing.T) {
 	}
 	if m.BookProperties.Style != "new-style --sref http://example.com/new.png" {
 		t.Errorf("expected style override, got %q", m.BookProperties.Style)
+	}
+	if m.BookProperties.CharacterReferenceURL != "http://example.com/uploaded_character.png" {
+		t.Errorf("expected character reference URL 'http://example.com/uploaded_character.png', got %q", m.BookProperties.CharacterReferenceURL)
+	}
+	if _, statErr := os.Stat(filepath.Join(tmpDir, "images", "character_seed.png")); os.IsNotExist(statErr) {
+		t.Error("expected character_seed.png to be created, but it is missing")
 	}
 	if !m.Progress.ManuscriptGenerated {
 		t.Error("expected ManuscriptGenerated to be true")
@@ -638,6 +680,7 @@ func TestLLMProviderSelection_Gemini(t *testing.T) {
 	}
 	mInit.BookProperties.Style = "mock-style"
 	mInit.BookProperties.CharacterProfile = "mock-character-profile"
+	mInit.BookProperties.CharacterReferenceURL = "http://example.com/character.png"
 	if err = mInit.Save(); err != nil {
 		t.Fatalf("failed to save manifest: %v", err)
 	}
@@ -765,6 +808,7 @@ func TestLLMProviderSelection_OpenAI(t *testing.T) {
 	}
 	mInit.BookProperties.Style = "mock-style"
 	mInit.BookProperties.CharacterProfile = "mock-character-profile"
+	mInit.BookProperties.CharacterReferenceURL = "http://example.com/character.png"
 	if err = mInit.Save(); err != nil {
 		t.Fatalf("failed to save manifest: %v", err)
 	}
@@ -1069,6 +1113,7 @@ func TestBrew_TelemetryCustomPricing(t *testing.T) {
 	}
 	mInit.BookProperties.Style = "mock-style"
 	mInit.BookProperties.CharacterProfile = "mock-character-profile"
+	mInit.BookProperties.CharacterReferenceURL = "http://example.com/character.png"
 	if err = mInit.Save(); err != nil {
 		t.Fatalf("failed to save manifest: %v", err)
 	}
@@ -1976,4 +2021,315 @@ func TestGetBestImageSize(t *testing.T) {
 			t.Errorf("getBestImageSize(%q) = %q; want %q", tc.trimSize, actual, tc.expected)
 		}
 	}
+}
+
+//nolint:gocognit,funlen
+func TestBrew_CharacterInvariantInjection(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// 1. Write a dummy source image to be copied
+	dummySourceImage := filepath.Join(tmpDir, "source.png")
+	if err := os.WriteFile(dummySourceImage, []byte("fake-image-bytes"), 0600); err != nil {
+		t.Fatalf("failed to write source image: %v", err)
+	}
+
+	// 2. Initiate book
+	optsInit := InitiateOptions{
+		OutputDir:       tmpDir,
+		Theme:           "Invariant Test Theme",
+		TargetPageCount: 2,
+	}
+	mInit, err := Initiate(optsInit)
+	if err != nil {
+		t.Fatalf("failed to initiate: %v", err)
+	}
+
+	// Set character profile and default weight
+	mInit.BookProperties.CharacterProfile = "mock-char-profile"
+	mInit.BookProperties.CharacterWeight = 50
+
+	// Set page 1 specific weight override to 75
+	mInit.Progress.ManuscriptGenerated = true
+	mInit.Progress.Pages = []manifest.PageState{
+		{PageIndex: 1, Status: manifest.StatusPending, Text: "Stanza 1 text", IllustrationPrompt: "Prompt 1"},
+		{PageIndex: 2, Status: manifest.StatusPending, Text: "Stanza 2 text", IllustrationPrompt: "Prompt 2"},
+	}
+	wOverride := 75
+	mInit.Progress.Pages[0].CharacterWeight = &wOverride
+
+	if err = mInit.Save(); err != nil {
+		t.Fatalf("failed to save manifest: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// 3. Setup mock ImageGen Server
+	imageGenClientTransport, imageGenServerTransport := mcpsdk.NewInMemoryTransports()
+	var requestsMu sync.Mutex
+	var imageGenRequests []generateRequest
+
+	imageGenServer, err := createMockImageGenServer(ctx, dummySourceImage, &imageGenRequests, &requestsMu)
+	if err != nil {
+		t.Fatalf("failed to create mock imagegen server: %v", err)
+	}
+
+	imageGenSession, err := imageGenServer.Connect(ctx, imageGenServerTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = imageGenSession.Close() }()
+
+	// 4. Setup mock Cloud Server
+	cloudClientTransport, cloudServerTransport := mcpsdk.NewInMemoryTransports()
+	var uploadPaths []string
+	cloudServer, err := createMockCloudServer(&uploadPaths, &requestsMu)
+	if err != nil {
+		t.Fatalf("failed to create mock cloud server: %v", err)
+	}
+
+	cloudSession, err := cloudServer.Connect(ctx, cloudServerTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = cloudSession.Close() }()
+
+	// 5. Run Brew
+	opts := BrewOptions{
+		OutputDir:         tmpDir,
+		MCPTransport:      imageGenClientTransport,
+		CloudMCPTransport: cloudClientTransport,
+	}
+
+	err = Brew(ctx, opts)
+	if err != nil {
+		t.Fatalf("Brew failed: %v", err)
+	}
+
+	// 6. Assertions
+	m, err := manifest.LoadManifest(filepath.Join(tmpDir, "manifest.json"))
+	if err != nil {
+		t.Fatalf("failed to load manifest: %v", err)
+	}
+
+	if m.BookProperties.CharacterReferenceURL != "http://example.com/character_seed.png" {
+		t.Errorf("expected reference URL to be 'http://example.com/character_seed.png', got %q", m.BookProperties.CharacterReferenceURL)
+	}
+
+	// Verify character seed image path exists
+	seedPath := filepath.Join(tmpDir, "images", "character_seed.png")
+	if _, statErr := os.Stat(seedPath); os.IsNotExist(statErr) {
+		t.Error("expected character seed image file to be created on disk")
+	}
+
+	// Verify cloud upload was called with absolute path
+	requestsMu.Lock()
+	defer requestsMu.Unlock()
+
+	if len(uploadPaths) != 1 {
+		t.Fatalf("expected 1 upload request, got %d", len(uploadPaths))
+	}
+	if !filepath.IsAbs(uploadPaths[0]) {
+		t.Errorf("expected upload path to be absolute, got %q", uploadPaths[0])
+	}
+	if !strings.HasSuffix(uploadPaths[0], "character_seed.png") {
+		t.Errorf("expected uploaded file name to be character_seed.png, got %q", uploadPaths[0])
+	}
+
+	// Verify imagegen requests had prepended prompts and correct weights
+	// There should be 3 requests: 1 for character seed generation, 2 for pages
+	if len(imageGenRequests) != 3 {
+		t.Fatalf("expected 3 image generation requests (1 seed + 2 pages), got %d", len(imageGenRequests))
+	}
+
+	// First request is seed portrait: prompt should be "Detailed visual seed character portrait: mock-char-profile"
+	// Cref should be empty, weight should be nil
+	seedReq := imageGenRequests[0]
+	if seedReq.Prompt != "Detailed visual seed character portrait: mock-char-profile" {
+		t.Errorf("unexpected seed prompt: %q", seedReq.Prompt)
+	}
+	if seedReq.CrefURL != "" {
+		t.Errorf("expected empty cref for seed generation, got %q", seedReq.CrefURL)
+	}
+	if seedReq.CharacterWeight != nil {
+		t.Errorf("expected nil weight for seed generation, got %d", *seedReq.CharacterWeight)
+	}
+
+	// Second request is page 1: prompt prepended with character profile, cref set to uploaded URL, weight set to override (75)
+	page1Req := imageGenRequests[1]
+	if page1Req.Prompt != "mock-char-profile, Prompt 1" {
+		t.Errorf("unexpected page 1 prompt: %q", page1Req.Prompt)
+	}
+	if page1Req.CrefURL != "http://example.com/character_seed.png" {
+		t.Errorf("unexpected page 1 cref URL: %q", page1Req.CrefURL)
+	}
+	if page1Req.CharacterWeight == nil || *page1Req.CharacterWeight != 75 {
+		t.Errorf("expected page 1 weight 75, got %v", page1Req.CharacterWeight)
+	}
+
+	// Third request is page 2: prompt prepended, cref set, weight set to global default (50)
+	page2Req := imageGenRequests[2]
+	if page2Req.Prompt != "mock-char-profile, Prompt 2" {
+		t.Errorf("unexpected page 2 prompt: %q", page2Req.Prompt)
+	}
+	if page2Req.CrefURL != "http://example.com/character_seed.png" {
+		t.Errorf("unexpected page 2 cref URL: %q", page2Req.CrefURL)
+	}
+	if page2Req.CharacterWeight == nil || *page2Req.CharacterWeight != 50 {
+		t.Errorf("expected page 2 weight 50, got %v", page2Req.CharacterWeight)
+	}
+}
+
+func TestGetUniqueOutputDir(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos-test-unique-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	baseDir := filepath.Join(tmpDir, "book")
+
+	// Case 1: Directory does not exist. Should return baseDir unchanged.
+	got1 := GetUniqueOutputDir(baseDir)
+	if got1 != baseDir {
+		t.Errorf("expected %q, got %q", baseDir, got1)
+	}
+
+	// Case 2: Base directory exists. Should return baseDir-1.
+	if err := os.Mkdir(baseDir, 0750); err != nil {
+		t.Fatalf("failed to create baseDir: %v", err)
+	}
+	got2 := GetUniqueOutputDir(baseDir)
+	want2 := baseDir + "-1"
+	if got2 != want2 {
+		t.Errorf("expected %q, got %q", want2, got2)
+	}
+
+	// Case 3: Base directory and baseDir-1 exist. Should return baseDir-2.
+	if err := os.Mkdir(want2, 0750); err != nil {
+		t.Fatalf("failed to create want2: %v", err)
+	}
+	got3 := GetUniqueOutputDir(baseDir)
+	want3 := baseDir + "-2"
+	if got3 != want3 {
+		t.Errorf("expected %q, got %q", want3, got3)
+	}
+}
+
+type errorReader struct{}
+
+func (errorReader) Read(p []byte) (n int, err error) {
+	return 0, errors.New("read error")
+}
+
+func TestConfirmOverwrite(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected bool
+	}{
+		{"yes", "y\n", true},
+		{"yes-long", "yes\n", true},
+		{"yes-caps", "Y\n", true},
+		{"yes-mixed", "Yes\n", true},
+		{"yes-caps-long", "YES\n", true},
+		{"no", "n\n", false},
+		{"no-long", "no\n", false},
+		{"empty", "\n", false},
+		{"invalid", "maybe\n", false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var buf strings.Builder
+			r := strings.NewReader(tc.input)
+			got, err := ConfirmOverwrite(r, &buf, "/some/path")
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tc.expected {
+				t.Errorf("for input %q, expected %t, got %t", tc.input, tc.expected, got)
+			}
+			out := buf.String()
+			if !strings.Contains(out, "overwrite") {
+				t.Errorf("expected output prompt to contain 'overwrite', got %q", out)
+			}
+		})
+	}
+
+	t.Run("read-error", func(t *testing.T) {
+		var buf strings.Builder
+		got, err := ConfirmOverwrite(errorReader{}, &buf, "/some/path")
+		if err == nil {
+			t.Error("expected error on read error, got nil")
+		}
+		if got {
+			t.Error("expected false on read error, got true")
+		}
+	})
+}
+
+type generateRequest struct {
+	Prompt          string `json:"prompt"`
+	CrefURL         string `json:"cref_url"`
+	CharacterWeight *int   `json:"character_weight"`
+}
+
+func createMockImageGenServer(ctx context.Context, dummySourceImage string, requests *[]generateRequest, requestsMu *sync.Mutex) (*mcpsdk.Server, error) {
+	server := mcpsdk.NewServer(&mcpsdk.Implementation{
+		Name:    "mock-imagegen-server",
+		Version: "1.0.0",
+	}, nil)
+
+	server.AddTool(&mcpsdk.Tool{
+		Name:        "imagegen_register_style",
+		InputSchema: map[string]any{"type": "object"},
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		return &mcpsdk.CallToolResult{
+			Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: "Successfully registered style"}},
+		}, nil
+	})
+
+	server.AddTool(&mcpsdk.Tool{
+		Name:        "imagegen_generate",
+		InputSchema: map[string]any{"type": "object"},
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		var args generateRequest
+		if unmarshalErr := json.Unmarshal(req.Params.Arguments, &args); unmarshalErr != nil {
+			return nil, unmarshalErr
+		}
+		requestsMu.Lock()
+		*requests = append(*requests, args)
+		requestsMu.Unlock()
+
+		return &mcpsdk.CallToolResult{
+			Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: "Successfully generated image and saved to: " + dummySourceImage}},
+		}, nil
+	})
+	return server, nil
+}
+
+func createMockCloudServer(requests *[]string, requestsMu *sync.Mutex) (*mcpsdk.Server, error) {
+	server := mcpsdk.NewServer(&mcpsdk.Implementation{
+		Name:    "mock-cloud-server",
+		Version: "1.0.0",
+	}, nil)
+
+	server.AddTool(&mcpsdk.Tool{
+		Name:        "cloud_upload_file",
+		InputSchema: map[string]any{"type": "object"},
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		var args struct {
+			LocalPath string `json:"local_path"`
+		}
+		_ = json.Unmarshal(req.Params.Arguments, &args)
+		requestsMu.Lock()
+		*requests = append(*requests, args.LocalPath)
+		requestsMu.Unlock()
+
+		return &mcpsdk.CallToolResult{
+			Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: "http://example.com/character_seed.png"}},
+		}, nil
+	})
+	return server, nil
 }

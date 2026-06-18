@@ -433,3 +433,44 @@ func TestUpdateTotalCostKilnSync(t *testing.T) {
 		t.Errorf("expected Kiln.TotalCostUSD to match Telemetry.TotalCostUSD %f, got %f", expectedCost, m.Kiln.TotalCostUSD)
 	}
 }
+
+func TestLoadManifest_NilFields(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	manifestPath := filepath.Join(tmpDir, "manifest.json")
+	rawJSON := `{
+		"book_properties": {"theme": "Test theme"},
+		"progress": {"manuscript_generated": false}
+	}`
+	if writeErr := os.WriteFile(manifestPath, []byte(rawJSON), 0600); writeErr != nil {
+		t.Fatalf("failed to write manifest: %v", writeErr)
+	}
+
+	loaded, err := LoadManifest(manifestPath)
+	if err != nil {
+		t.Fatalf("failed to load manifest: %v", err)
+	}
+
+	if loaded.AssetRegistry == nil {
+		t.Error("expected AssetRegistry to be initialized")
+	}
+	if loaded.Progress.Pages == nil {
+		t.Error("expected Progress.Pages to be initialized")
+	}
+	if loaded.Telemetry.ModelUsages == nil {
+		t.Error("expected Telemetry.ModelUsages to be initialized")
+	}
+	if loaded.Kiln.Milestones == nil {
+		t.Error("expected Kiln.Milestones to be initialized")
+	}
+	if loaded.Kiln.Version != 1 {
+		t.Errorf("expected Kiln.Version to be initialized to 1, got %d", loaded.Kiln.Version)
+	}
+	if loaded.BookProperties.CharacterWeight != 100 {
+		t.Errorf("expected default CharacterWeight 100, got %d", loaded.BookProperties.CharacterWeight)
+	}
+}
