@@ -31,6 +31,7 @@ type BrewOptions struct {
 	Concurrency       int
 	Review            bool
 	Pages             []int
+	Silent            bool
 	MCPTransport      mcpsdk.Transport // For testing
 	CloudMCPTransport mcpsdk.Transport // For testing
 	LLM               LLMClient        // For testing
@@ -131,6 +132,9 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 			Path:   filepath.ToSlash(previewPath),
 		}
 		fmt.Printf("\nWeb preview generated: open %s in your browser to flip through the book!\n\n", u.String())
+		if !opts.Silent {
+			triggerBrowserOpen(u.String())
+		}
 	}
 
 	// Log telemetry summary
@@ -184,6 +188,9 @@ func handleReviewCheckpoint(opts BrewOptions, m *manifest.Manifest, manuscriptPa
 			Path:   filepath.ToSlash(previewPath),
 		}
 		fmt.Printf("\nWeb preview generated: open %s in your browser to flip through the book!\n\n", u.String())
+		if !opts.Silent {
+			triggerBrowserOpen(u.String())
+		}
 	}
 
 	return fmt.Errorf("%w: manuscript is available at %s. Edit the file, then run brew without --review to generate illustrations", ErrReviewPause, manuscriptPath)

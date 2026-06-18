@@ -17,6 +17,7 @@ var (
 	brewConcurrency int
 	brewReview      bool
 	brewPagesStr    string
+	brewSilent      bool
 )
 
 var brewCmd = &cobra.Command{
@@ -55,6 +56,7 @@ var brewCmd = &cobra.Command{
 			Concurrency: brewConcurrency,
 			Review:      brewReview,
 			Pages:       pages,
+			Silent:      brewSilent,
 		}
 		err := pipeline.Brew(cmd.Context(), opts)
 		if err != nil {
@@ -75,5 +77,6 @@ func init() {
 	brewCmd.Flags().IntVar(&brewConcurrency, "concurrency", 0, "Number of concurrent image generation workers (defaults to config or 1)")
 	brewCmd.Flags().BoolVar(&brewReview, "review", false, "Export manuscript for local markdown review and pause execution")
 	brewCmd.Flags().StringVar(&brewPagesStr, "pages", "", "Comma-separated list of page numbers to regenerate (e.g. 2,4)")
+	brewCmd.Flags().BoolVar(&brewSilent, "silent", false, "Silence automatic opening of web preview in the browser")
 	rootCmd.AddCommand(brewCmd)
 }

@@ -11,6 +11,7 @@ Pithos is the **book factory** of the Borch-AI publishing stack. It is a determi
 - **Upstream**: **Kiln** orchestrates Pithos as a subprocess (`kiln forge`). Kiln supplies the validated niche concept; Pithos executes production.
 - **Downstream**: Pithos invokes `pw-mcp-imagegen`, `pw-mcp-kdp-math`, `pw-mcp-typst` (pending) from the Powerword MCP plugin network.
 - **Monitoring**: **Lamplighter** (Pithos Phase 5.1) provides mobile approval checkpoints during long brew/assemble runs.
+- **Sister Factory**: **Aeolian** operates as a parallel factory for the music segment; Pithos remains strictly focused on books, preserving decoupling.
 
 > [!NOTE]
 > **Core Deliverables Achieved**: Both Task 4.2 (Typst PDF Layout Assembly) and Task 5.20 (Kiln Foundry State Integration) have shipped. Phase 6 work is now defrosted and open for development.
@@ -125,7 +126,7 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
 *   [ ] **Task 5.25: Opt-in Brainstorming during Initiate**
     *   Add a `--brainstorm` boolean flag to the `pithos initiate` command. If set, this flag initializes the LLM client using configured credentials and prompts the LLM to generate the `style_seed` and `character_profile` immediately, saving the drafts to the created manifest file.
     *   [Implementation Plan](plans/phase_5/task_5_25_opt_in_initiate_brainstorming.md)
-*   [ ] **Task 5.26: Automatic Browser Preview Opening**
+*   [x] **Task 5.26: Automatic Browser Preview Opening**
     *   Automatically open the generated web preview visualizer in the default system browser after `pithos brew` or `pithos assemble` completes. Provide a `--silent` flag to allow opting out of this behavior in headless/CI environments.
     *   [Implementation Plan](plans/phase_5/task_5_26_auto_open_preview.md)
 *   [ ] **Task 5.27: GCP Cloud Storage Configuration Support**

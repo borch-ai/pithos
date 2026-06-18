@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,8 +20,9 @@ type AssembleOptions struct {
 	InputDir         string
 	Format           string // e.g. "paperback", "hardcover"
 	Bleed            bool
-	TrimSize         string           // e.g. "6x9"
-	PaperType        string           // e.g. "white"
+	TrimSize         string // e.g. "6x9"
+	PaperType        string // e.g. "white"
+	Silent           bool
 	MCPTransport     mcpsdk.Transport // For testing (fallback)
 	KDPMathTransport mcpsdk.Transport // For testing
 	TypstTransport   mcpsdk.Transport // For testing
@@ -41,6 +43,8 @@ type geometryResult struct {
 
 // Assemble validates the page count, calls pw-mcp-kdp-math to calculate dimensions,
 // and saves the results to the manifest.
+//
+//nolint:gocognit,funlen // Assemble function coordinates page count validation, fetchGeometry, and Typst compile
 func Assemble(ctx context.Context, opts AssembleOptions) (*manifest.Manifest, error) {
 	if opts.InputDir == "" {
 		return nil, errors.New("input directory is required")
@@ -141,6 +145,13 @@ func Assemble(ctx context.Context, opts AssembleOptions) (*manifest.Manifest, er
 	// Regenerate web preview with updated KDP layout calculations
 	if previewErr := GenerateWebPreview(opts.InputDir, m); previewErr != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to regenerate web preview: %v\n", previewErr)
+	} else if !opts.Silent {
+		previewPath := filepath.Join(opts.InputDir, "web_preview", "preview.html")
+		u := &url.URL{
+			Scheme: "file",
+			Path:   filepath.ToSlash(previewPath),
+		}
+		triggerBrowserOpen(u.String())
 	}
 
 	if err := Checkpoint(ctx, opts.InputDir, "Compiled print layouts and PDFs"); err != nil {
