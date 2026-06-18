@@ -2,8 +2,10 @@ package pipeline
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 )
@@ -44,4 +46,20 @@ func triggerBrowserOpen(urlStr string) {
 	if err := openBrowser(urlStr); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to automatically open browser preview: %v\n", err)
 	}
+}
+
+// formatFileURL converts a local filepath into a valid file:// absolute URL.
+func formatFileURL(path string) string {
+	if absPath, err := filepath.Abs(path); err == nil {
+		path = absPath
+	}
+	p := filepath.ToSlash(path)
+	if !strings.HasPrefix(p, "/") {
+		p = "/" + p
+	}
+	u := &url.URL{
+		Scheme: "file",
+		Path:   p,
+	}
+	return u.String()
 }
