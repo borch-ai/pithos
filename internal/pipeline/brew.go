@@ -25,15 +25,16 @@ var ErrReviewPause = errors.New("review mode active")
 
 // BrewOptions holds configuration parameters for the brew command.
 type BrewOptions struct {
-	OutputDir    string
-	Theme        string
-	Style        string
-	Concurrency  int
-	Review       bool
-	Pages        []int
-	MCPTransport mcpsdk.Transport // For testing
-	LLM          LLMClient        // For testing
-	HTTPClient   *http.Client     // For testing
+	OutputDir         string
+	Theme             string
+	Style             string
+	Concurrency       int
+	Review            bool
+	Pages             []int
+	MCPTransport      mcpsdk.Transport // For testing
+	CloudMCPTransport mcpsdk.Transport // For testing
+	LLM               LLMClient        // For testing
+	HTTPClient        *http.Client     // For testing
 }
 
 // Brew executes the manuscript generation and page-by-page illustration generation.
@@ -361,6 +362,11 @@ func generateIllustrations(ctx context.Context, m *manifest.Manifest, opts BrewO
 		}
 	}
 
+	// Character Seed Portrait Bootstrapping
+	if err := bootstrapCharacterReference(ctx, m, opts, mcpClient, styleID); err != nil {
+		return err
+	}
+
 	concurrency := opts.Concurrency
 	if concurrency <= 0 {
 		if config.Cfg != nil && config.Cfg.Concurrency > 0 {
@@ -403,8 +409,21 @@ Loop:
 			if prompt == "" {
 				prompt = p.Text
 			}
+			if m.BookProperties.CharacterProfile != "" {
+				prompt = m.BookProperties.CharacterProfile + ", " + prompt
+			}
+			var charWeight *int
+			if p.CharacterWeight != nil {
+				charWeight = p.CharacterWeight
+			} else {
+				w := m.BookProperties.CharacterWeight
+				if w == 0 {
+					w = 100
+				}
+				charWeight = &w
+			}
 			imageSize := getBestImageSize(m.BookProperties.TrimSize)
-			imgPath, err := generateSingleImage(ctx, mcpClient, p.PageIndex, prompt, styleID, opts.OutputDir, imageSize)
+			imgPath, err := generateSingleImage(ctx, mcpClient, p.PageIndex, prompt, styleID, opts.OutputDir, imageSize, m.BookProperties.CharacterReferenceURL, charWeight)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error generating image for page %d: %v\n", p.PageIndex, err)
 				// Revert to pending
@@ -466,21 +485,27 @@ func registerStyleProfile(ctx context.Context, mcpClient *mcp.PluginClient, styl
 	return styleID, nil
 }
 
-func generateSingleImage(ctx context.Context, mcpClient *mcp.PluginClient, pageIndex int, pageText string, styleID string, outputDir string, imageSize string) (string, error) {
+func generateImageRaw(ctx context.Context, mcpClient *mcp.PluginClient, prompt string, styleID string, imageSize string, crefURL string, charWeight *int) (string, error) {
 	if imageSize == "" {
 		imageSize = "1024x1024"
 	}
 	generateArgs := map[string]interface{}{
-		"prompt": pageText,
+		"prompt": prompt,
 		"size":   imageSize,
 	}
 	if styleID != "" {
 		generateArgs["style_id"] = styleID
 	}
+	if crefURL != "" {
+		generateArgs["cref_url"] = crefURL
+	}
+	if charWeight != nil {
+		generateArgs["character_weight"] = *charWeight
+	}
 
 	resText, err := mcpClient.CallTool(ctx, "imagegen_generate", generateArgs)
 	if err != nil {
-		return "", fmt.Errorf("failed to generate image for page %d: %w", pageIndex, err)
+		return "", err
 	}
 
 	prefix := "Successfully generated image and saved to: "
@@ -488,7 +513,15 @@ func generateSingleImage(ctx context.Context, mcpClient *mcp.PluginClient, pageI
 		return "", fmt.Errorf("unexpected imagegen response format: %q", resText)
 	}
 
-	srcPath := strings.TrimPrefix(resText, prefix)
+	return strings.TrimPrefix(resText, prefix), nil
+}
+
+func generateSingleImage(ctx context.Context, mcpClient *mcp.PluginClient, pageIndex int, pageText string, styleID string, outputDir string, imageSize string, crefURL string, charWeight *int) (string, error) {
+	srcPath, err := generateImageRaw(ctx, mcpClient, pageText, styleID, imageSize, crefURL, charWeight)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate image for page %d: %w", pageIndex, err)
+	}
+
 	ext := filepath.Ext(srcPath)
 	if ext == "" {
 		ext = ".png"
@@ -783,6 +816,7 @@ func importManuscriptFromMarkdown(outputDir string, m *manifest.Manifest, pagesF
 	charProfileChanged := false
 	if charProfileOk && parsedCharProfile != m.BookProperties.CharacterProfile {
 		m.BookProperties.CharacterProfile = parsedCharProfile
+		m.BookProperties.CharacterReferenceURL = ""
 		charProfileChanged = true
 		changed = true
 	}
@@ -879,4 +913,62 @@ func getBestImageSize(trimSize string) string {
 	default:
 		return "1792x1024"
 	}
+}
+
+func bootstrapCharacterReference(ctx context.Context, m *manifest.Manifest, opts BrewOptions, mcpClient *mcp.PluginClient, styleID string) error {
+	if m.BookProperties.CharacterReferenceURL != "" || m.BookProperties.CharacterProfile == "" {
+		return nil
+	}
+
+	seedPrompt := "Detailed visual seed character portrait: " + m.BookProperties.CharacterProfile
+	imageSize := getBestImageSize(m.BookProperties.TrimSize)
+
+	fmt.Println("Generating character seed portrait...")
+	srcPath, err := generateImageRaw(ctx, mcpClient, seedPrompt, styleID, imageSize, "", nil)
+	if err != nil {
+		return fmt.Errorf("failed to generate character seed portrait: %w", err)
+	}
+
+	ext := filepath.Ext(srcPath)
+	if ext == "" {
+		ext = ".png"
+	}
+
+	destPath := filepath.Join(opts.OutputDir, "images", "character_seed"+ext)
+	if copyErr := copyFile(srcPath, destPath); copyErr != nil {
+		return fmt.Errorf("failed to copy character seed image: %w", copyErr)
+	}
+
+	// Initialize pw-mcp-cloud client
+	cloudClient := mcp.NewPluginClient(mcp.PluginCloud)
+	if opts.CloudMCPTransport != nil {
+		cloudClient.SetTransport(opts.CloudMCPTransport)
+	}
+
+	if startErr := cloudClient.Start(ctx); startErr != nil {
+		return fmt.Errorf("failed to start MCP cloud client: %w", startErr)
+	}
+	defer func() { _ = cloudClient.Stop() }()
+
+	absPath, err := filepath.Abs(destPath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve absolute path of character seed image: %w", err)
+	}
+
+	fmt.Printf("Uploading character seed portrait to cloud storage from %s...\n", absPath)
+	uploadArgs := map[string]interface{}{
+		"local_path": absPath,
+	}
+	publicURL, err := cloudClient.CallTool(ctx, "cloud_upload_file", uploadArgs)
+	if err != nil {
+		return fmt.Errorf("failed to upload character seed portrait: %w", err)
+	}
+
+	m.BookProperties.CharacterReferenceURL = strings.TrimSpace(publicURL)
+	if err := m.Save(); err != nil {
+		return fmt.Errorf("failed to save manifest after setting character reference URL: %w", err)
+	}
+
+	fmt.Printf("Character seed portrait uploaded successfully: %s\n", m.BookProperties.CharacterReferenceURL)
+	return nil
 }

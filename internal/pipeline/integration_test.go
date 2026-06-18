@@ -53,10 +53,14 @@ func TestBrew_Integration_RealSubprocess(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 
+	cloudTransport, cloudCleanup := setupMockCloudTransport(t, ctx, "http://example.com/uploaded_character.png")
+	defer cloudCleanup()
+
 	optsBrew := BrewOptions{
-		OutputDir:   tempDir,
-		LLM:         mockLLMClient,
-		Concurrency: 3,
+		OutputDir:         tempDir,
+		LLM:               mockLLMClient,
+		Concurrency:       3,
+		CloudMCPTransport: cloudTransport,
 	}
 
 	err = Brew(ctx, optsBrew)
@@ -165,10 +169,14 @@ func TestBrew_Integration_ReviewFlow(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 
+	cloudTransport, cloudCleanup := setupMockCloudTransport(t, ctx, "http://example.com/uploaded_character.png")
+	defer cloudCleanup()
+
 	err = Brew(ctx, BrewOptions{
-		OutputDir: tempDir,
-		LLM:       mockLLMClient,
-		Review:    true,
+		OutputDir:         tempDir,
+		LLM:               mockLLMClient,
+		Review:            true,
+		CloudMCPTransport: cloudTransport,
 	})
 	if err == nil {
 		t.Fatal("expected Brew to return review pause error, got nil")
@@ -200,10 +208,11 @@ func TestBrew_Integration_ReviewFlow(t *testing.T) {
 	defer cancel2()
 
 	optsBrew := BrewOptions{
-		OutputDir:   tempDir,
-		LLM:         mockLLMClient,
-		Review:      false,
-		Concurrency: 2,
+		OutputDir:         tempDir,
+		LLM:               mockLLMClient,
+		Review:            false,
+		Concurrency:       2,
+		CloudMCPTransport: cloudTransport,
 	}
 
 	err = Brew(ctx2, optsBrew)
@@ -349,6 +358,7 @@ backend = "openai"
 	config.Cfg = &config.Config{
 		MCP: config.MCPConfig{
 			ImageGenPath: binaryPath,
+			CloudPath:    "pw-mcp-cloud",
 		},
 		API: config.APIConfig{
 			GeminiKey: "mock-gemini-key",
