@@ -33,8 +33,7 @@ generated_images/
 *.swp
 
 # Secrets
-.env
-.env.local
+.env*
 *.env
 
 SCRATCH
