@@ -196,21 +196,7 @@ func TestAssemble_Success(t *testing.T) {
 		t.Fatalf("Assemble failed: %v", err)
 	}
 
-	// Verify manuscript.md was exported and has correct structure/content
-	manuscriptPath := filepath.Join(tmpDir, "manuscript.md")
-	if _, statErr := os.Stat(manuscriptPath); os.IsNotExist(statErr) {
-		t.Error("expected manuscript.md to be automatically exported during Assemble, but it was not found")
-	} else {
-		//nolint:gosec // manuscriptPath is constructed in temp test directory
-		contentBytes, readErr := os.ReadFile(manuscriptPath)
-		if readErr != nil {
-			t.Fatalf("failed to read manuscript.md: %v", readErr)
-		}
-		content := string(contentBytes)
-		if !strings.Contains(content, "# Page 1") || !strings.Contains(content, "Stanza content text") || !strings.Contains(content, "Illustration prompt details") {
-			t.Errorf("manuscript.md did not contain expected content: %s", content)
-		}
-	}
+	verifyManuscript(t, filepath.Join(tmpDir, "manuscript.md"))
 
 	// Reload manifest and check KDP layout details
 	m2, err := manifest.LoadManifest(filepath.Join(tmpDir, "manifest.json"))
@@ -238,6 +224,67 @@ func TestAssemble_Success(t *testing.T) {
 	}
 	if m2.Kiln.InteriorPDFPath != m2.AssetRegistry["interior_pdf"] {
 		t.Errorf("expected Kiln InteriorPDFPath to match AssetRegistry, got %q vs %q", m2.Kiln.InteriorPDFPath, m2.AssetRegistry["interior_pdf"])
+	}
+	if m2.BookProperties.TrimSize != "8.5x8.5" {
+		t.Errorf("expected TrimSize fallback to default '8.5x8.5', got %q", m2.BookProperties.TrimSize)
+	}
+}
+
+func TestAssemble_TrimSizeOverride(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos-assemble-override-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	optsInit := InitiateOptions{
+		OutputDir:       tmpDir,
+		Theme:           "Parody Theme",
+		TargetPageCount: 80,
+	}
+	m, err := Initiate(optsInit)
+	if err != nil {
+		t.Fatalf("Initiate failed: %v", err)
+	}
+
+	m.Progress.Pages = make([]manifest.PageState, 80)
+	for i := 0; i < 80; i++ {
+		m.Progress.Pages[i] = manifest.PageState{
+			PageIndex:          i + 1,
+			Status:             manifest.StatusCompleted,
+			Text:               "Stanza content text",
+			IllustrationPrompt: "Illustration prompt details",
+		}
+	}
+	if saveErr := m.Save(); saveErr != nil {
+		t.Fatalf("failed to save manifest: %v", saveErr)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	clientKDP, serverKDP := mcpsdk.NewInMemoryTransports()
+	_, cleanupKDP := setupMockKDPMathServer(t, ctx, serverKDP)
+	defer cleanupKDP()
+	clientTypst, serverTypst := mcpsdk.NewInMemoryTransports()
+	_, cleanupTypst := setupMockTypstServer(t, ctx, serverTypst)
+	defer cleanupTypst()
+
+	optsAssembleOverride := AssembleOptions{
+		InputDir:         tmpDir,
+		Format:           "paperback",
+		Bleed:            true,
+		TrimSize:         "6x9",
+		KDPMathTransport: clientKDP,
+		TypstTransport:   clientTypst,
+	}
+
+	m3, err := Assemble(ctx, optsAssembleOverride)
+	if err != nil {
+		t.Fatalf("Assemble override failed: %v", err)
+	}
+	if m3.BookProperties.TrimSize != "6x9" {
+		t.Errorf("expected TrimSize override '6x9', got %q", m3.BookProperties.TrimSize)
 	}
 }
 
@@ -636,5 +683,132 @@ func TestAssemble_MissingManuscriptNoPagesError(t *testing.T) {
 		t.Error("expected error when manuscript.md is missing and manifest has no pages, got nil")
 	} else if !strings.Contains(err.Error(), "manuscript.md is missing and no pages are generated in the manifest") {
 		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestAssemble_TrimSizeDefaulting(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos-assemble-trim-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	optsInit := InitiateOptions{
+		OutputDir:       tmpDir,
+		TargetPageCount: 10,
+	}
+	m, err := Initiate(optsInit)
+	if err != nil {
+		t.Fatalf("Initiate failed: %v", err)
+	}
+
+	// Manually clear TrimSize to test assemble defaulting
+	m.BookProperties.TrimSize = ""
+	m.Progress.Pages = make([]manifest.PageState, 10)
+	if saveErr := m.Save(); saveErr != nil {
+		t.Fatalf("failed to save manifest: %v", saveErr)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	clientKDP, serverKDP := mcpsdk.NewInMemoryTransports()
+	_, cleanupKDP := setupMockKDPMathServer(t, ctx, serverKDP)
+	defer cleanupKDP()
+	clientTypst, serverTypst := mcpsdk.NewInMemoryTransports()
+	_, cleanupTypst := setupMockTypstServer(t, ctx, serverTypst)
+	defer cleanupTypst()
+
+	optsAssemble := AssembleOptions{
+		InputDir:         tmpDir,
+		TrimSize:         "",
+		KDPMathTransport: clientKDP,
+		TypstTransport:   clientTypst,
+	}
+
+	mRes, err := Assemble(ctx, optsAssemble)
+	if err != nil {
+		t.Fatalf("Assemble trim defaulting failed: %v", err)
+	}
+	if mRes.BookProperties.TrimSize != "6x9" {
+		t.Errorf("expected TrimSize to default to '6x9' when empty everywhere, got %q", mRes.BookProperties.TrimSize)
+	}
+}
+
+func TestAssemble_GenerateWebPreviewError(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos-assemble-err-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	optsInit := InitiateOptions{
+		OutputDir:       tmpDir,
+		Theme:           "Parody Theme",
+		TargetPageCount: 80,
+	}
+	m, err := Initiate(optsInit)
+	if err != nil {
+		t.Fatalf("Initiate failed: %v", err)
+	}
+
+	m.Progress.Pages = make([]manifest.PageState, 80)
+	for i := 0; i < 80; i++ {
+		m.Progress.Pages[i] = manifest.PageState{
+			PageIndex:          i + 1,
+			Status:             manifest.StatusCompleted,
+			Text:               "Stanza content text",
+			IllustrationPrompt: "Illustration prompt details",
+		}
+	}
+	if saveErr := m.Save(); saveErr != nil {
+		t.Fatalf("failed to save manifest: %v", saveErr)
+	}
+
+	// Create a blocker file named 'web_preview' to force MkdirAll to fail
+	previewPath := filepath.Join(tmpDir, "web_preview")
+	if writeErr := os.WriteFile(previewPath, []byte("blocker file"), 0600); writeErr != nil {
+		t.Fatalf("failed to write blocker file: %v", writeErr)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	clientKDP, serverKDP := mcpsdk.NewInMemoryTransports()
+	_, cleanupKDP := setupMockKDPMathServer(t, ctx, serverKDP)
+	defer cleanupKDP()
+
+	clientTypst, serverTypst := mcpsdk.NewInMemoryTransports()
+	_, cleanupTypst := setupMockTypstServer(t, ctx, serverTypst)
+	defer cleanupTypst()
+
+	optsAssemble := AssembleOptions{
+		InputDir:         tmpDir,
+		Format:           "paperback",
+		Bleed:            true,
+		KDPMathTransport: clientKDP,
+		TypstTransport:   clientTypst,
+	}
+
+	_, err = Assemble(ctx, optsAssemble)
+	if err != nil {
+		t.Fatalf("expected Assemble to succeed even if web preview generation fails, but got error: %v", err)
+	}
+}
+
+func verifyManuscript(t *testing.T, path string) {
+	t.Helper()
+	if _, statErr := os.Stat(path); os.IsNotExist(statErr) {
+		t.Error("expected manuscript.md to be automatically exported during Assemble, but it was not found")
+		return
+	}
+	//nolint:gosec // path is constructed in temp test directory
+	contentBytes, readErr := os.ReadFile(path)
+	if readErr != nil {
+		t.Fatalf("failed to read manuscript.md: %v", readErr)
+	}
+	content := string(contentBytes)
+	if !strings.Contains(content, "# Page 1") || !strings.Contains(content, "Stanza content text") || !strings.Contains(content, "Illustration prompt details") {
+		t.Errorf("manuscript.md did not contain expected content: %s", content)
 	}
 }

@@ -47,6 +47,7 @@ Replace the raw markdown-file-editing review loop with an interactive terminal-b
   - If a user cycles image variations (`v` or Arrow Keys):
     * Update the page's active `ImagePath` and `SelectedModel` in the manifest.
     * Copy the selected variation candidate file to `images/page_<index>.png` to update terminal rendering.
+  - **Live Web Preview Sync**: On any state change (editing stanzas, changing image variations, style updates), automatically call `GenerateWebPreview` to regenerate `data.js` in the preview workspace, allowing live reloading in the browser.
 
 ## Verification Plan
 

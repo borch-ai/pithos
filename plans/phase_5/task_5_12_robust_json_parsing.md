@@ -1,7 +1,9 @@
 # plan: Task 5.12: Robust JSON Output Parsing
 
-**Status:** Open
+**Status:** Completed
 **Go Version:** 1.26.4
+**Date Completed:** June 17, 2026
+**Unit Test Coverage:** 91.00%
 
 Implement an LLM response sanitization helper to strip markdown code blocks (e.g. ````json ... ````) from output text, protecting Pithos against JSON parsing errors when providers wrap structured JSON responses in formatting blocks. This helper will protect all structured JSON queries, including visual style guide generation and manuscript generation.
 

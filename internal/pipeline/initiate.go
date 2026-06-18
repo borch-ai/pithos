@@ -17,6 +17,7 @@ type InitiateOptions struct {
 	Style           string
 	Format          string
 	TargetPageCount int
+	TrimSize        string
 }
 
 // Initiate scaffolds a new book project directory structure and writes the initial manifest.json.
@@ -29,6 +30,11 @@ func Initiate(opts InitiateOptions) (*manifest.Manifest, error) {
 	// Default target page count to 15 if not specified or invalid
 	if opts.TargetPageCount <= 0 {
 		opts.TargetPageCount = 15
+	}
+
+	trimSize := opts.TrimSize
+	if trimSize == "" {
+		trimSize = "8.5x8.5"
 	}
 
 	// 1. Create target output directory
@@ -56,6 +62,7 @@ func Initiate(opts InitiateOptions) (*manifest.Manifest, error) {
 		Style:           opts.Style,
 		Format:          opts.Format,
 		TargetPageCount: opts.TargetPageCount,
+		TrimSize:        trimSize,
 	}
 	m.Kiln.Version = 1
 	m.Kiln.Milestones = []string{"initiate_complete"}
