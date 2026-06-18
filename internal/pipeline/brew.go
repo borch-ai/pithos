@@ -127,6 +127,9 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 		fmt.Fprintf(os.Stderr, "Warning: failed to generate web preview: %v\n", previewErr)
 	} else {
 		previewPath := filepath.Join(opts.OutputDir, "web_preview", "preview.html")
+		if absPath, err := filepath.Abs(previewPath); err == nil {
+			previewPath = absPath
+		}
 		u := &url.URL{
 			Scheme: "file",
 			Path:   filepath.ToSlash(previewPath),
@@ -183,6 +186,9 @@ func handleReviewCheckpoint(opts BrewOptions, m *manifest.Manifest, manuscriptPa
 		fmt.Fprintf(os.Stderr, "Warning: failed to generate web preview: %v\n", previewErr)
 	} else {
 		previewPath := filepath.Join(opts.OutputDir, "web_preview", "preview.html")
+		if absPath, err := filepath.Abs(previewPath); err == nil {
+			previewPath = absPath
+		}
 		u := &url.URL{
 			Scheme: "file",
 			Path:   filepath.ToSlash(previewPath),

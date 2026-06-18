@@ -5,10 +5,14 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
 )
 
 //nolint:gosec // G204: urlStr is the generated local HTML preview path
 var openBrowserFunc = func(urlStr string) error {
+	if isTestEnv() {
+		return nil
+	}
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "windows":
@@ -21,6 +25,15 @@ var openBrowserFunc = func(urlStr string) error {
 		cmd = exec.Command("xdg-open", urlStr)
 	}
 	return cmd.Start()
+}
+
+func isTestEnv() bool {
+	for _, arg := range os.Args {
+		if strings.HasPrefix(arg, "-test.") {
+			return true
+		}
+	}
+	return strings.HasSuffix(os.Args[0], ".test") || strings.HasSuffix(os.Args[0], ".test.exe")
 }
 
 func openBrowser(urlStr string) error {

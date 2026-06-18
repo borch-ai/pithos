@@ -147,6 +147,9 @@ func Assemble(ctx context.Context, opts AssembleOptions) (*manifest.Manifest, er
 		fmt.Fprintf(os.Stderr, "Warning: failed to regenerate web preview: %v\n", previewErr)
 	} else if !opts.Silent {
 		previewPath := filepath.Join(opts.InputDir, "web_preview", "preview.html")
+		if absPath, err := filepath.Abs(previewPath); err == nil {
+			previewPath = absPath
+		}
 		u := &url.URL{
 			Scheme: "file",
 			Path:   filepath.ToSlash(previewPath),
