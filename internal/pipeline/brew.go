@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -31,6 +30,7 @@ type BrewOptions struct {
 	Concurrency       int
 	Review            bool
 	Pages             []int
+	Silent            bool
 	MCPTransport      mcpsdk.Transport // For testing
 	CloudMCPTransport mcpsdk.Transport // For testing
 	LLM               LLMClient        // For testing
@@ -105,7 +105,7 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 		return err
 	}
 
-	if err := handleReviewCheckpoint(opts, m, manuscriptPath); err != nil {
+	if err := handleReviewCheckpoint(ctx, opts, m, manuscriptPath); err != nil {
 		return err
 	}
 
@@ -126,11 +126,11 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 		fmt.Fprintf(os.Stderr, "Warning: failed to generate web preview: %v\n", previewErr)
 	} else {
 		previewPath := filepath.Join(opts.OutputDir, "web_preview", "preview.html")
-		u := &url.URL{
-			Scheme: "file",
-			Path:   filepath.ToSlash(previewPath),
+		urlStr := formatFileURL(previewPath)
+		fmt.Printf("\nWeb preview generated: open %s in your browser to flip through the book!\n\n", urlStr)
+		if !opts.Silent {
+			triggerBrowserOpen(ctx, urlStr)
 		}
-		fmt.Printf("\nWeb preview generated: open %s in your browser to flip through the book!\n\n", u.String())
 	}
 
 	// Log telemetry summary
@@ -161,7 +161,7 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 	return nil
 }
 
-func handleReviewCheckpoint(opts BrewOptions, m *manifest.Manifest, manuscriptPath string) error {
+func handleReviewCheckpoint(ctx context.Context, opts BrewOptions, m *manifest.Manifest, manuscriptPath string) error {
 	if !opts.Review {
 		return nil
 	}
@@ -179,11 +179,11 @@ func handleReviewCheckpoint(opts BrewOptions, m *manifest.Manifest, manuscriptPa
 		fmt.Fprintf(os.Stderr, "Warning: failed to generate web preview: %v\n", previewErr)
 	} else {
 		previewPath := filepath.Join(opts.OutputDir, "web_preview", "preview.html")
-		u := &url.URL{
-			Scheme: "file",
-			Path:   filepath.ToSlash(previewPath),
+		urlStr := formatFileURL(previewPath)
+		fmt.Printf("\nWeb preview generated: open %s in your browser to flip through the book!\n\n", urlStr)
+		if !opts.Silent {
+			triggerBrowserOpen(ctx, urlStr)
 		}
-		fmt.Printf("\nWeb preview generated: open %s in your browser to flip through the book!\n\n", u.String())
 	}
 
 	return fmt.Errorf("%w: manuscript is available at %s. Edit the file, then run brew without --review to generate illustrations", ErrReviewPause, manuscriptPath)

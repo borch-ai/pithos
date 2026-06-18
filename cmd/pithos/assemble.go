@@ -13,6 +13,7 @@ var (
 	assembleBleed     bool
 	assembleTrimSize  string
 	assemblePaperType string
+	assembleSilent    bool
 )
 
 var assembleCmd = &cobra.Command{
@@ -25,6 +26,7 @@ var assembleCmd = &cobra.Command{
 			Bleed:     assembleBleed,
 			TrimSize:  assembleTrimSize,
 			PaperType: assemblePaperType,
+			Silent:    assembleSilent,
 		}
 		m, err := pipeline.Assemble(cmd.Context(), opts)
 		if err != nil {
@@ -43,5 +45,6 @@ func init() {
 	assembleCmd.Flags().BoolVar(&assembleBleed, "bleed", false, "Include bleed margins")
 	assembleCmd.Flags().StringVar(&assembleTrimSize, "trim-size", "6x9", "Trim size of the book (e.g. 6x9, 5.5x8.5)")
 	assembleCmd.Flags().StringVar(&assemblePaperType, "paper-type", "white", "Paper type of the book (white, cream, standard_color, premium_color)")
+	assembleCmd.Flags().BoolVar(&assembleSilent, "silent", false, "Silence automatic opening of web preview in the browser")
 	rootCmd.AddCommand(assembleCmd)
 }
