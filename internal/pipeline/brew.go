@@ -105,7 +105,7 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 		return err
 	}
 
-	if err := handleReviewCheckpoint(opts, m, manuscriptPath); err != nil {
+	if err := handleReviewCheckpoint(ctx, opts, m, manuscriptPath); err != nil {
 		return err
 	}
 
@@ -129,7 +129,7 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 		urlStr := formatFileURL(previewPath)
 		fmt.Printf("\nWeb preview generated: open %s in your browser to flip through the book!\n\n", urlStr)
 		if !opts.Silent {
-			triggerBrowserOpen(urlStr)
+			triggerBrowserOpen(ctx, urlStr)
 		}
 	}
 
@@ -161,7 +161,7 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 	return nil
 }
 
-func handleReviewCheckpoint(opts BrewOptions, m *manifest.Manifest, manuscriptPath string) error {
+func handleReviewCheckpoint(ctx context.Context, opts BrewOptions, m *manifest.Manifest, manuscriptPath string) error {
 	if !opts.Review {
 		return nil
 	}
@@ -182,7 +182,7 @@ func handleReviewCheckpoint(opts BrewOptions, m *manifest.Manifest, manuscriptPa
 		urlStr := formatFileURL(previewPath)
 		fmt.Printf("\nWeb preview generated: open %s in your browser to flip through the book!\n\n", urlStr)
 		if !opts.Silent {
-			triggerBrowserOpen(urlStr)
+			triggerBrowserOpen(ctx, urlStr)
 		}
 	}
 

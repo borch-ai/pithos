@@ -146,7 +146,7 @@ func Assemble(ctx context.Context, opts AssembleOptions) (*manifest.Manifest, er
 		fmt.Fprintf(os.Stderr, "Warning: failed to regenerate web preview: %v\n", previewErr)
 	} else if !opts.Silent {
 		previewPath := filepath.Join(opts.InputDir, "web_preview", "preview.html")
-		triggerBrowserOpen(formatFileURL(previewPath))
+		triggerBrowserOpen(ctx, formatFileURL(previewPath))
 	}
 
 	if err := Checkpoint(ctx, opts.InputDir, "Compiled print layouts and PDFs"); err != nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -21,13 +22,13 @@ func TestOpenBrowserBehavior(t *testing.T) {
 
 	var calledURL string
 	var callCount int
-	openBrowserFunc = func(urlStr string) error {
+	openBrowserFunc = func(ctx context.Context, urlStr string) error {
 		calledURL = urlStr
 		callCount++
 		return nil
 	}
 
-	err := openBrowser("https://example.com")
+	err := openBrowser(context.Background(), "https://example.com")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -43,12 +44,51 @@ func TestTriggerBrowserOpen_Error(t *testing.T) {
 	origFunc := openBrowserFunc
 	defer func() { openBrowserFunc = origFunc }()
 
-	openBrowserFunc = func(urlStr string) error {
+	openBrowserFunc = func(ctx context.Context, urlStr string) error {
 		return errors.New("mock browser launch error")
 	}
 
 	// This should run without panic or failure, logging to stderr
-	triggerBrowserOpen("https://example.com")
+	triggerBrowserOpen(context.Background(), "https://example.com")
+}
+
+func TestDefaultOpenBrowser_AllPlatforms(t *testing.T) {
+	origExec := execCommandContext
+	origGOOS := goos
+	defer func() {
+		execCommandContext = origExec
+		goos = origGOOS
+	}()
+
+	platforms := []struct {
+		osName      string
+		expectedCmd string
+	}{
+		{"darwin", "open"},
+		{"windows", "rundll32"},
+		{"linux", "xdg-open"},
+		{"other", "xdg-open"},
+	}
+
+	for _, p := range platforms {
+		t.Run(p.osName, func(t *testing.T) {
+			goos = p.osName
+			var calledName string
+			execCommandContext = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+				calledName = name
+				// Execute the standard Unix "true" command to mock successful startup/termination
+				return exec.CommandContext(ctx, "true")
+			}
+
+			err := defaultOpenBrowser(context.Background(), "https://example.com")
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if calledName != p.expectedCmd {
+				t.Errorf("expected command %q for OS %q, got %q", p.expectedCmd, p.osName, calledName)
+			}
+		})
+	}
 }
 
 //nolint:funlen // TestAssemble_BrowserOpen coordinates multiple subtests and mock servers
@@ -89,7 +129,7 @@ func TestAssemble_BrowserOpen(t *testing.T) {
 		defer cleanupTypst()
 
 		called := false
-		openBrowserFunc = func(urlStr string) error {
+		openBrowserFunc = func(ctx context.Context, urlStr string) error {
 			called = true
 			return nil
 		}
@@ -125,7 +165,7 @@ func TestAssemble_BrowserOpen(t *testing.T) {
 
 		called := false
 		var calledURL string
-		openBrowserFunc = func(urlStr string) error {
+		openBrowserFunc = func(ctx context.Context, urlStr string) error {
 			called = true
 			calledURL = urlStr
 			return nil
@@ -211,7 +251,7 @@ func TestBrew_BrowserOpen(t *testing.T) {
 		}
 
 		called := false
-		openBrowserFunc = func(urlStr string) error {
+		openBrowserFunc = func(ctx context.Context, urlStr string) error {
 			called = true
 			return nil
 		}
@@ -257,7 +297,7 @@ func TestBrew_BrowserOpen(t *testing.T) {
 
 		called := false
 		var calledURL string
-		openBrowserFunc = func(urlStr string) error {
+		openBrowserFunc = func(ctx context.Context, urlStr string) error {
 			called = true
 			calledURL = urlStr
 			return nil
