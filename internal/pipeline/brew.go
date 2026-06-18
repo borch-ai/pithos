@@ -290,6 +290,7 @@ func generateManuscript(ctx context.Context, m *manifest.Manifest, opts BrewOpti
 			Status:             manifest.StatusPending,
 			Text:               text,
 			IllustrationPrompt: promptVal,
+			Layout:             "full-bleed",
 		}
 	}
 	m.Progress.ManuscriptGenerated = true
@@ -582,6 +583,11 @@ func exportManuscriptToMarkdown(outputDir string, style, charProfile string, pag
 
 	for _, p := range pages {
 		fmt.Fprintf(&sb, "# Page %d\n", p.PageIndex)
+		layoutVal := p.Layout
+		if layoutVal == "" {
+			layoutVal = "full-bleed"
+		}
+		fmt.Fprintf(&sb, "<!-- Layout: %s -->\n", sanitizeCommentText(layoutVal))
 		sb.WriteString("## Text\n")
 		sb.WriteString(strings.TrimSpace(p.Text))
 		sb.WriteString("\n\n## Prompt\n")
@@ -604,13 +610,33 @@ type parsedPage struct {
 	index         int
 	text          string
 	prompt        string
+	layout        string
 	hasSubheaders bool
 }
 
+func extractLayoutComment(line string) (string, bool) {
+	trimmed := strings.TrimSpace(line)
+	if strings.HasPrefix(trimmed, "<!--") && strings.HasSuffix(trimmed, "-->") {
+		commentContent := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(trimmed, "<!--"), "-->"))
+		if strings.HasPrefix(strings.ToLower(commentContent), "layout:") {
+			return strings.TrimSpace(commentContent[len("layout:"):]), true
+		}
+	}
+	return "", false
+}
+
 func parsePageBlock(index int, lines []string) (parsedPage, bool, error) {
+	var layoutVal string
+	var filteredLines []string
 	textCount := 0
 	promptCount := 0
+
 	for _, line := range lines {
+		if val, ok := extractLayoutComment(line); ok {
+			layoutVal = val
+			continue
+		}
+		filteredLines = append(filteredLines, line)
 		trimmed := strings.TrimSpace(line)
 		switch trimmed {
 		case "## Text":
@@ -626,7 +652,8 @@ func parsePageBlock(index int, lines []string) (parsedPage, bool, error) {
 		// Legacy format: everything under "# Page N" is the text
 		return parsedPage{
 			index:         index,
-			text:          strings.TrimSpace(strings.Join(lines, "\n")),
+			text:          strings.TrimSpace(strings.Join(filteredLines, "\n")),
+			layout:        layoutVal,
 			hasSubheaders: false,
 		}, false, nil
 	}
@@ -645,7 +672,7 @@ func parsePageBlock(index int, lines []string) (parsedPage, bool, error) {
 	var promptLines []string
 	currentSection := 0 // 0 = none, 1 = text, 2 = prompt
 
-	for _, line := range lines {
+	for _, line := range filteredLines {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "## Text" {
 			currentSection = 1
@@ -668,6 +695,7 @@ func parsePageBlock(index int, lines []string) (parsedPage, bool, error) {
 		index:         index,
 		text:          strings.TrimSpace(strings.Join(textLines, "\n")),
 		prompt:        strings.TrimSpace(strings.Join(promptLines, "\n")),
+		layout:        layoutVal,
 		hasSubheaders: true,
 	}, true, nil
 }
@@ -766,7 +794,8 @@ func validateManuscriptEdits(parsedPages []parsedPage, m *manifest.Manifest, pag
 				found = true
 				textChanged := page.Text != pp.text
 				promptChanged := pp.hasSubheaders && page.IllustrationPrompt != pp.prompt
-				if (textChanged || promptChanged) && !isPageAllowed(pp.index, pagesFilter) {
+				layoutChanged := pp.layout != "" && page.Layout != pp.layout
+				if (textChanged || promptChanged || layoutChanged) && !isPageAllowed(pp.index, pagesFilter) {
 					return fmt.Errorf("manuscript.md contains edits for page %d which is not included in the selective page override list: %v", pp.index, pagesFilter)
 				}
 			}
@@ -776,6 +805,44 @@ func validateManuscriptEdits(parsedPages []parsedPage, m *manifest.Manifest, pag
 		}
 	}
 	return nil
+}
+
+func updateSinglePage(page *manifest.PageState, pp parsedPage) bool {
+	textChanged := page.Text != pp.text
+	promptChanged := pp.hasSubheaders && page.IllustrationPrompt != pp.prompt
+	layoutChanged := pp.layout != "" && page.Layout != pp.layout
+
+	if !textChanged && !promptChanged && !layoutChanged {
+		return false
+	}
+
+	if textChanged || promptChanged {
+		page.Text = pp.text
+		if pp.hasSubheaders {
+			page.IllustrationPrompt = pp.prompt
+		}
+		page.Status = manifest.StatusPending
+	}
+	if layoutChanged {
+		page.Layout = pp.layout
+	}
+	return true
+}
+
+func updateManifestPages(m *manifest.Manifest, parsedPages []parsedPage) bool {
+	changed := false
+	for _, pp := range parsedPages {
+		for i := range m.Progress.Pages {
+			page := &m.Progress.Pages[i]
+			if page.PageIndex == pp.index {
+				if updateSinglePage(page, pp) {
+					changed = true
+				}
+				break
+			}
+		}
+	}
+	return changed
 }
 
 //nolint:gocognit // import verification requires matching multiple states (index, text modifications)
@@ -821,25 +888,8 @@ func importManuscriptFromMarkdown(outputDir string, m *manifest.Manifest, pagesF
 		changed = true
 	}
 
-	for _, pp := range parsedPages {
-		for i, page := range m.Progress.Pages {
-			if page.PageIndex == pp.index {
-				textChanged := page.Text != pp.text
-				promptChanged := pp.hasSubheaders && page.IllustrationPrompt != pp.prompt
-
-				if !textChanged && !promptChanged {
-					break
-				}
-
-				m.Progress.Pages[i].Text = pp.text
-				if pp.hasSubheaders {
-					m.Progress.Pages[i].IllustrationPrompt = pp.prompt
-				}
-				m.Progress.Pages[i].Status = manifest.StatusPending
-				changed = true
-				break
-			}
-		}
+	if updateManifestPages(m, parsedPages) {
+		changed = true
 	}
 
 	if styleChanged || charProfileChanged {

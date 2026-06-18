@@ -37,7 +37,7 @@ func TestJSONSerialization(t *testing.T) {
 	m.Progress.CoverImageGenerated = true
 	m.Progress.CoverImagePath = "/assets/cover.png"
 	m.Progress.Pages = []PageState{
-		{PageIndex: 0, Status: StatusCompleted, ImagePath: "/assets/page_0.png", Text: "Hello World"},
+		{PageIndex: 0, Status: StatusCompleted, ImagePath: "/assets/page_0.png", Text: "Hello World", Layout: "facing-pages"},
 	}
 	m.AssetRegistry["cover"] = "/assets/cover.png"
 	m.KDPLayout = KDPLayout{
@@ -68,8 +68,8 @@ func TestJSONSerialization(t *testing.T) {
 	if m2.AssetRegistry["cover"] != m.AssetRegistry["cover"] {
 		t.Errorf("expected AssetRegistry['cover'] %s, got %s", m.AssetRegistry["cover"], m2.AssetRegistry["cover"])
 	}
-	if len(m2.Progress.Pages) != 1 || m2.Progress.Pages[0].Status != StatusCompleted {
-		t.Errorf("expected Pages[0].Status %v, got %v", StatusCompleted, m2.Progress.Pages[0].Status)
+	if len(m2.Progress.Pages) != 1 || m2.Progress.Pages[0].Status != StatusCompleted || m2.Progress.Pages[0].Layout != "facing-pages" {
+		t.Errorf("expected Pages[0].Status %v and Layout facing-pages, got status %v layout %q", StatusCompleted, m2.Progress.Pages[0].Status, m2.Progress.Pages[0].Layout)
 	}
 }
 

@@ -49,6 +49,7 @@ type previewPage struct {
 	Text               string `json:"text"`
 	ImagePath          string `json:"imagePath"`
 	IllustrationPrompt string `json:"illustrationPrompt"`
+	Layout             string `json:"layout,omitempty"`
 }
 
 type previewData struct {
@@ -75,6 +76,7 @@ func generateDataJS(m *manifest.Manifest) (string, error) {
 			Text:               p.Text,
 			ImagePath:          imgPath,
 			IllustrationPrompt: p.IllustrationPrompt,
+			Layout:             p.Layout,
 		}
 	}
 
