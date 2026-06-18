@@ -1323,9 +1323,9 @@ func TestBrew_ReviewFlow_Export(t *testing.T) {
 		t.Fatalf("failed to read manuscript.md: %v", readErr)
 	}
 	content := string(data)
-	if !strings.Contains(content, "# Page 1\n## Text\nStanza 1 original\n\n## Prompt\nIllustration prompt for stanza 1") ||
-		!strings.Contains(content, "# Page 2\n## Text\nStanza 2 original\n\n## Prompt\nIllustration prompt for stanza 2") ||
-		!strings.Contains(content, "# Page 3\n## Text\nStanza 3 original\n\n## Prompt\nIllustration prompt for stanza 3") {
+	if !strings.Contains(content, "# Page 1") || !strings.Contains(content, "## Text\nStanza 1 original\n\n## Prompt\nIllustration prompt for stanza 1") ||
+		!strings.Contains(content, "# Page 2") || !strings.Contains(content, "## Text\nStanza 2 original\n\n## Prompt\nIllustration prompt for stanza 2") ||
+		!strings.Contains(content, "# Page 3") || !strings.Contains(content, "## Text\nStanza 3 original\n\n## Prompt\nIllustration prompt for stanza 3") {
 		t.Errorf("manuscript.md has incorrect format: %s", content)
 	}
 }
@@ -1542,8 +1542,8 @@ func TestImportManuscriptFromMarkdown_DoubleSubheaders(t *testing.T) {
 
 	m := manifest.NewManifest(filepath.Join(tmpDir, "manifest.json"))
 	m.Progress.Pages = []manifest.PageState{
-		{PageIndex: 1, Text: "Stanza 1 original", IllustrationPrompt: "Prompt 1 original", Status: manifest.StatusCompleted, ImagePath: "images/page_1.png"},
-		{PageIndex: 2, Text: "Stanza 2 original", IllustrationPrompt: "Prompt 2 original", Status: manifest.StatusCompleted, ImagePath: "images/page_2.png"},
+		{PageIndex: 1, Text: "Stanza 1 original", IllustrationPrompt: "Prompt 1 original", Status: manifest.StatusCompleted, ImagePath: "images/page_1.png", Layout: "full-bleed"},
+		{PageIndex: 2, Text: "Stanza 2 original", IllustrationPrompt: "Prompt 2 original", Status: manifest.StatusCompleted, ImagePath: "images/page_2.png", Layout: "full-bleed"},
 	}
 
 	manuscriptPath := filepath.Join(tmpDir, "manuscript.md")
@@ -1551,6 +1551,7 @@ func TestImportManuscriptFromMarkdown_DoubleSubheaders(t *testing.T) {
 	// Test 1: Write manuscript with modified text in double subheader format
 	content := `<!-- review -->
 # Page 1
+<!-- Layout: facing-pages -->
 ## Text
 Stanza 1 edited text
 
@@ -1558,6 +1559,7 @@ Stanza 1 edited text
 Prompt 1 original
 
 # Page 2
+<!-- Layout: facing-pages-flipped -->
 ## Text
 Stanza 2 original
 
@@ -1579,6 +1581,9 @@ Prompt 2 edited prompt
 	if m.Progress.Pages[0].Text != "Stanza 1 edited text" {
 		t.Errorf("expected page 1 text to be edited, got %q", m.Progress.Pages[0].Text)
 	}
+	if m.Progress.Pages[0].Layout != "facing-pages" {
+		t.Errorf("expected page 1 layout to be facing-pages, got %q", m.Progress.Pages[0].Layout)
+	}
 	if m.Progress.Pages[0].Status != manifest.StatusPending || m.Progress.Pages[0].ImagePath != "images/page_1.png" {
 		t.Errorf("expected page 1 status to be reset, got status %q path %q", m.Progress.Pages[0].Status, m.Progress.Pages[0].ImagePath)
 	}
@@ -1586,15 +1591,28 @@ Prompt 2 edited prompt
 	if m.Progress.Pages[1].IllustrationPrompt != "Prompt 2 edited prompt" {
 		t.Errorf("expected page 2 prompt to be edited, got %q", m.Progress.Pages[1].IllustrationPrompt)
 	}
+	if m.Progress.Pages[1].Layout != "facing-pages-flipped" {
+		t.Errorf("expected page 2 layout to be facing-pages-flipped, got %q", m.Progress.Pages[1].Layout)
+	}
 	if m.Progress.Pages[1].Status != manifest.StatusPending || m.Progress.Pages[1].ImagePath != "images/page_2.png" {
 		t.Errorf("expected page 2 status to be reset, got status %q path %q", m.Progress.Pages[1].Status, m.Progress.Pages[1].ImagePath)
 	}
+}
 
-	// Test 2: Fallback behavior for legacy manuscripts
-	m.Progress.Pages[0].Status = manifest.StatusCompleted
-	m.Progress.Pages[0].ImagePath = "images/page_1.png"
-	m.Progress.Pages[1].Status = manifest.StatusCompleted
-	m.Progress.Pages[1].ImagePath = "images/page_2.png"
+func TestImportManuscriptFromMarkdown_LegacyFallback(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos-import-legacy-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	m := manifest.NewManifest(filepath.Join(tmpDir, "manifest.json"))
+	m.Progress.Pages = []manifest.PageState{
+		{PageIndex: 1, Text: "Stanza 1 original", IllustrationPrompt: "Prompt 1 original", Status: manifest.StatusCompleted, ImagePath: "images/page_1.png"},
+		{PageIndex: 2, Text: "Stanza 2 original", IllustrationPrompt: "Prompt 2 original", Status: manifest.StatusCompleted, ImagePath: "images/page_2.png"},
+	}
+
+	manuscriptPath := filepath.Join(tmpDir, "manuscript.md")
 
 	legacyContent := `<!-- review -->
 # Page 1
@@ -1607,7 +1625,7 @@ Stanza 2 original
 		t.Fatalf("failed to write manuscript.md: %v", writeErr)
 	}
 
-	changed, err = importManuscriptFromMarkdown(tmpDir, m, nil)
+	changed, err := importManuscriptFromMarkdown(tmpDir, m, nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -1628,7 +1646,7 @@ Stanza 2 original
 	if m.Progress.Pages[1].Text != "Stanza 2 original" {
 		t.Errorf("expected page 2 text to remain same, got %q", m.Progress.Pages[1].Text)
 	}
-	if m.Progress.Pages[1].IllustrationPrompt != "Prompt 2 edited prompt" {
+	if m.Progress.Pages[1].IllustrationPrompt != "Prompt 2 original" {
 		t.Errorf("expected page 2 illustration prompt to be preserved, got %q", m.Progress.Pages[1].IllustrationPrompt)
 	}
 	if m.Progress.Pages[1].Status != manifest.StatusCompleted {
@@ -1827,8 +1845,8 @@ func TestBrew_ReviewFlow_GuidesExport(t *testing.T) {
 		TargetPageCount:  2,
 	}
 	m.Progress.Pages = []manifest.PageState{
-		{PageIndex: 1, Status: manifest.StatusCompleted, ImagePath: "images/page_1.png", Text: "Stanza 1 text", IllustrationPrompt: "Prompt 1"},
-		{PageIndex: 2, Status: manifest.StatusCompleted, ImagePath: "images/page_2.png", Text: "Stanza 2 text", IllustrationPrompt: "Prompt 2"},
+		{PageIndex: 1, Status: manifest.StatusCompleted, ImagePath: "images/page_1.png", Text: "Stanza 1 text", IllustrationPrompt: "Prompt 1", Layout: "facing-pages"},
+		{PageIndex: 2, Status: manifest.StatusCompleted, ImagePath: "images/page_2.png", Text: "Stanza 2 text", IllustrationPrompt: "Prompt 2", Layout: "full-bleed"},
 	}
 	if err = m.Save(); err != nil {
 		t.Fatalf("failed to save manifest: %v", err)
@@ -1852,6 +1870,12 @@ func TestBrew_ReviewFlow_GuidesExport(t *testing.T) {
 	}
 	if !strings.Contains(content, "<!-- CharacterProfile: A chubby cat -->") {
 		t.Errorf("exported file missing CharacterProfile comment: %s", content)
+	}
+	if !strings.Contains(content, "<!-- Layout: facing-pages -->") {
+		t.Errorf("exported file missing Layout comment: %s", content)
+	}
+	if !strings.Contains(content, "<!-- Layout: full-bleed -->") {
+		t.Errorf("exported file missing Layout comment: %s", content)
 	}
 
 	// Verify sanitization of comment terminators (-->) in Style and CharacterProfile

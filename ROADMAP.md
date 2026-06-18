@@ -125,6 +125,12 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
 *   [ ] **Task 5.25: Opt-in Brainstorming during Initiate**
     *   Add a `--brainstorm` boolean flag to the `pithos initiate` command. If set, this flag initializes the LLM client using configured credentials and prompts the LLM to generate the `style_seed` and `character_profile` immediately, saving the drafts to the created manifest file.
     *   [Implementation Plan](plans/phase_5/task_5_25_opt_in_initiate_brainstorming.md)
+*   [ ] **Task 5.26: Automatic Browser Preview Opening**
+    *   Automatically open the generated web preview visualizer in the default system browser after `pithos brew` or `pithos assemble` completes. Provide a `--silent` flag to allow opting out of this behavior in headless/CI environments.
+    *   [Implementation Plan](plans/phase_5/task_5_26_auto_open_preview.md)
+*   [ ] **Task 5.27: GCP Cloud Storage Configuration Support**
+    *   Enable GCS configuration natively in Pithos via `.pithos.toml` and `.env`, and propagate variables to `pw-mcp-cloud` to support character-consistent illustration generation.
+    *   [Implementation Plan](plans/phase_5/task_5_27_gcp_cloud_storage_configuration.md)
 
 
 ### Interactive UI & Quality Enhancements

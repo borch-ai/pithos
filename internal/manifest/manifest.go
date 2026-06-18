@@ -29,6 +29,7 @@ type PageState struct {
 	Text               string     `json:"text,omitempty"`
 	IllustrationPrompt string     `json:"illustration_prompt,omitempty"`
 	CharacterWeight    *int       `json:"character_weight,omitempty"`
+	Layout             string     `json:"layout,omitempty"`
 }
 
 // BookProperties holds high-level configurations of the book.
