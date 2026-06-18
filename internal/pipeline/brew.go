@@ -498,9 +498,9 @@ func generateImageRaw(ctx context.Context, mcpClient *mcp.PluginClient, prompt s
 	}
 	if crefURL != "" {
 		generateArgs["cref_url"] = crefURL
-	}
-	if charWeight != nil {
-		generateArgs["character_weight"] = *charWeight
+		if charWeight != nil {
+			generateArgs["character_weight"] = *charWeight
+		}
 	}
 
 	resText, err := mcpClient.CallTool(ctx, "imagegen_generate", generateArgs)

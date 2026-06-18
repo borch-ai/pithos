@@ -36,7 +36,7 @@ var initiateCmd = &cobra.Command{
 					return err
 				}
 				if !confirm {
-					return fmt.Errorf("initiation cancelled: directory %s already exists", resolvedDir)
+					return fmt.Errorf("initiation cancelled: directory %s already exists and manifest overwrite was declined", resolvedDir)
 				}
 			}
 		}
