@@ -140,6 +140,65 @@ func setupMockTypstServer(t *testing.T, ctx context.Context, serverTransport mcp
 	}
 }
 
+func setupMockPDFCheckServer(t *testing.T, ctx context.Context, serverTransport mcpsdk.Transport, valid bool, errors []string, warnings []string) (*mcpsdk.ServerSession, func()) {
+	t.Helper()
+	server := mcpsdk.NewServer(&mcpsdk.Implementation{
+		Name:    "mock-pdfcheck-server",
+		Version: "1.0.0",
+	}, nil)
+
+	server.AddTool(&mcpsdk.Tool{
+		Name: "validate_pdf",
+		InputSchema: map[string]any{
+			"type": "object",
+		},
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		resMap := map[string]interface{}{
+			"valid":      valid,
+			"page_count": 80,
+			"dimensions": "6.000 x 9.000 in",
+			"errors":     errors,
+			"warnings":   warnings,
+		}
+		resBytes, _ := json.Marshal(resMap)
+		return &mcpsdk.CallToolResult{
+			Content: []mcpsdk.Content{
+				&mcpsdk.TextContent{Text: string(resBytes)},
+			},
+		}, nil
+	})
+
+	server.AddTool(&mcpsdk.Tool{
+		Name: "validate_cover_pdf",
+		InputSchema: map[string]any{
+			"type": "object",
+		},
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		resMap := map[string]interface{}{
+			"valid":      valid,
+			"page_count": 1,
+			"dimensions": "12.550 x 9.250 in",
+			"errors":     errors,
+			"warnings":   warnings,
+		}
+		resBytes, _ := json.Marshal(resMap)
+		return &mcpsdk.CallToolResult{
+			Content: []mcpsdk.Content{
+				&mcpsdk.TextContent{Text: string(resBytes)},
+			},
+		}, nil
+	})
+
+	serverSession, err := server.Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return serverSession, func() {
+		_ = serverSession.Close()
+	}
+}
+
 func TestAssemble_Success(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "pithos-assemble-*")
 	if err != nil {
@@ -183,12 +242,17 @@ func TestAssemble_Success(t *testing.T) {
 	_, cleanupTypst := setupMockTypstServer(t, ctx, serverTypst)
 	defer cleanupTypst()
 
+	clientPDFCheck, serverPDFCheck := mcpsdk.NewInMemoryTransports()
+	_, cleanupPDFCheck := setupMockPDFCheckServer(t, ctx, serverPDFCheck, true, nil, nil)
+	defer cleanupPDFCheck()
+
 	optsAssemble := AssembleOptions{
-		InputDir:         tmpDir,
-		Format:           "paperback",
-		Bleed:            true,
-		KDPMathTransport: clientKDP,
-		TypstTransport:   clientTypst,
+		InputDir:          tmpDir,
+		Format:            "paperback",
+		Bleed:             true,
+		KDPMathTransport:  clientKDP,
+		TypstTransport:    clientTypst,
+		PDFCheckTransport: clientPDFCheck,
 	}
 
 	_, err = Assemble(ctx, optsAssemble)
@@ -270,13 +334,18 @@ func TestAssemble_TrimSizeOverride(t *testing.T) {
 	_, cleanupTypst := setupMockTypstServer(t, ctx, serverTypst)
 	defer cleanupTypst()
 
+	clientPDFCheck, serverPDFCheck := mcpsdk.NewInMemoryTransports()
+	_, cleanupPDFCheck := setupMockPDFCheckServer(t, ctx, serverPDFCheck, true, nil, nil)
+	defer cleanupPDFCheck()
+
 	optsAssembleOverride := AssembleOptions{
-		InputDir:         tmpDir,
-		Format:           "paperback",
-		Bleed:            true,
-		TrimSize:         "6x9",
-		KDPMathTransport: clientKDP,
-		TypstTransport:   clientTypst,
+		InputDir:          tmpDir,
+		Format:            "paperback",
+		Bleed:             true,
+		TrimSize:          "6x9",
+		KDPMathTransport:  clientKDP,
+		TypstTransport:    clientTypst,
+		PDFCheckTransport: clientPDFCheck,
 	}
 
 	m3, err := Assemble(ctx, optsAssembleOverride)
@@ -434,7 +503,7 @@ func TestAssemble_UnmarshalJSONError(t *testing.T) {
 	}
 }
 
-func TestAssemble_FormatDefaulting(t *testing.T) {
+func TestAssemble_FormatDefaulting_ManifestFormat(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -467,11 +536,16 @@ func TestAssemble_FormatDefaulting(t *testing.T) {
 	_, cleanupTypst := setupMockTypstServer(t, ctx, serverTypst)
 	defer cleanupTypst()
 
+	clientPDFCheck, serverPDFCheck := mcpsdk.NewInMemoryTransports()
+	_, cleanupPDFCheck := setupMockPDFCheckServer(t, ctx, serverPDFCheck, true, nil, nil)
+	defer cleanupPDFCheck()
+
 	optsAssemble := AssembleOptions{
-		InputDir:         tmpDir,
-		Format:           "", // empty to trigger defaulting to manifest
-		KDPMathTransport: clientKDP,
-		TypstTransport:   clientTypst,
+		InputDir:          tmpDir,
+		Format:            "", // empty to trigger defaulting to manifest
+		KDPMathTransport:  clientKDP,
+		TypstTransport:    clientTypst,
+		PDFCheckTransport: clientPDFCheck,
 	}
 
 	mRes, err := Assemble(ctx, optsAssemble)
@@ -481,6 +555,11 @@ func TestAssemble_FormatDefaulting(t *testing.T) {
 	if mRes.BookProperties.Format != "hardcover" {
 		t.Errorf("expected format to remain 'hardcover', got %q", mRes.BookProperties.Format)
 	}
+}
+
+func TestAssemble_FormatDefaulting_EmptyEverywhere(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
 	// Case B: both opts.Format and manifest.BookProperties.Format are empty
 	tmpDir2, err := os.MkdirTemp("", "pithos-assemble-def2-*")
@@ -511,11 +590,16 @@ func TestAssemble_FormatDefaulting(t *testing.T) {
 	_, cleanupTypst2 := setupMockTypstServer(t, ctx, serverTypst2)
 	defer cleanupTypst2()
 
+	clientPDFCheck2, serverPDFCheck2 := mcpsdk.NewInMemoryTransports()
+	_, cleanupPDFCheck2 := setupMockPDFCheckServer(t, ctx, serverPDFCheck2, true, nil, nil)
+	defer cleanupPDFCheck2()
+
 	optsAssemble2 := AssembleOptions{
-		InputDir:         tmpDir2,
-		Format:           "", // empty
-		KDPMathTransport: clientKDP2,
-		TypstTransport:   clientTypst2,
+		InputDir:          tmpDir2,
+		Format:            "", // empty
+		KDPMathTransport:  clientKDP2,
+		TypstTransport:    clientTypst2,
+		PDFCheckTransport: clientPDFCheck2,
 	}
 
 	mRes2, err := Assemble(ctx, optsAssemble2)
@@ -719,11 +803,16 @@ func TestAssemble_TrimSizeDefaulting(t *testing.T) {
 	_, cleanupTypst := setupMockTypstServer(t, ctx, serverTypst)
 	defer cleanupTypst()
 
+	clientPDFCheck, serverPDFCheck := mcpsdk.NewInMemoryTransports()
+	_, cleanupPDFCheck := setupMockPDFCheckServer(t, ctx, serverPDFCheck, true, nil, nil)
+	defer cleanupPDFCheck()
+
 	optsAssemble := AssembleOptions{
-		InputDir:         tmpDir,
-		TrimSize:         "",
-		KDPMathTransport: clientKDP,
-		TypstTransport:   clientTypst,
+		InputDir:          tmpDir,
+		TrimSize:          "",
+		KDPMathTransport:  clientKDP,
+		TypstTransport:    clientTypst,
+		PDFCheckTransport: clientPDFCheck,
 	}
 
 	mRes, err := Assemble(ctx, optsAssemble)
@@ -782,12 +871,17 @@ func TestAssemble_GenerateWebPreviewError(t *testing.T) {
 	_, cleanupTypst := setupMockTypstServer(t, ctx, serverTypst)
 	defer cleanupTypst()
 
+	clientPDFCheck, serverPDFCheck := mcpsdk.NewInMemoryTransports()
+	_, cleanupPDFCheck := setupMockPDFCheckServer(t, ctx, serverPDFCheck, true, nil, nil)
+	defer cleanupPDFCheck()
+
 	optsAssemble := AssembleOptions{
-		InputDir:         tmpDir,
-		Format:           "paperback",
-		Bleed:            true,
-		KDPMathTransport: clientKDP,
-		TypstTransport:   clientTypst,
+		InputDir:          tmpDir,
+		Format:            "paperback",
+		Bleed:             true,
+		KDPMathTransport:  clientKDP,
+		TypstTransport:    clientTypst,
+		PDFCheckTransport: clientPDFCheck,
 	}
 
 	_, err = Assemble(ctx, optsAssemble)
@@ -810,5 +904,286 @@ func verifyManuscript(t *testing.T, path string) {
 	content := string(contentBytes)
 	if !strings.Contains(content, "# Page 1") || !strings.Contains(content, "Stanza content text") || !strings.Contains(content, "Illustration prompt details") {
 		t.Errorf("manuscript.md did not contain expected content: %s", content)
+	}
+}
+
+func TestAssemble_PDFCheck_Failure(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos-assemble-pdfcheck-fail-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	optsInit := InitiateOptions{
+		OutputDir:       tmpDir,
+		Theme:           "Parody Theme",
+		TargetPageCount: 10,
+	}
+	m, err := Initiate(optsInit)
+	if err != nil {
+		t.Fatalf("Initiate failed: %v", err)
+	}
+	m.Progress.Pages = make([]manifest.PageState, 10)
+	if saveErr := m.Save(); saveErr != nil {
+		t.Fatalf("failed to save manifest: %v", saveErr)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	clientKDP, serverKDP := mcpsdk.NewInMemoryTransports()
+	_, cleanupKDP := setupMockKDPMathServer(t, ctx, serverKDP)
+	defer cleanupKDP()
+
+	clientTypst, serverTypst := mcpsdk.NewInMemoryTransports()
+	_, cleanupTypst := setupMockTypstServer(t, ctx, serverTypst)
+	defer cleanupTypst()
+
+	clientPDFCheck, serverPDFCheck := mcpsdk.NewInMemoryTransports()
+	_, cleanupPDFCheck := setupMockPDFCheckServer(t, ctx, serverPDFCheck, false, []string{"Font not embedded"}, []string{"pdffonts utility not found"})
+	defer cleanupPDFCheck()
+
+	optsAssemble := AssembleOptions{
+		InputDir:          tmpDir,
+		Format:            "paperback",
+		KDPMathTransport:  clientKDP,
+		TypstTransport:    clientTypst,
+		PDFCheckTransport: clientPDFCheck,
+	}
+
+	_, err = Assemble(ctx, optsAssemble)
+	if err == nil {
+		t.Error("expected Assemble to fail when PDFCheck validation fails, but it succeeded")
+	} else if !strings.Contains(err.Error(), "pdf preflight check failed") {
+		t.Errorf("expected error to contain 'pdf preflight check failed', got: %v", err)
+	}
+}
+
+func TestAssemble_PDFCheck_CoverFailure(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos-assemble-pdfcheck-cover-fail-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	optsInit := InitiateOptions{
+		OutputDir:       tmpDir,
+		Theme:           "Parody Theme",
+		TargetPageCount: 10,
+	}
+	m, err := Initiate(optsInit)
+	if err != nil {
+		t.Fatalf("Initiate failed: %v", err)
+	}
+	m.Progress.Pages = make([]manifest.PageState, 10)
+	m.AssetRegistry["cover_pdf"] = "mock_cover.pdf"
+	if saveErr := m.Save(); saveErr != nil {
+		t.Fatalf("failed to save manifest: %v", saveErr)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	clientKDP, serverKDP := mcpsdk.NewInMemoryTransports()
+	_, cleanupKDP := setupMockKDPMathServer(t, ctx, serverKDP)
+	defer cleanupKDP()
+
+	clientTypst, serverTypst := mcpsdk.NewInMemoryTransports()
+	_, cleanupTypst := setupMockTypstServer(t, ctx, serverTypst)
+	defer cleanupTypst()
+
+	// Inside PDF passes (valid = true), but Cover PDF fails
+	server := mcpsdk.NewServer(&mcpsdk.Implementation{
+		Name:    "mock-pdfcheck-server",
+		Version: "1.0.0",
+	}, nil)
+
+	server.AddTool(&mcpsdk.Tool{
+		Name: "validate_pdf",
+		InputSchema: map[string]any{
+			"type": "object",
+		},
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		resMap := map[string]interface{}{
+			"valid": true,
+		}
+		resBytes, _ := json.Marshal(resMap)
+		return &mcpsdk.CallToolResult{
+			Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: string(resBytes)}},
+		}, nil
+	})
+
+	server.AddTool(&mcpsdk.Tool{
+		Name: "validate_cover_pdf",
+		InputSchema: map[string]any{
+			"type": "object",
+		},
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		resMap := map[string]interface{}{
+			"valid":  false,
+			"errors": []string{"Barcode missing"},
+		}
+		resBytes, _ := json.Marshal(resMap)
+		return &mcpsdk.CallToolResult{
+			Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: string(resBytes)}},
+		}, nil
+	})
+
+	clientPDFCheck, serverPDFCheck := mcpsdk.NewInMemoryTransports()
+	serverSession, err := server.Connect(ctx, serverPDFCheck, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = serverSession.Close() }()
+
+	optsAssemble := AssembleOptions{
+		InputDir:          tmpDir,
+		Format:            "paperback",
+		PaperType:         "standard_color", // trigger mapping to color
+		KDPMathTransport:  clientKDP,
+		TypstTransport:    clientTypst,
+		PDFCheckTransport: clientPDFCheck,
+	}
+
+	_, err = Assemble(ctx, optsAssemble)
+	if err == nil {
+		t.Error("expected Assemble to fail when Cover PDFCheck validation fails, but it succeeded")
+	} else if !strings.Contains(err.Error(), "pdf preflight check failed") {
+		t.Errorf("expected error to contain 'pdf preflight check failed', got: %v", err)
+	}
+}
+
+func TestAssemble_PDFCheck_InvalidJSON(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos-assemble-pdfcheck-json-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	optsInit := InitiateOptions{
+		OutputDir:       tmpDir,
+		TargetPageCount: 10,
+	}
+	m, err := Initiate(optsInit)
+	if err != nil {
+		t.Fatalf("Initiate failed: %v", err)
+	}
+	m.Progress.Pages = make([]manifest.PageState, 10)
+	if saveErr := m.Save(); saveErr != nil {
+		t.Fatalf("failed to save manifest: %v", saveErr)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	clientKDP, serverKDP := mcpsdk.NewInMemoryTransports()
+	_, cleanupKDP := setupMockKDPMathServer(t, ctx, serverKDP)
+	defer cleanupKDP()
+
+	clientTypst, serverTypst := mcpsdk.NewInMemoryTransports()
+	_, cleanupTypst := setupMockTypstServer(t, ctx, serverTypst)
+	defer cleanupTypst()
+
+	server := mcpsdk.NewServer(&mcpsdk.Implementation{
+		Name:    "mock-pdfcheck-server",
+		Version: "1.0.0",
+	}, nil)
+
+	server.AddTool(&mcpsdk.Tool{
+		Name: "validate_pdf",
+		InputSchema: map[string]any{
+			"type": "object",
+		},
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		return &mcpsdk.CallToolResult{
+			Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: "not-json-content"}},
+		}, nil
+	})
+
+	clientPDFCheck, serverPDFCheck := mcpsdk.NewInMemoryTransports()
+	serverSession, err := server.Connect(ctx, serverPDFCheck, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = serverSession.Close() }()
+
+	optsAssemble := AssembleOptions{
+		InputDir:          tmpDir,
+		KDPMathTransport:  clientKDP,
+		TypstTransport:    clientTypst,
+		PDFCheckTransport: clientPDFCheck,
+	}
+
+	_, err = Assemble(ctx, optsAssemble)
+	if err == nil {
+		t.Error("expected Assemble to fail when PDFCheck validation returns non-JSON, but it succeeded")
+	}
+}
+
+func TestAssemble_PDFCheck_ToolError(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos-assemble-pdfcheck-tool-err-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	optsInit := InitiateOptions{
+		OutputDir:       tmpDir,
+		TargetPageCount: 10,
+	}
+	m, err := Initiate(optsInit)
+	if err != nil {
+		t.Fatalf("Initiate failed: %v", err)
+	}
+	m.Progress.Pages = make([]manifest.PageState, 10)
+	if saveErr := m.Save(); saveErr != nil {
+		t.Fatalf("failed to save manifest: %v", saveErr)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	clientKDP, serverKDP := mcpsdk.NewInMemoryTransports()
+	_, cleanupKDP := setupMockKDPMathServer(t, ctx, serverKDP)
+	defer cleanupKDP()
+
+	clientTypst, serverTypst := mcpsdk.NewInMemoryTransports()
+	_, cleanupTypst := setupMockTypstServer(t, ctx, serverTypst)
+	defer cleanupTypst()
+
+	server := mcpsdk.NewServer(&mcpsdk.Implementation{
+		Name:    "mock-pdfcheck-server",
+		Version: "1.0.0",
+	}, nil)
+
+	server.AddTool(&mcpsdk.Tool{
+		Name: "validate_pdf",
+		InputSchema: map[string]any{
+			"type": "object",
+		},
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		return &mcpsdk.CallToolResult{
+			IsError: true,
+			Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: "failed to validate"}},
+		}, nil
+	})
+
+	clientPDFCheck, serverPDFCheck := mcpsdk.NewInMemoryTransports()
+	serverSession, err := server.Connect(ctx, serverPDFCheck, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = serverSession.Close() }()
+
+	optsAssemble := AssembleOptions{
+		InputDir:          tmpDir,
+		KDPMathTransport:  clientKDP,
+		TypstTransport:    clientTypst,
+		PDFCheckTransport: clientPDFCheck,
+	}
+
+	_, err = Assemble(ctx, optsAssemble)
+	if err == nil {
+		t.Error("expected Assemble to fail when PDFCheck tool invocation fails, but it succeeded")
 	}
 }

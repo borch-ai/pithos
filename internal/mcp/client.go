@@ -28,6 +28,8 @@ const (
 	PluginTypst PluginType = "pw-mcp-typst"
 	// PluginCloud represents the cloud storage/orchestrator plugin.
 	PluginCloud PluginType = "pw-mcp-cloud"
+	// PluginPDFCheck represents the PDF preflight validation plugin.
+	PluginPDFCheck PluginType = "pw-mcp-pdfcheck"
 )
 
 // PluginClient handles connection lifecycle and requests to a specific MCP server.
@@ -87,6 +89,8 @@ func (pc *PluginClient) ResolveBinaryPath() string {
 		return config.Cfg.MCP.TypstPath
 	case PluginCloud:
 		return config.Cfg.MCP.CloudPath
+	case PluginPDFCheck:
+		return config.Cfg.MCP.PDFCheckPath
 	default:
 		return string(pc.pluginType)
 	}

@@ -436,11 +436,16 @@ func TestCheckpoint_AssembleError(t *testing.T) {
 	sessionTypst, _ := serverT.Connect(ctx, serverTypst, nil)
 	defer func() { _ = sessionTypst.Close() }()
 
+	pdfCheckTransport, serverPDFCheck := mcpsdk.NewInMemoryTransports()
+	sessionPDFCheck, _ := setupMockPDFCheckServer(t, ctx, serverPDFCheck, true, nil, nil)
+	defer func() { _ = sessionPDFCheck.Close() }()
+
 	optsAssemble := AssembleOptions{
-		InputDir:         tmpDir,
-		Format:           "hardcover",
-		KDPMathTransport: kdpMathTransport,
-		TypstTransport:   typstTransport,
+		InputDir:          tmpDir,
+		Format:            "hardcover",
+		KDPMathTransport:  kdpMathTransport,
+		TypstTransport:    typstTransport,
+		PDFCheckTransport: pdfCheckTransport,
 	}
 
 	_, err = Assemble(ctx, optsAssemble)

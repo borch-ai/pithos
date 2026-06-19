@@ -128,6 +128,10 @@ func TestAssemble_BrowserOpen(t *testing.T) {
 		_, cleanupTypst := setupMockTypstServer(t, ctx, serverTypst)
 		defer cleanupTypst()
 
+		clientPDFCheck, serverPDFCheck := mcpsdk.NewInMemoryTransports()
+		_, cleanupPDFCheck := setupMockPDFCheckServer(t, ctx, serverPDFCheck, true, nil, nil)
+		defer cleanupPDFCheck()
+
 		called := false
 		openBrowserFunc = func(ctx context.Context, urlStr string) error {
 			called = true
@@ -135,12 +139,13 @@ func TestAssemble_BrowserOpen(t *testing.T) {
 		}
 
 		opts := AssembleOptions{
-			InputDir:         tmpDir,
-			Format:           "paperback",
-			Bleed:            true,
-			Silent:           true,
-			KDPMathTransport: clientKDP,
-			TypstTransport:   clientTypst,
+			InputDir:          tmpDir,
+			Format:            "paperback",
+			Bleed:             true,
+			Silent:            true,
+			KDPMathTransport:  clientKDP,
+			TypstTransport:    clientTypst,
+			PDFCheckTransport: clientPDFCheck,
 		}
 		_, err = Assemble(ctx, opts)
 		if err != nil {
@@ -163,6 +168,10 @@ func TestAssemble_BrowserOpen(t *testing.T) {
 		_, cleanupTypst := setupMockTypstServer(t, ctx, serverTypst)
 		defer cleanupTypst()
 
+		clientPDFCheck, serverPDFCheck := mcpsdk.NewInMemoryTransports()
+		_, cleanupPDFCheck := setupMockPDFCheckServer(t, ctx, serverPDFCheck, true, nil, nil)
+		defer cleanupPDFCheck()
+
 		called := false
 		var calledURL string
 		openBrowserFunc = func(ctx context.Context, urlStr string) error {
@@ -172,12 +181,13 @@ func TestAssemble_BrowserOpen(t *testing.T) {
 		}
 
 		opts := AssembleOptions{
-			InputDir:         tmpDir,
-			Format:           "paperback",
-			Bleed:            true,
-			Silent:           false,
-			KDPMathTransport: clientKDP,
-			TypstTransport:   clientTypst,
+			InputDir:          tmpDir,
+			Format:            "paperback",
+			Bleed:             true,
+			Silent:            false,
+			KDPMathTransport:  clientKDP,
+			TypstTransport:    clientTypst,
+			PDFCheckTransport: clientPDFCheck,
 		}
 		_, err = Assemble(ctx, opts)
 		if err != nil {

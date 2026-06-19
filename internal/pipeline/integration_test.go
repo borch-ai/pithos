@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -319,6 +320,20 @@ func setupMockOpenAIServer(t *testing.T, imageBytes []byte) (downloadServer *htt
 	}))
 
 	openaiServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "predict") {
+			googleResp := map[string]interface{}{
+				"predictions": []map[string]interface{}{
+					{
+						"bytesBase64Encoded": base64.StdEncoding.EncodeToString(imageBytes),
+						"mimeType":           "image/png",
+					},
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(googleResp)
+			return
+		}
+
 		resp := struct {
 			Data []struct {
 				URL string `json:"url"`
@@ -340,15 +355,17 @@ func setupMockOpenAIServer(t *testing.T, imageBytes []byte) (downloadServer *htt
 func configureTestEnvironment(t *testing.T, tempDir string, binaryPath string, openaiURL string) func() {
 	t.Helper()
 	t.Setenv("OPENAI_BASE_URL", openaiURL)
+	t.Setenv("GOOGLE_BASE_URL", openaiURL)
 	t.Setenv("POWERWORD_WORKSPACE_ROOT", tempDir)
-	t.Setenv("POWERWORD_IMAGEGEN_BACKEND", "openai")
+	t.Setenv("POWERWORD_IMAGEGEN_BACKEND", "google")
 
 	//nolint:gosec // dummy key used for mock test configuration
 	pwTOML := `
 [api_keys]
 openai = "dummy-key"
+gemini = "dummy-key"
 [plugins.imagegen]
-backend = "openai"
+backend = "google"
 `
 	if err := os.WriteFile(filepath.Join(tempDir, "powerword.toml"), []byte(pwTOML), 0600); err != nil {
 		t.Fatalf("failed to write powerword.toml: %v", err)
@@ -472,13 +489,15 @@ func TestAssemble_Integration_RealSubprocess(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("POWERWORD_WORKSPACE_ROOT", tempDir)
 	typstBinaryPath := buildTypstBinary(t, tempDir)
+	pdfcheckBinaryPath := buildPDFCheckBinary(t, tempDir)
 
-	// Configure environment: point TypstPath to our built binary.
+	// Configure environment: point TypstPath and PDFCheckPath to our built binaries.
 	origCfg := config.Cfg
 	config.Cfg = &config.Config{
 		MCP: config.MCPConfig{
-			TypstPath:   typstBinaryPath,
-			KDPMathPath: "pw-mcp-kdp-math",
+			TypstPath:    typstBinaryPath,
+			KDPMathPath:  "pw-mcp-kdp-math",
+			PDFCheckPath: pdfcheckBinaryPath,
 		},
 		API: config.APIConfig{
 			GeminiKey: "mock-gemini-key",
@@ -524,7 +543,7 @@ func TestAssemble_Integration_RealSubprocess(t *testing.T) {
 		t.Fatal("expected manuscript.md NOT to exist before Assemble is run")
 	}
 
-	// 4. Run Assemble with KDP Math Mocked, but Typst running as a real subprocess
+	// 4. Run Assemble with KDP Math Mocked, but Typst and PDFCheck running as real subprocesses
 	optsAssemble := AssembleOptions{
 		InputDir:         tempDir,
 		Format:           "paperback",
@@ -596,6 +615,36 @@ func buildTypstBinary(t *testing.T, tempDir string) string {
 	cmd.Dir = siblingPath
 	if buildErr := cmd.Run(); buildErr != nil {
 		t.Fatalf("failed to build pw-mcp-typst: %v", buildErr)
+	}
+
+	return binaryPath
+}
+
+func buildPDFCheckBinary(t *testing.T, tempDir string) string {
+	t.Helper()
+	binaryPath := filepath.Join(tempDir, "pw-mcp-pdfcheck")
+	siblingPath := "../../../powerword/cmd/pw-mcp-pdfcheck"
+
+	if _, statErr := os.Stat(siblingPath); statErr != nil {
+		path, err := exec.LookPath("pw-mcp-pdfcheck")
+		if err != nil {
+			t.Skip("pw-mcp-pdfcheck binary not found and sibling powerword repo not found")
+		}
+		t.Logf("Using existing system pw-mcp-pdfcheck binary: %s", path)
+		return path
+	}
+
+	t.Logf("Building pw-mcp-pdfcheck from sibling repository: %s", siblingPath)
+	absBinary, err := filepath.Abs(binaryPath)
+	if err != nil {
+		t.Fatalf("failed to get absolute binary path: %v", err)
+	}
+
+	//nolint:gosec // siblingPath and binaryPath are constructed inside test dir
+	cmd := exec.CommandContext(context.Background(), "go", "build", "-o", absBinary, ".")
+	cmd.Dir = siblingPath
+	if buildErr := cmd.Run(); buildErr != nil {
+		t.Fatalf("failed to build pw-mcp-pdfcheck: %v", buildErr)
 	}
 
 	return binaryPath
