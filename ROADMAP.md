@@ -97,6 +97,9 @@ Focus: Turning raw text and image assets into valid, print-ready files.
 *   [ ] **Task 4.4: Mixed Layout Templates**
     *   Support left-page text / right-page image mixed layouts per page in the layout engine.
     *   [Implementation Plan](plans/phase_4/task_4_4_mixed_layout_templates.md)
+*   [ ] **Task 4.5: Print-Ready PDF Preflight Validation (`pw-mcp-pdfcheck`)**
+    *   After compiling the final interior PDF, invoke the `pw-mcp-pdfcheck` plugin to run automated preflight checks (validation of PDF page geometry, margins, safe zones, embedded fonts, image DPI, and grayscale color space). Fail the assembly pipeline if critical errors are found.
+    *   [Implementation Plan](plans/phase_4/task_4_5_pdfcheck_integration.md)
 
 ---
 
@@ -135,7 +138,12 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
 *   [x] **Task 5.28: Provision GCP Cloud Storage & IAM**
     *   Provision the GCS storage bucket with public-read object access, configure a dedicated GCP Service Account with minimal permissions, and export the credentials JSON file.
     *   [Implementation Plan](plans/phase_5/task_5_28_gcp_infrastructure_provisioning.md)
-
+*   [ ] **Task 5.29: Imagegen Backend Capability Validation**
+    *   Query the `pw-mcp-imagegen` server's capabilities handshake before starting image generation. If the active backend (e.g. Google Imagen or OpenAI) does not support image-based character references (cref) but a character profile is defined, fail fast with a descriptive error to prevent API cost waste.
+    *   [Implementation Plan](plans/phase_5/task_5_29_imagegen_capability_validation.md)
+*   [ ] **Task 5.30: Preflight Diagnostics Doctor Extensions**
+    *   Extend the `pithos doctor` diagnostic checklist to verify the presence, configuration, and handshake success of the `pw-mcp-pdfcheck` server.
+    *   [Implementation Plan](plans/phase_5/task_5_30_doctor_pdfcheck_check.md)
 
 ### Interactive UI & Quality Enhancements
 *   [x] **Task 5.10: Visual Prompt Expansion for Character Consistency**
@@ -204,6 +212,8 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
         *   Implement an integration test that builds `pw-mcp-epub` from powerword sibling directory and performs complete pipeline compile checks.
     *   [ ] **Task 5.8.4: EPUB Standards Structural Validation & Epubcheck**
         *   Implement validation in the test suite to unpack the resulting `.epub` and verify strict compliance (uncompressed mimetype, container.xml, content.opf manifest, and toc.xhtml) as well as integrating automated `epubcheck` validation.
+    *   [ ] **Task 5.8.5: Standalone EPUB Export Command**
+        *   Implement a standalone `pithos epub` CLI subcommand that parses the book workspace manifest and triggers EPUB generation directly, without requiring a full assembly pipeline run.
 *   [ ] **Task 5.9: Google Doc MCP Integration**
     *   Integrate with the `pw-mcp-gdoc` MCP plugin to export manuscripts to Google Docs for editing and import them back on resume.
     *   [Implementation Plan](plans/phase_5/task_5_9_gdoc_mcp_integration.md)
