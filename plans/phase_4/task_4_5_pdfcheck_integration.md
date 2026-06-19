@@ -1,8 +1,9 @@
 # plan: Task 4.5: Print-Ready PDF Preflight Validation (pw-mcp-pdfcheck)
 
-**Status:** Pending
+**Status:** Completed
 **Go Version:** 1.26.4
-**Unit Test Coverage Target:** ≥91.0%
+**Date Completed:** 2026-06-19
+**Unit Test Coverage:** 91.10%
 
 This task integrates the print-ready PDF preflight inspector (`pw-mcp-pdfcheck` plugin) directly into Pithos's book assembly pipeline. After generating the interior PDF, Pithos will execute automated checks to verify page geometry, margins, safe zones, embedded fonts, and barcode details against KDP guidelines, failing the build on critical errors.
 
@@ -56,6 +57,7 @@ This task integrates the print-ready PDF preflight inspector (`pw-mcp-pdfcheck` 
 ### Automated Tests
 - Mock the `validate_pdf` and `validate_cover_pdf` tool calls in `assemble_test.go`.
 - Add test scenarios for successful validations and formatting violations.
+- Run `TestAssemble_Integration_RealSubprocess` in `integration_test.go` which compiles the real `pw-mcp-pdfcheck` plugin as a subprocess binary and runs it end-to-end.
 - Verify total statement coverage meets the strict 91% coverage criteria (`make check-coverage`).
 
 ### Manual Verification

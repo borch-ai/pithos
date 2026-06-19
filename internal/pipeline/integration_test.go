@@ -472,13 +472,15 @@ func TestAssemble_Integration_RealSubprocess(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("POWERWORD_WORKSPACE_ROOT", tempDir)
 	typstBinaryPath := buildTypstBinary(t, tempDir)
+	pdfcheckBinaryPath := buildPDFCheckBinary(t, tempDir)
 
-	// Configure environment: point TypstPath to our built binary.
+	// Configure environment: point TypstPath and PDFCheckPath to our built binaries.
 	origCfg := config.Cfg
 	config.Cfg = &config.Config{
 		MCP: config.MCPConfig{
-			TypstPath:   typstBinaryPath,
-			KDPMathPath: "pw-mcp-kdp-math",
+			TypstPath:    typstBinaryPath,
+			KDPMathPath:  "pw-mcp-kdp-math",
+			PDFCheckPath: pdfcheckBinaryPath,
 		},
 		API: config.APIConfig{
 			GeminiKey: "mock-gemini-key",
@@ -524,7 +526,7 @@ func TestAssemble_Integration_RealSubprocess(t *testing.T) {
 		t.Fatal("expected manuscript.md NOT to exist before Assemble is run")
 	}
 
-	// 4. Run Assemble with KDP Math Mocked, but Typst running as a real subprocess
+	// 4. Run Assemble with KDP Math Mocked, but Typst and PDFCheck running as real subprocesses
 	optsAssemble := AssembleOptions{
 		InputDir:         tempDir,
 		Format:           "paperback",
@@ -596,6 +598,36 @@ func buildTypstBinary(t *testing.T, tempDir string) string {
 	cmd.Dir = siblingPath
 	if buildErr := cmd.Run(); buildErr != nil {
 		t.Fatalf("failed to build pw-mcp-typst: %v", buildErr)
+	}
+
+	return binaryPath
+}
+
+func buildPDFCheckBinary(t *testing.T, tempDir string) string {
+	t.Helper()
+	binaryPath := filepath.Join(tempDir, "pw-mcp-pdfcheck")
+	siblingPath := "../../../powerword/cmd/pw-mcp-pdfcheck"
+
+	if _, statErr := os.Stat(siblingPath); statErr != nil {
+		path, err := exec.LookPath("pw-mcp-pdfcheck")
+		if err != nil {
+			t.Skip("pw-mcp-pdfcheck binary not found and sibling powerword repo not found")
+		}
+		t.Logf("Using existing system pw-mcp-pdfcheck binary: %s", path)
+		return path
+	}
+
+	t.Logf("Building pw-mcp-pdfcheck from sibling repository: %s", siblingPath)
+	absBinary, err := filepath.Abs(binaryPath)
+	if err != nil {
+		t.Fatalf("failed to get absolute binary path: %v", err)
+	}
+
+	//nolint:gosec // siblingPath and binaryPath are constructed inside test dir
+	cmd := exec.CommandContext(context.Background(), "go", "build", "-o", absBinary, ".")
+	cmd.Dir = siblingPath
+	if buildErr := cmd.Run(); buildErr != nil {
+		t.Fatalf("failed to build pw-mcp-pdfcheck: %v", buildErr)
 	}
 
 	return binaryPath

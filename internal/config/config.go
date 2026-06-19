@@ -32,6 +32,7 @@ type MCPConfig struct {
 	ViralPath    string `mapstructure:"viral_path"`
 	TypstPath    string `mapstructure:"typst_path"`
 	CloudPath    string `mapstructure:"cloud_path"`
+	PDFCheckPath string `mapstructure:"pdfcheck_path"`
 }
 
 // APIConfig holds API keys for LLM and content services.
@@ -70,6 +71,7 @@ func LoadConfig(cfgFile string) (*Config, error) {
 	v.SetDefault("mcp.viral_path", "")
 	v.SetDefault("mcp.typst_path", "")
 	v.SetDefault("mcp.cloud_path", "")
+	v.SetDefault("mcp.pdfcheck_path", "")
 	v.SetDefault("api.gemini_key", "")
 	v.SetDefault("api.openai_key", "")
 	v.SetDefault("telemetry.lamplighter_enabled", false)
@@ -185,6 +187,11 @@ func finalizeLoad(v *viper.Viper) (*Config, error) {
 	}
 
 	rawConfig.MCP.CloudPath, err = validateOrFallbackPath(rawConfig.MCP.CloudPath, "pw-mcp-cloud")
+	if err != nil {
+		errs = append(errs, err.Error())
+	}
+
+	rawConfig.MCP.PDFCheckPath, err = validateOrFallbackPath(rawConfig.MCP.PDFCheckPath, "pw-mcp-pdfcheck")
 	if err != nil {
 		errs = append(errs, err.Error())
 	}

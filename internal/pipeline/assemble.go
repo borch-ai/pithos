@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/borch-ai/pithos/internal/manifest"
@@ -16,15 +17,16 @@ import (
 
 // AssembleOptions holds configuration parameters for the assemble command.
 type AssembleOptions struct {
-	InputDir         string
-	Format           string // e.g. "paperback", "hardcover"
-	Bleed            bool
-	TrimSize         string // e.g. "6x9"
-	PaperType        string // e.g. "white"
-	Silent           bool
-	MCPTransport     mcpsdk.Transport // For testing (fallback)
-	KDPMathTransport mcpsdk.Transport // For testing
-	TypstTransport   mcpsdk.Transport // For testing
+	InputDir          string
+	Format            string // e.g. "paperback", "hardcover"
+	Bleed             bool
+	TrimSize          string // e.g. "6x9"
+	PaperType         string // e.g. "white"
+	Silent            bool
+	MCPTransport      mcpsdk.Transport // For testing (fallback)
+	KDPMathTransport  mcpsdk.Transport // For testing
+	TypstTransport    mcpsdk.Transport // For testing
+	PDFCheckTransport mcpsdk.Transport // For testing
 }
 
 type geometryResult struct {
@@ -128,6 +130,11 @@ func Assemble(ctx context.Context, opts AssembleOptions) (*manifest.Manifest, er
 
 	if err := m.RegisterAsset("interior_pdf", pdfPath); err != nil {
 		return nil, fmt.Errorf("failed to register interior PDF asset: %w", err)
+	}
+
+	// Run PDF preflight checks (Interior and optionally Cover PDF)
+	if err := runPDFPreflightCheck(ctx, opts, m, pdfPath); err != nil {
+		return nil, fmt.Errorf("pdf preflight check failed: %w", err)
 	}
 
 	// cover_pdf is read from the AssetRegistry as a future-proof hook for when
@@ -235,6 +242,138 @@ func formatTrimSizeForTypst(trimSize string) string {
 		return fmt.Sprintf("%sin,%sin", strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1]))
 	}
 	return "6in,9in" // fallback default
+}
+
+func parseTrimSize(trimSize string) (float64, float64, error) {
+	parts := strings.Split(strings.ToLower(trimSize), "x")
+	if len(parts) != 2 {
+		return 0, 0, fmt.Errorf("invalid format: %q", trimSize)
+	}
+	w, err := strconv.ParseFloat(strings.TrimSpace(parts[0]), 64)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid width %q: %w", parts[0], err)
+	}
+	h, err := strconv.ParseFloat(strings.TrimSpace(parts[1]), 64)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid height %q: %w", parts[1], err)
+	}
+	return w, h, nil
+}
+
+func runPDFPreflightCheck(ctx context.Context, opts AssembleOptions, m *manifest.Manifest, pdfPath string) error {
+	expectedWidth, expectedHeight, err := parseTrimSize(m.BookProperties.TrimSize)
+	if err != nil {
+		return fmt.Errorf("failed to parse trim size %q: %w", m.BookProperties.TrimSize, err)
+	}
+
+	mcpClient := mcp.NewPluginClient(mcp.PluginPDFCheck)
+	if opts.PDFCheckTransport != nil {
+		mcpClient.SetTransport(opts.PDFCheckTransport)
+	} else if opts.MCPTransport != nil {
+		mcpClient.SetTransport(opts.MCPTransport)
+	}
+
+	if startErr := mcpClient.Start(ctx); startErr != nil {
+		return fmt.Errorf("failed to start MCP pdfcheck client: %w", startErr)
+	}
+	defer func() { _ = mcpClient.Stop() }()
+
+	if err := validateInteriorPDF(ctx, mcpClient, pdfPath, expectedWidth, expectedHeight, m); err != nil {
+		return err
+	}
+
+	coverPDFPath := m.AssetRegistry["cover_pdf"]
+	if coverPDFPath != "" {
+		return validateCoverPDF(ctx, mcpClient, coverPDFPath, expectedWidth, expectedHeight, m, opts.PaperType)
+	}
+
+	return nil
+}
+
+type pdfCheckResult struct {
+	Valid      bool     `json:"valid"`
+	PageCount  int      `json:"page_count"`
+	Dimensions string   `json:"dimensions"`
+	Errors     []string `json:"errors"`
+	Warnings   []string `json:"warnings"`
+}
+
+func validateInteriorPDF(ctx context.Context, mcpClient *mcp.PluginClient, pdfPath string, expectedWidth, expectedHeight float64, m *manifest.Manifest) error {
+	args := map[string]interface{}{
+		"pdf_path":               pdfPath,
+		"expected_width_inches":  expectedWidth,
+		"expected_height_inches": expectedHeight,
+		"bleed_inches":           m.KDPLayout.Bleed,
+		"min_gutter_inches":      m.KDPLayout.MarginSize,
+	}
+
+	resText, err := mcpClient.CallTool(ctx, "validate_pdf", args)
+	if err != nil {
+		return fmt.Errorf("validate_pdf tool invocation failed: %w", err)
+	}
+
+	var checkRes pdfCheckResult
+	if err := json.Unmarshal([]byte(resText), &checkRes); err != nil {
+		return fmt.Errorf("failed to parse validate_pdf response JSON: %w (raw response: %q)", err, resText)
+	}
+
+	if !checkRes.Valid || len(checkRes.Errors) > 0 {
+		fmt.Fprintf(os.Stderr, "Interior PDF Preflight Validation failed for %s:\n", pdfPath)
+		for _, e := range checkRes.Errors {
+			fmt.Fprintf(os.Stderr, "  - ERROR: %s\n", e)
+		}
+		for _, w := range checkRes.Warnings {
+			fmt.Fprintf(os.Stderr, "  - WARNING: %s\n", w)
+		}
+		return fmt.Errorf("interior PDF check reported errors: %v", checkRes.Errors)
+	}
+	return nil
+}
+
+func validateCoverPDF(ctx context.Context, mcpClient *mcp.PluginClient, coverPDFPath string, expectedWidth, expectedHeight float64, m *manifest.Manifest, paperType string) error {
+	pageCount := len(m.Progress.Pages)
+	if pageCount == 0 {
+		pageCount = m.BookProperties.TargetPageCount
+	}
+
+	if paperType == "" {
+		paperType = "white"
+	}
+	paperTypeMapped := strings.ToLower(paperType)
+	if paperTypeMapped == "standard_color" || paperTypeMapped == "premium_color" {
+		paperTypeMapped = "color"
+	}
+
+	coverArgs := map[string]interface{}{
+		"pdf_path":               coverPDFPath,
+		"expected_width_inches":  expectedWidth,
+		"expected_height_inches": expectedHeight,
+		"page_count":             pageCount,
+		"paper_type":             paperTypeMapped,
+		"bleed_inches":           m.KDPLayout.Bleed,
+	}
+
+	coverResText, err := mcpClient.CallTool(ctx, "validate_cover_pdf", coverArgs)
+	if err != nil {
+		return fmt.Errorf("validate_cover_pdf tool invocation failed: %w", err)
+	}
+
+	var coverCheckRes pdfCheckResult
+	if err := json.Unmarshal([]byte(coverResText), &coverCheckRes); err != nil {
+		return fmt.Errorf("failed to parse validate_cover_pdf response JSON: %w (raw response: %q)", err, coverResText)
+	}
+
+	if !coverCheckRes.Valid || len(coverCheckRes.Errors) > 0 {
+		fmt.Fprintf(os.Stderr, "Cover PDF Preflight Validation failed for %s:\n", coverPDFPath)
+		for _, e := range coverCheckRes.Errors {
+			fmt.Fprintf(os.Stderr, "  - ERROR: %s\n", e)
+		}
+		for _, w := range coverCheckRes.Warnings {
+			fmt.Fprintf(os.Stderr, "  - WARNING: %s\n", w)
+		}
+		return fmt.Errorf("cover PDF check reported errors: %v", coverCheckRes.Errors)
+	}
+	return nil
 }
 
 func fetchGeometry(ctx context.Context, opts AssembleOptions, pageCount int, format string) (geometryResult, error) {
