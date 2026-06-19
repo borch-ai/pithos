@@ -326,3 +326,134 @@ func TestLoadConfig_InvalidToml(t *testing.T) {
 		t.Fatal("expected error loading invalid TOML, got nil")
 	}
 }
+
+func TestLoadConfig_CloudConfig_Toml(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos_cloud_test")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+	}()
+
+	// Clear environment variables first to avoid pollution
+	_ = os.Unsetenv("PITHOS_CLOUD_PROVIDER")
+	_ = os.Unsetenv("PITHOS_CLOUD_BUCKET")
+	_ = os.Unsetenv("PITHOS_CLOUD_CREDENTIALS_PATH")
+	_ = os.Unsetenv("PITHOS_CLOUD_PROJECT_ID")
+	_ = os.Unsetenv("POWERWORD_CLOUD_PROVIDER")
+	_ = os.Unsetenv("POWERWORD_CLOUD_BUCKET")
+	_ = os.Unsetenv("POWERWORD_CLOUD_CREDENTIALS_PATH")
+	_ = os.Unsetenv("GOOGLE_APPLICATION_CREDENTIALS")
+	_ = os.Unsetenv("GOOGLE_CLOUD_PROJECT")
+
+	defer func() {
+		_ = os.Unsetenv("PITHOS_CLOUD_PROVIDER")
+		_ = os.Unsetenv("PITHOS_CLOUD_BUCKET")
+		_ = os.Unsetenv("PITHOS_CLOUD_CREDENTIALS_PATH")
+		_ = os.Unsetenv("PITHOS_CLOUD_PROJECT_ID")
+		_ = os.Unsetenv("POWERWORD_CLOUD_PROVIDER")
+		_ = os.Unsetenv("POWERWORD_CLOUD_BUCKET")
+		_ = os.Unsetenv("POWERWORD_CLOUD_CREDENTIALS_PATH")
+		_ = os.Unsetenv("GOOGLE_APPLICATION_CREDENTIALS")
+		_ = os.Unsetenv("GOOGLE_CLOUD_PROJECT")
+	}()
+
+	tomlContent := `
+[cloud]
+provider = "gcs"
+bucket = "my-test-bucket"
+credentials_path = "/my/creds/path.json"
+project_id = "my-gcp-project"
+`
+	configFile := filepath.Join(tmpDir, "config.toml")
+	if wErr := os.WriteFile(configFile, []byte(tomlContent), 0600); wErr != nil {
+		t.Fatalf("failed to write config file: %v", wErr)
+	}
+
+	cfg, err := LoadConfig(configFile)
+	if err != nil {
+		t.Fatalf("expected no load error, got: %v", err)
+	}
+
+	// Verify unmarshaling from TOML
+	if cfg.Cloud.Provider != "gcs" {
+		t.Errorf("expected cloud.provider 'gcs', got '%s'", cfg.Cloud.Provider)
+	}
+	if cfg.Cloud.Bucket != "my-test-bucket" {
+		t.Errorf("expected cloud.bucket 'my-test-bucket', got '%s'", cfg.Cloud.Bucket)
+	}
+	if cfg.Cloud.CredentialsPath != "/my/creds/path.json" {
+		t.Errorf("expected cloud.credentials_path '/my/creds/path.json', got '%s'", cfg.Cloud.CredentialsPath)
+	}
+	if cfg.Cloud.ProjectID != "my-gcp-project" {
+		t.Errorf("expected cloud.project_id 'my-gcp-project', got '%s'", cfg.Cloud.ProjectID)
+	}
+
+	// Verify propagation to POWERWORD_ and GOOGLE_ env variables
+	if os.Getenv("POWERWORD_CLOUD_PROVIDER") != "gcs" {
+		t.Errorf("expected POWERWORD_CLOUD_PROVIDER 'gcs', got '%s'", os.Getenv("POWERWORD_CLOUD_PROVIDER"))
+	}
+	if os.Getenv("POWERWORD_CLOUD_BUCKET") != "my-test-bucket" {
+		t.Errorf("expected POWERWORD_CLOUD_BUCKET 'my-test-bucket', got '%s'", os.Getenv("POWERWORD_CLOUD_BUCKET"))
+	}
+	if os.Getenv("POWERWORD_CLOUD_CREDENTIALS_PATH") != "/my/creds/path.json" {
+		t.Errorf("expected POWERWORD_CLOUD_CREDENTIALS_PATH '/my/creds/path.json', got '%s'", os.Getenv("POWERWORD_CLOUD_CREDENTIALS_PATH"))
+	}
+	if os.Getenv("GOOGLE_APPLICATION_CREDENTIALS") != "/my/creds/path.json" {
+		t.Errorf("expected GOOGLE_APPLICATION_CREDENTIALS '/my/creds/path.json', got '%s'", os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
+	}
+	if os.Getenv("GOOGLE_CLOUD_PROJECT") != "my-gcp-project" {
+		t.Errorf("expected GOOGLE_CLOUD_PROJECT 'my-gcp-project', got '%s'", os.Getenv("GOOGLE_CLOUD_PROJECT"))
+	}
+}
+
+func TestLoadConfig_CloudConfig_EnvOverride(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos_cloud_env_test")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+	}()
+
+	_ = os.Setenv("PITHOS_CLOUD_PROVIDER", "gcp")
+	_ = os.Setenv("PITHOS_CLOUD_BUCKET", "env-bucket")
+	_ = os.Setenv("PITHOS_CLOUD_CREDENTIALS_PATH", "/env/creds.json")
+	_ = os.Setenv("PITHOS_CLOUD_PROJECT_ID", "env-project")
+
+	defer func() {
+		_ = os.Unsetenv("PITHOS_CLOUD_PROVIDER")
+		_ = os.Unsetenv("PITHOS_CLOUD_BUCKET")
+		_ = os.Unsetenv("PITHOS_CLOUD_CREDENTIALS_PATH")
+		_ = os.Unsetenv("PITHOS_CLOUD_PROJECT_ID")
+		_ = os.Unsetenv("POWERWORD_CLOUD_PROVIDER")
+		_ = os.Unsetenv("POWERWORD_CLOUD_BUCKET")
+		_ = os.Unsetenv("POWERWORD_CLOUD_CREDENTIALS_PATH")
+		_ = os.Unsetenv("GOOGLE_APPLICATION_CREDENTIALS")
+		_ = os.Unsetenv("GOOGLE_CLOUD_PROJECT")
+	}()
+
+	configFile := filepath.Join(tmpDir, "config.toml")
+	if wErr := os.WriteFile(configFile, []byte(""), 0600); wErr != nil {
+		t.Fatalf("failed to write config file: %v", wErr)
+	}
+
+	cfg, err := LoadConfig(configFile)
+	if err != nil {
+		t.Fatalf("expected no load error, got: %v", err)
+	}
+
+	if cfg.Cloud.Provider != "gcp" {
+		t.Errorf("expected overridden cloud.provider 'gcp', got '%s'", cfg.Cloud.Provider)
+	}
+	if cfg.Cloud.Bucket != "env-bucket" {
+		t.Errorf("expected overridden cloud.bucket 'env-bucket', got '%s'", cfg.Cloud.Bucket)
+	}
+	if cfg.Cloud.CredentialsPath != "/env/creds.json" {
+		t.Errorf("expected overridden cloud.credentials_path '/env/creds.json', got '%s'", cfg.Cloud.CredentialsPath)
+	}
+	if cfg.Cloud.ProjectID != "env-project" {
+		t.Errorf("expected overridden cloud.project_id 'env-project', got '%s'", cfg.Cloud.ProjectID)
+	}
+}
