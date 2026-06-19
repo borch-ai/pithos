@@ -100,7 +100,9 @@ credentials_path = "/absolute/path/to/pithos/.gcp-sa-key.json"
 project_id = "<YOUR_PROJECT_ID>"
 ```
 
----
+## Proposed Changes
+
+None (Infrastructure Provisioning setup steps documented above).
 
 ## Verification Plan
 
