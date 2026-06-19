@@ -138,12 +138,16 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
 *   [x] **Task 5.28: Provision GCP Cloud Storage & IAM**
     *   Provision the GCS storage bucket with public-read object access, configure a dedicated GCP Service Account with minimal permissions, and export the credentials JSON file.
     *   [Implementation Plan](plans/phase_5/task_5_28_gcp_infrastructure_provisioning.md)
-*   [ ] **Task 5.29: Imagegen Backend Capability Validation**
+*   [x] **Task 5.29: Imagegen Backend Capability Validation**
     *   Query the `pw-mcp-imagegen` server's capabilities handshake before starting image generation. If the active backend (e.g. Google Imagen or OpenAI) does not support image-based character references (cref) but a character profile is defined, fail fast with a descriptive error to prevent API cost waste.
     *   [Implementation Plan](plans/phase_5/task_5_29_imagegen_capability_validation.md)
 *   [ ] **Task 5.30: Preflight Diagnostics Doctor Extensions**
     *   Extend the `pithos doctor` diagnostic checklist to verify the presence, configuration, and handshake success of the `pw-mcp-pdfcheck` server.
     *   [Implementation Plan](plans/phase_5/task_5_30_doctor_pdfcheck_check.md)
+*   [ ] **Task 5.31: Imagegen Capability Overrides Configuration**
+    *   Add configuration keys (`force_cref` and `force_sref`) in `.pithos.toml` and `.env` / environment variables. Parse them in config and propagate them or bypass capability checks in Pithos to allow manual capability overrides.
+    *   [Implementation Plan](plans/phase_5/task_5_31_imagegen_capability_overrides.md)
+
 
 ### Interactive UI & Quality Enhancements
 *   [x] **Task 5.10: Visual Prompt Expansion for Character Consistency**
