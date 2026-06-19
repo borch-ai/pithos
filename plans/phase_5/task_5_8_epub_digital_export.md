@@ -33,6 +33,11 @@ Integrate with the standalone `pw-mcp-epub` Powerword MCP plugin to export the p
   - Register the resulting `.epub` output path under the key `epub` in the manifest output asset registry.
   - Provide graceful error propagation: if the plugin fails, log the error clearly and return it without crashing the CLI.
 
+#### [NEW] [epub.go](file://../../cmd/pithos/epub.go)
+- Define a new Cobra command `epubCmd` for `pithos epub`.
+- Set up parsing for `--output` (the book directory).
+- Execute the EPUB compilation client directly from the command handler by loading the workspace manifest and invoking the `pw-mcp-epub` tool, enabling standalone digital exports.
+
 ---
 
 ## End-to-End Test Suite Design
