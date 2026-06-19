@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -319,6 +320,20 @@ func setupMockOpenAIServer(t *testing.T, imageBytes []byte) (downloadServer *htt
 	}))
 
 	openaiServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "predict") {
+			googleResp := map[string]interface{}{
+				"predictions": []map[string]interface{}{
+					{
+						"bytesBase64Encoded": base64.StdEncoding.EncodeToString(imageBytes),
+						"mimeType":           "image/png",
+					},
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(googleResp)
+			return
+		}
+
 		resp := struct {
 			Data []struct {
 				URL string `json:"url"`
@@ -340,15 +355,17 @@ func setupMockOpenAIServer(t *testing.T, imageBytes []byte) (downloadServer *htt
 func configureTestEnvironment(t *testing.T, tempDir string, binaryPath string, openaiURL string) func() {
 	t.Helper()
 	t.Setenv("OPENAI_BASE_URL", openaiURL)
+	t.Setenv("GOOGLE_BASE_URL", openaiURL)
 	t.Setenv("POWERWORD_WORKSPACE_ROOT", tempDir)
-	t.Setenv("POWERWORD_IMAGEGEN_BACKEND", "openai")
+	t.Setenv("POWERWORD_IMAGEGEN_BACKEND", "google")
 
 	//nolint:gosec // dummy key used for mock test configuration
 	pwTOML := `
 [api_keys]
 openai = "dummy-key"
+gemini = "dummy-key"
 [plugins.imagegen]
-backend = "openai"
+backend = "google"
 `
 	if err := os.WriteFile(filepath.Join(tempDir, "powerword.toml"), []byte(pwTOML), 0600); err != nil {
 		t.Fatalf("failed to write powerword.toml: %v", err)
