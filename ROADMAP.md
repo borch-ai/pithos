@@ -129,9 +129,12 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
 *   [x] **Task 5.26: Automatic Browser Preview Opening**
     *   Automatically open the generated web preview visualizer in the default system browser after `pithos brew` or `pithos assemble` completes. Provide a `--silent` flag to allow opting out of this behavior in headless/CI environments.
     *   [Implementation Plan](plans/phase_5/task_5_26_auto_open_preview.md)
-*   [ ] **Task 5.27: GCP Cloud Storage Configuration Support**
+*   [x] **Task 5.27: GCP Cloud Storage Configuration Support**
     *   Enable GCS configuration natively in Pithos via `.pithos.toml` and `.env`, and propagate variables to `pw-mcp-cloud` to support character-consistent illustration generation.
     *   [Implementation Plan](plans/phase_5/task_5_27_gcp_cloud_storage_configuration.md)
+*   [x] **Task 5.28: Provision GCP Cloud Storage & IAM**
+    *   Provision the GCS storage bucket with public-read object access, configure a dedicated GCP Service Account with minimal permissions, and export the credentials JSON file.
+    *   [Implementation Plan](plans/phase_5/task_5_28_gcp_infrastructure_provisioning.md)
 
 
 ### Interactive UI & Quality Enhancements

@@ -33,8 +33,8 @@ generated_images/
 *.swp
 
 # Secrets
-.env
-.env.local
-*.env
+.env*
+!.env.example
+.gcp-sa-key.json
 
 SCRATCH

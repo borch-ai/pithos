@@ -21,6 +21,7 @@ type Config struct {
 	API         APIConfig                         `mapstructure:"api"`
 	Telemetry   TelemetryConfig                   `mapstructure:"telemetry"`
 	Pricing     map[string]telemetry.ModelPricing `mapstructure:"pricing"`
+	Cloud       CloudConfig                       `mapstructure:"cloud"`
 }
 
 // MCPConfig holds paths to local Powerword MCP server binaries.
@@ -45,6 +46,14 @@ type TelemetryConfig struct {
 	FirebaseCredentialsPath string `mapstructure:"firebase_credentials_path"`
 }
 
+// CloudConfig holds configurations for Google Cloud Storage.
+type CloudConfig struct {
+	Provider        string `mapstructure:"provider"`
+	Bucket          string `mapstructure:"bucket"`
+	CredentialsPath string `mapstructure:"credentials_path"`
+	ProjectID       string `mapstructure:"project_id"`
+}
+
 // Cfg is the global configuration instance.
 var Cfg *Config
 
@@ -65,6 +74,10 @@ func LoadConfig(cfgFile string) (*Config, error) {
 	v.SetDefault("api.openai_key", "")
 	v.SetDefault("telemetry.lamplighter_enabled", false)
 	v.SetDefault("telemetry.firebase_credentials_path", "")
+	v.SetDefault("cloud.provider", "noop")
+	v.SetDefault("cloud.bucket", "")
+	v.SetDefault("cloud.credentials_path", "")
+	v.SetDefault("cloud.project_id", "")
 
 	if cfgFile != "" {
 		v.SetConfigFile(cfgFile)
@@ -117,6 +130,21 @@ func finalizeLoad(v *viper.Viper) (*Config, error) {
 	var rawConfig Config
 	if err := v.Unmarshal(&rawConfig); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal configuration: %w", err)
+	}
+
+	// Propagate cloud configurations to environment variables for sub-processes
+	if rawConfig.Cloud.Provider != "" {
+		_ = os.Setenv("POWERWORD_CLOUD_PROVIDER", rawConfig.Cloud.Provider)
+	}
+	if rawConfig.Cloud.Bucket != "" {
+		_ = os.Setenv("POWERWORD_CLOUD_BUCKET", rawConfig.Cloud.Bucket)
+	}
+	if rawConfig.Cloud.CredentialsPath != "" {
+		_ = os.Setenv("POWERWORD_CLOUD_CREDENTIALS_PATH", rawConfig.Cloud.CredentialsPath)
+		_ = os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", rawConfig.Cloud.CredentialsPath)
+	}
+	if rawConfig.Cloud.ProjectID != "" {
+		_ = os.Setenv("GOOGLE_CLOUD_PROJECT", rawConfig.Cloud.ProjectID)
 	}
 
 	if len(rawConfig.Pricing) == 0 {
