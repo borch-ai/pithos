@@ -98,7 +98,7 @@ Focus: Turning raw text and image assets into valid, print-ready files.
     *   Support left-page text / right-page image mixed layouts per page in the layout engine.
     *   [Implementation Plan](plans/phase_4/task_4_4_mixed_layout_templates.md)
 *   [ ] **Task 4.5: Print-Ready PDF Preflight Validation (`pw-mcp-pdfcheck`)**
-    *   After compiling the final interior PDF, invoke the `pw-mcp-pdfcheck` plugin to run automated preflight checks (validation of PDF page geometry, margins, safe zones, embedded fonts, image DPI, and grayscale colorspace). Fail the assembly pipeline if critical errors are found.
+    *   After compiling the final interior PDF, invoke the `pw-mcp-pdfcheck` plugin to run automated preflight checks (validation of PDF page geometry, margins, safe zones, embedded fonts, image DPI, and grayscale color space). Fail the assembly pipeline if critical errors are found.
     *   [Implementation Plan](plans/phase_4/task_4_5_pdfcheck_integration.md)
 
 ---
@@ -144,9 +144,6 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
 *   [ ] **Task 5.30: Preflight Diagnostics Doctor Extensions**
     *   Extend the `pithos doctor` diagnostic checklist to verify the presence, configuration, and handshake success of the `pw-mcp-pdfcheck` server.
     *   [Implementation Plan](plans/phase_5/task_5_30_doctor_pdfcheck_check.md)
-
-
-
 
 ### Interactive UI & Quality Enhancements
 *   [x] **Task 5.10: Visual Prompt Expansion for Character Consistency**
