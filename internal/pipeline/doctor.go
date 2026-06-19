@@ -2,8 +2,11 @@ package pipeline
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"time"
 
 	"github.com/borch-ai/pithos/internal/config"
@@ -31,6 +34,7 @@ type mcpClientInterface interface {
 	ResolveBinaryPath() string
 	Start(ctx context.Context) error
 	Stop() error
+	CallTool(ctx context.Context, toolName string, args map[string]interface{}) (string, error)
 }
 
 var newPluginClientFunc = func(pType mcp.PluginType) mcpClientInterface {
@@ -105,6 +109,8 @@ func DiagnoseCredentials() []DiagnosticItem {
 }
 
 // DiagnoseMCPPlugins checks if MCP plugin binaries are executable and if they handshake successfully.
+//
+//nolint:gocognit,nestif,funlen // loops over plugins and checks capabilities handshake
 func DiagnoseMCPPlugins(ctx context.Context) []DiagnosticItem {
 	var items []DiagnosticItem
 	if config.Cfg == nil {
@@ -172,10 +178,66 @@ func DiagnoseMCPPlugins(ctx context.Context) []DiagnosticItem {
 			})
 			_ = client.Stop() // Best effort cleanup to avoid subprocess leak
 		} else {
+			msg := fmt.Sprintf("Connected successfully to %s", binaryPath)
+			status := StatusOk
+
+			if p.pType == mcp.PluginImageGen {
+				capText, err := client.CallTool(handshakeCtx, "imagegen_get_capabilities", nil)
+				if err != nil {
+					status = StatusWarning
+					msg = fmt.Sprintf("Connected successfully to %s, but failed to get capabilities: %v", binaryPath, err)
+				} else {
+					var caps imagegenCapabilities
+					if unmarshalErr := json.Unmarshal([]byte(capText), &caps); unmarshalErr != nil {
+						status = StatusWarning
+						msg = fmt.Sprintf("Connected successfully to %s, but capability response is not valid JSON: %s", binaryPath, capText)
+					} else {
+						crefStr := "UNSUPPORTED"
+						if caps.SupportsCref {
+							crefStr = "SUPPORTED"
+						}
+						srefStr := "UNSUPPORTED"
+						if caps.SupportsSref {
+							srefStr = "SUPPORTED"
+						}
+						msg = fmt.Sprintf("Connected successfully. Active backend: [%s] (cref: %s, sref: %s)", caps.Backend, crefStr, srefStr)
+
+						if !caps.SupportsCref {
+							seedingRequested := false
+							if entries, readErr := os.ReadDir("books"); readErr == nil {
+								for _, entry := range entries {
+									if entry.IsDir() {
+										manifestPath := filepath.Join("books", entry.Name(), "manifest.json")
+										//nolint:gosec // ReadFile path is constructed inside local workspace books directory
+										if manifestBytes, loadErr := os.ReadFile(manifestPath); loadErr == nil {
+											var rawManifest struct {
+												BookProperties struct {
+													CharacterProfile string `json:"character_profile"`
+												} `json:"book_properties"`
+											}
+											if json.Unmarshal(manifestBytes, &rawManifest) == nil {
+												if rawManifest.BookProperties.CharacterProfile != "" {
+													seedingRequested = true
+													break
+												}
+											}
+										}
+									}
+								}
+							}
+							if seedingRequested {
+								status = StatusWarning
+								msg += " - WARNING: active backend does not support cref, but local books request character profiles"
+							}
+						}
+					}
+				}
+			}
+
 			items = append(items, DiagnosticItem{
 				Name:    p.name,
-				Status:  StatusOk,
-				Message: fmt.Sprintf("Connected successfully to %s", binaryPath),
+				Status:  status,
+				Message: msg,
 			})
 			_ = client.Stop()
 		}

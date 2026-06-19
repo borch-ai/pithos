@@ -92,11 +92,29 @@ func (m *mockLLM) Ping(ctx context.Context) error {
 }
 
 func setupMockImageGenServer(t *testing.T, ctx context.Context, serverTransport mcpsdk.Transport, generatedImagePath string) (*mcpsdk.ServerSession, func()) {
+	return setupMockImageGenServerWithCapabilities(t, ctx, serverTransport, generatedImagePath, "mock", true, true)
+}
+
+func setupMockImageGenServerWithCapabilities(t *testing.T, ctx context.Context, serverTransport mcpsdk.Transport, generatedImagePath string, backend string, supportsCref, supportsSref bool) (*mcpsdk.ServerSession, func()) {
 	t.Helper()
 	server := mcpsdk.NewServer(&mcpsdk.Implementation{
 		Name:    "mock-imagegen-server",
 		Version: "1.0.0",
 	}, nil)
+
+	server.AddTool(&mcpsdk.Tool{
+		Name: "imagegen_get_capabilities",
+		InputSchema: map[string]any{
+			"type": "object",
+		},
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		capsJSON := fmt.Sprintf(`{"backend":%q,"supports_cref":%t,"supports_sref":%t}`, backend, supportsCref, supportsSref)
+		return &mcpsdk.CallToolResult{
+			Content: []mcpsdk.Content{
+				&mcpsdk.TextContent{Text: capsJSON},
+			},
+		}, nil
+	})
 
 	server.AddTool(&mcpsdk.Tool{
 		Name: "imagegen_register_style",
@@ -2306,6 +2324,17 @@ func createMockImageGenServer(ctx context.Context, dummySourceImage string, requ
 	}, nil)
 
 	server.AddTool(&mcpsdk.Tool{
+		Name:        "imagegen_get_capabilities",
+		InputSchema: map[string]any{"type": "object"},
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		return &mcpsdk.CallToolResult{
+			Content: []mcpsdk.Content{
+				&mcpsdk.TextContent{Text: `{"backend":"mock","supports_cref":true,"supports_sref":true}`},
+			},
+		}, nil
+	})
+
+	server.AddTool(&mcpsdk.Tool{
 		Name:        "imagegen_register_style",
 		InputSchema: map[string]any{"type": "object"},
 	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
@@ -2356,4 +2385,188 @@ func createMockCloudServer(requests *[]string, requestsMu *sync.Mutex) (*mcpsdk.
 		}, nil
 	})
 	return server, nil
+}
+
+func TestBrew_CrefUnsupportedError(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos-brew-cref-err-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	// Setup pipeline initiate
+	optsInit := InitiateOptions{
+		OutputDir:       tmpDir,
+		Theme:           "Theme",
+		TargetPageCount: 1,
+	}
+	mInit, err := Initiate(optsInit)
+	if err != nil {
+		t.Fatalf("failed to initiate book: %v", err)
+	}
+	mInit.BookProperties.CharacterProfile = "mock-character-profile"
+	mInit.Progress.ManuscriptGenerated = true
+	mInit.Progress.Pages = []manifest.PageState{
+		{PageIndex: 1, Status: manifest.StatusPending, Text: "Stanza 1"},
+	}
+	if err = mInit.Save(); err != nil {
+		t.Fatalf("failed to save manifest: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	clientTransport, serverTransport := mcpsdk.NewInMemoryTransports()
+	_, cleanupMCP := setupMockImageGenServerWithCapabilities(t, ctx, serverTransport, "/dummy/source.png", "openai", false, false)
+	defer cleanupMCP()
+
+	optsBrew := BrewOptions{
+		OutputDir:    tmpDir,
+		MCPTransport: clientTransport,
+	}
+
+	err = Brew(ctx, optsBrew)
+	if err == nil {
+		t.Fatal("expected Brew to fail when active backend does not support cref but a character profile is defined")
+	}
+
+	expectedErr := "active imagegen backend [openai] does not support character references, but a character profile is defined; switch backend to midjourney or clean manifest character properties"
+	if !strings.Contains(err.Error(), expectedErr) {
+		t.Errorf("expected error containing %q, got %q", expectedErr, err.Error())
+	}
+}
+
+func TestBrew_CapabilitiesQueryError(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos-brew-cap-query-err-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	optsInit := InitiateOptions{
+		OutputDir:       tmpDir,
+		Theme:           "Theme",
+		TargetPageCount: 1,
+	}
+	mInit, err := Initiate(optsInit)
+	if err != nil {
+		t.Fatalf("failed to initiate: %v", err)
+	}
+	mInit.BookProperties.CharacterProfile = "mock-character-profile"
+	mInit.Progress.ManuscriptGenerated = true
+	mInit.Progress.Pages = []manifest.PageState{
+		{PageIndex: 1, Status: manifest.StatusPending, Text: "Stanza 1"},
+	}
+	if err = mInit.Save(); err != nil {
+		t.Fatalf("failed to save manifest: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	clientTransport, serverTransport := mcpsdk.NewInMemoryTransports()
+
+	// Create server that returns an error when callTool imagegen_get_capabilities is queried
+	server := mcpsdk.NewServer(&mcpsdk.Implementation{
+		Name:    "mock-imagegen-server",
+		Version: "1.0.0",
+	}, nil)
+
+	server.AddTool(&mcpsdk.Tool{
+		Name:        "imagegen_get_capabilities",
+		InputSchema: map[string]any{"type": "object"},
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		return &mcpsdk.CallToolResult{
+			IsError: true,
+			Content: []mcpsdk.Content{
+				&mcpsdk.TextContent{Text: "failed to fetch capabilities"},
+			},
+		}, nil
+	})
+
+	serverSession, err := server.Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = serverSession.Close() }()
+
+	optsBrew := BrewOptions{
+		OutputDir:    tmpDir,
+		MCPTransport: clientTransport,
+	}
+
+	err = Brew(ctx, optsBrew)
+	if err == nil {
+		t.Fatal("expected Brew to fail when capabilities query fails")
+	}
+	if !strings.Contains(err.Error(), "failed to query imagegen backend capabilities") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestBrew_CapabilitiesInvalidJSON(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos-brew-cap-json-err-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	optsInit := InitiateOptions{
+		OutputDir:       tmpDir,
+		Theme:           "Theme",
+		TargetPageCount: 1,
+	}
+	mInit, err := Initiate(optsInit)
+	if err != nil {
+		t.Fatalf("failed to initiate: %v", err)
+	}
+	mInit.BookProperties.CharacterProfile = "mock-character-profile"
+	mInit.Progress.ManuscriptGenerated = true
+	mInit.Progress.Pages = []manifest.PageState{
+		{PageIndex: 1, Status: manifest.StatusPending, Text: "Stanza 1"},
+	}
+	if err = mInit.Save(); err != nil {
+		t.Fatalf("failed to save manifest: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	clientTransport, serverTransport := mcpsdk.NewInMemoryTransports()
+
+	// Create server that returns invalid JSON for capabilities
+	server := mcpsdk.NewServer(&mcpsdk.Implementation{
+		Name:    "mock-imagegen-server",
+		Version: "1.0.0",
+	}, nil)
+
+	server.AddTool(&mcpsdk.Tool{
+		Name:        "imagegen_get_capabilities",
+		InputSchema: map[string]any{"type": "object"},
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		return &mcpsdk.CallToolResult{
+			Content: []mcpsdk.Content{
+				&mcpsdk.TextContent{Text: "invalid-json"},
+			},
+		}, nil
+	})
+
+	serverSession, err := server.Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = serverSession.Close() }()
+
+	optsBrew := BrewOptions{
+		OutputDir:    tmpDir,
+		MCPTransport: clientTransport,
+	}
+
+	err = Brew(ctx, optsBrew)
+	if err == nil {
+		t.Fatal("expected Brew to fail when capabilities JSON is invalid")
+	}
+	if !strings.Contains(err.Error(), "failed to parse imagegen backend capabilities JSON") {
+		t.Errorf("unexpected error: %v", err)
+	}
 }

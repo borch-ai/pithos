@@ -1,8 +1,8 @@
 # plan: Task 5.29: Imagegen Backend Capability Validation
 
-**Status:** Pending
+**Status:** Completed
 **Go Version:** 1.26.4
-**Unit Test Coverage:** 91.0% (Target)
+**Unit Test Coverage:** 91.3%
 
 This task integrates the capability handshake in Pithos's brew pipeline. Before bootstrapping the character reference image or generating stanzas illustrations, Pithos will query the `pw-mcp-imagegen` server to ensure the active backend supports the features required by the book properties (such as character references/seeding).
 
