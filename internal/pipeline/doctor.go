@@ -219,25 +219,34 @@ func DiagnoseMCPPlugins(ctx context.Context) []DiagnosticItem {
 
 						if !caps.SupportsCref {
 							seedingRequested := false
-							if entries, readErr := os.ReadDir("books"); readErr == nil {
-								for _, entry := range entries {
-									if entry.IsDir() {
-										manifestPath := filepath.Join("books", entry.Name(), "manifest.json")
-										//nolint:gosec // ReadFile path is constructed inside local workspace books directory
-										if manifestBytes, loadErr := os.ReadFile(manifestPath); loadErr == nil {
-											var rawManifest struct {
-												BookProperties struct {
-													CharacterProfile string `json:"character_profile"`
-												} `json:"book_properties"`
-											}
-											if json.Unmarshal(manifestBytes, &rawManifest) == nil {
-												if rawManifest.BookProperties.CharacterProfile != "" {
-													seedingRequested = true
-													break
+							dirsToScan := []string{getWorkspacesRoot()}
+							if filepath.Clean(getWorkspacesRoot()) != "books" {
+								dirsToScan = append(dirsToScan, "books")
+							}
+							for _, dir := range dirsToScan {
+								if entries, readErr := os.ReadDir(dir); readErr == nil {
+									for _, entry := range entries {
+										if entry.IsDir() {
+											manifestPath := filepath.Join(dir, entry.Name(), "manifest.json")
+											//nolint:gosec // ReadFile path is constructed inside local workspace books directory
+											if manifestBytes, loadErr := os.ReadFile(manifestPath); loadErr == nil {
+												var rawManifest struct {
+													BookProperties struct {
+														CharacterProfile string `json:"character_profile"`
+													} `json:"book_properties"`
+												}
+												if json.Unmarshal(manifestBytes, &rawManifest) == nil {
+													if rawManifest.BookProperties.CharacterProfile != "" {
+														seedingRequested = true
+														break
+													}
 												}
 											}
 										}
 									}
+								}
+								if seedingRequested {
+									break
 								}
 							}
 							if seedingRequested {

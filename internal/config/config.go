@@ -16,12 +16,13 @@ var Version = "dev"
 
 // Config represents the schema of the .pithos.toml file.
 type Config struct {
-	Concurrency int                               `mapstructure:"concurrency"`
-	MCP         MCPConfig                         `mapstructure:"mcp"`
-	API         APIConfig                         `mapstructure:"api"`
-	Telemetry   TelemetryConfig                   `mapstructure:"telemetry"`
-	Pricing     map[string]telemetry.ModelPricing `mapstructure:"pricing"`
-	Cloud       CloudConfig                       `mapstructure:"cloud"`
+	WorkspacesRoot string                            `mapstructure:"workspaces_root"`
+	Concurrency    int                               `mapstructure:"concurrency"`
+	MCP            MCPConfig                         `mapstructure:"mcp"`
+	API            APIConfig                         `mapstructure:"api"`
+	Telemetry      TelemetryConfig                   `mapstructure:"telemetry"`
+	Pricing        map[string]telemetry.ModelPricing `mapstructure:"pricing"`
+	Cloud          CloudConfig                       `mapstructure:"cloud"`
 }
 
 // MCPConfig holds paths to local Powerword MCP server binaries.
@@ -66,6 +67,13 @@ func LoadConfig(cfgFile string) (*Config, error) {
 	v := viper.New()
 
 	// Set default values so environment variables can bind even if keys are missing from the config file.
+	var defaultWorkspacesRoot string
+	if home, err := os.UserHomeDir(); err == nil {
+		defaultWorkspacesRoot = filepath.Join(home, ".local", "share", "pithos", "workspaces")
+	} else {
+		defaultWorkspacesRoot = filepath.Join(".", "books")
+	}
+	v.SetDefault("workspaces_root", defaultWorkspacesRoot)
 	v.SetDefault("concurrency", 1)
 	v.SetDefault("mcp.imagegen_path", "")
 	v.SetDefault("mcp.kdp_math_path", "")
@@ -137,6 +145,8 @@ func finalizeLoad(v *viper.Viper) (*Config, error) {
 	if err := v.Unmarshal(&rawConfig); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal configuration: %w", err)
 	}
+
+	rawConfig.WorkspacesRoot = expandTilde(rawConfig.WorkspacesRoot)
 
 	// Propagate cloud configurations to environment variables for sub-processes
 	if rawConfig.Cloud.Provider != "" {
@@ -253,4 +263,22 @@ func loadEnvFile(dir string) {
 			_ = os.Setenv(key, val)
 		}
 	}
+}
+
+// expandTilde resolves paths starting with ~/ or ~ to the user's home directory.
+func expandTilde(path string) string {
+	if path == "" {
+		return ""
+	}
+	if path == "~" {
+		if home, err := os.UserHomeDir(); err == nil {
+			return home
+		}
+	}
+	if strings.HasPrefix(path, "~"+string(filepath.Separator)) {
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, path[2:])
+		}
+	}
+	return path
 }
