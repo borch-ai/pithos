@@ -190,7 +190,7 @@ func DiagnoseMCPPlugins(ctx context.Context) []DiagnosticItem {
 					var caps imagegenCapabilities
 					if unmarshalErr := json.Unmarshal([]byte(capText), &caps); unmarshalErr != nil {
 						status = StatusWarning
-						msg = fmt.Sprintf("Connected successfully to %s, but capability response is not valid JSON: %s", binaryPath, capText)
+						msg = fmt.Sprintf("Connected successfully to %s, but capability response is not valid JSON: %s (error: %v)", binaryPath, capText, unmarshalErr)
 					} else {
 						crefStr := "UNSUPPORTED"
 						if caps.SupportsCref {

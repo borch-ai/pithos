@@ -291,11 +291,21 @@ func TestDoctor_ImageGenCapabilitiesWarning(t *testing.T) {
 		},
 	}
 
+	// Use isolated temp working directory to prevent clobbering developer's books directory
+	origWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get current working directory: %v", err)
+	}
+	tempWd := t.TempDir()
+	if err := os.Chdir(tempWd); err != nil {
+		t.Fatalf("failed to change directory to temp dir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origWd) }()
+
 	// Create temporary books directory with a manifest that requires character profiles
 	if err := os.MkdirAll("books/test-book", 0750); err != nil {
 		t.Fatalf("failed to create books dir: %v", err)
 	}
-	defer func() { _ = os.RemoveAll("books") }()
 
 	dummyManifest := `{"book_properties": {"character_profile": "A parodic frog"}}`
 	if err := os.WriteFile("books/test-book/manifest.json", []byte(dummyManifest), 0600); err != nil {
