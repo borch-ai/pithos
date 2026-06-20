@@ -995,7 +995,8 @@ func bootstrapCharacterReference(ctx context.Context, m *manifest.Manifest, opts
 		return fmt.Errorf("failed to copy character seed image: %w", copyErr)
 	}
 
-	if ext == ".mp4" {
+	lowerExt := strings.ToLower(ext)
+	if lowerExt == ".mp4" || lowerExt == ".webm" {
 		pngPath := filepath.Join(opts.OutputDir, "images", "character_seed.png")
 		fmt.Printf("Extracting static frame from video seed to %s...\n", pngPath)
 		// #nosec G204

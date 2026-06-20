@@ -3,7 +3,7 @@
 **Status:** Proposed
 **Go Version:** 1.26.4
 
-This task adds cost verification checks and user budget constraints to Pithos. It prevents accidental spend limits and rate cap breaches during long automated runs of `pithos brew` or `pithos assemble`.
+This task adds cost verification checks and user budget constraints to Pithos. It prevents accidental overspend and rate cap breaches during long automated runs of `pithos brew` or `pithos assemble`.
 
 ## User Review Required
 
