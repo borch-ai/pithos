@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -2526,6 +2527,211 @@ func TestBrew_CapabilitiesQueryError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "failed to query imagegen backend capabilities") {
 		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+type videoSeedInjectSetup struct {
+	Ctx              context.Context
+	Cancel           context.CancelFunc
+	Opts             BrewOptions
+	ImageGenRequests *[]generateRequest
+	UploadPaths      *[]string
+	RequestsMu       *sync.Mutex
+}
+
+func setupVideoSeedInjectTest(t *testing.T, tmpDir, sourceExt, theme string) videoSeedInjectSetup {
+	dummySourceImage := filepath.Join(tmpDir, "source"+sourceExt)
+	if err := os.WriteFile(dummySourceImage, []byte("fake-video-bytes"), 0600); err != nil {
+		t.Fatalf("failed to write source image: %v", err)
+	}
+
+	optsInit := InitiateOptions{
+		OutputDir:       tmpDir,
+		Theme:           theme,
+		TargetPageCount: 2,
+	}
+	mInit, err := Initiate(optsInit)
+	if err != nil {
+		t.Fatalf("failed to initiate: %v", err)
+	}
+
+	mInit.BookProperties.CharacterProfile = "mock-char-profile"
+	mInit.Progress.ManuscriptGenerated = true
+	mInit.Progress.Pages = []manifest.PageState{
+		{PageIndex: 1, Status: manifest.StatusPending, Text: "Stanza 1 text", IllustrationPrompt: "Prompt 1"},
+		{PageIndex: 2, Status: manifest.StatusPending, Text: "Stanza 2 text", IllustrationPrompt: "Prompt 2"},
+	}
+	if err = mInit.Save(); err != nil {
+		t.Fatalf("failed to save manifest: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+	// Setup mock ImageGen Server
+	imageGenClientTransport, imageGenServerTransport := mcpsdk.NewInMemoryTransports()
+	var requestsMu sync.Mutex
+	var imageGenRequests []generateRequest
+	imageGenServer, err := createMockImageGenServer(ctx, dummySourceImage, &imageGenRequests, &requestsMu)
+	if err != nil {
+		cancel()
+		t.Fatalf("failed to create mock imagegen server: %v", err)
+	}
+	imageGenSession, err := imageGenServer.Connect(ctx, imageGenServerTransport, nil)
+	if err != nil {
+		cancel()
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = imageGenSession.Close() })
+
+	// Setup mock Cloud Server
+	cloudClientTransport, cloudServerTransport := mcpsdk.NewInMemoryTransports()
+	var uploadPaths []string
+	cloudServer, err := createMockCloudServer(&uploadPaths, &requestsMu)
+	if err != nil {
+		cancel()
+		t.Fatalf("failed to create mock cloud server: %v", err)
+	}
+	cloudSession, err := cloudServer.Connect(ctx, cloudServerTransport, nil)
+	if err != nil {
+		cancel()
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = cloudSession.Close() })
+
+	opts := BrewOptions{
+		OutputDir:         tmpDir,
+		MCPTransport:      imageGenClientTransport,
+		CloudMCPTransport: cloudClientTransport,
+	}
+
+	return videoSeedInjectSetup{
+		Ctx:              ctx,
+		Cancel:           cancel,
+		Opts:             opts,
+		ImageGenRequests: &imageGenRequests,
+		UploadPaths:      &uploadPaths,
+		RequestsMu:       &requestsMu,
+	}
+}
+
+func TestBrew_CharacterInvariantInjection_VideoSeed_FFmpegNotFound(t *testing.T) {
+	tmpDir := t.TempDir()
+	setup := setupVideoSeedInjectTest(t, tmpDir, ".mp4", "Invariant Test Theme")
+	defer setup.Cancel()
+
+	// Stub lookPathFunc to return error
+	origLookPath := lookPathFunc
+	lookPathFunc = func(file string) (string, error) {
+		return "", exec.ErrNotFound
+	}
+	defer func() { lookPathFunc = origLookPath }()
+
+	err := Brew(setup.Ctx, setup.Opts)
+	if err == nil {
+		t.Fatal("expected Brew to fail due to ffmpeg not found, got nil")
+	}
+	if !strings.Contains(err.Error(), "ffmpeg not found in PATH") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestBrew_CharacterInvariantInjection_VideoSeed_ExtractionFailed(t *testing.T) {
+	tmpDir := t.TempDir()
+	setup := setupVideoSeedInjectTest(t, tmpDir, ".mp4", "Invariant Test Theme")
+	defer setup.Cancel()
+
+	// Stub lookPathFunc to succeed, but execCommandContext to execute a failing command ("false")
+	origLookPath := lookPathFunc
+	origExec := execCommandContext
+	lookPathFunc = func(file string) (string, error) {
+		return "ffmpeg", nil
+	}
+	execCommandContext = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		return exec.CommandContext(ctx, "false")
+	}
+	defer func() {
+		lookPathFunc = origLookPath
+		execCommandContext = origExec
+	}()
+
+	err := Brew(setup.Ctx, setup.Opts)
+	if err == nil {
+		t.Fatal("expected Brew to fail due to ffmpeg failure, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to extract static frame from character seed video") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestBrew_CharacterInvariantInjection_VideoSeed_Success(t *testing.T) {
+	tmpDir := t.TempDir()
+	setup := setupVideoSeedInjectTest(t, tmpDir, ".mp4", "Invariant Test Theme")
+	defer setup.Cancel()
+
+	// Stub lookPathFunc to succeed, and execCommandContext to write the PNG file and run "true"
+	origLookPath := lookPathFunc
+	origExec := execCommandContext
+	lookPathFunc = func(file string) (string, error) {
+		return "ffmpeg", nil
+	}
+	execCommandContext = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		pngPath := args[len(args)-1]
+		_ = os.WriteFile(pngPath, []byte("fake-extracted-png"), 0600)
+		return exec.CommandContext(ctx, "true")
+	}
+	defer func() {
+		lookPathFunc = origLookPath
+		execCommandContext = origExec
+	}()
+
+	err := Brew(setup.Ctx, setup.Opts)
+	if err != nil {
+		t.Fatalf("expected Brew to succeed, got error: %v", err)
+	}
+
+	setup.RequestsMu.Lock()
+	defer setup.RequestsMu.Unlock()
+	if len(*setup.UploadPaths) == 0 {
+		t.Fatal("expected character_seed to be uploaded, but uploadPaths is empty")
+	}
+	if !strings.Contains((*setup.UploadPaths)[0], "character_seed.png") {
+		t.Errorf("expected uploaded path to contain character_seed.png, got %q", (*setup.UploadPaths)[0])
+	}
+}
+
+func TestBrew_CharacterInvariantInjection_WebmVideoSeed_Success(t *testing.T) {
+	tmpDir := t.TempDir()
+	setup := setupVideoSeedInjectTest(t, tmpDir, ".WEBM", "Invariant Test Theme Webm")
+	defer setup.Cancel()
+
+	// Stub lookPathFunc to succeed, and execCommandContext to write the PNG file and run "true"
+	origLookPath := lookPathFunc
+	origExec := execCommandContext
+	lookPathFunc = func(file string) (string, error) {
+		return "ffmpeg", nil
+	}
+	execCommandContext = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		pngPath := args[len(args)-1]
+		_ = os.WriteFile(pngPath, []byte("fake-extracted-png"), 0600)
+		return exec.CommandContext(ctx, "true")
+	}
+	defer func() {
+		lookPathFunc = origLookPath
+		execCommandContext = origExec
+	}()
+
+	err := Brew(setup.Ctx, setup.Opts)
+	if err != nil {
+		t.Fatalf("expected Brew to succeed, got error: %v", err)
+	}
+
+	setup.RequestsMu.Lock()
+	defer setup.RequestsMu.Unlock()
+	if len(*setup.UploadPaths) == 0 {
+		t.Fatal("expected character_seed to be uploaded, but uploadPaths is empty")
+	}
+	if !strings.Contains((*setup.UploadPaths)[0], "character_seed.png") {
+		t.Errorf("expected uploaded path to contain character_seed.png, got %q", (*setup.UploadPaths)[0])
 	}
 }
 

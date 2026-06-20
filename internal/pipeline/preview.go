@@ -952,10 +952,23 @@ const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
 
     if (page.imagePath) {
       // Full Bleed Layout
-      const bg = document.createElement('div');
-      bg.className = 'page-background';
-      bg.style.backgroundImage = "url('" + page.imagePath + "')";
-      pageEl.appendChild(bg);
+      let mediaEl;
+      const lowerPath = page.imagePath.toLowerCase();
+      if (lowerPath.endsWith('.mp4') || lowerPath.endsWith('.webm')) {
+        mediaEl = document.createElement('video');
+        mediaEl.className = 'page-background';
+        mediaEl.src = page.imagePath;
+        mediaEl.autoplay = true;
+        mediaEl.loop = true;
+        mediaEl.muted = true;
+        mediaEl.setAttribute('playsinline', '');
+        mediaEl.style.objectFit = 'cover';
+      } else {
+        mediaEl = document.createElement('div');
+        mediaEl.className = 'page-background';
+        mediaEl.style.backgroundImage = "url('" + page.imagePath + "')";
+      }
+      pageEl.appendChild(mediaEl);
 
       const inner = document.createElement('div');
       inner.className = 'page-inner';

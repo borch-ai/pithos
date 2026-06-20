@@ -14,6 +14,7 @@ import (
 var (
 	goos               = runtime.GOOS
 	execCommandContext = exec.CommandContext
+	lookPathFunc       = exec.LookPath
 )
 
 // defaultOpenBrowser executes the system command to open the browser using CommandContext.
