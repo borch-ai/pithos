@@ -29,7 +29,7 @@ func expandTilde(path string) string {
 			return home
 		}
 	}
-	if strings.HasPrefix(path, "~"+string(filepath.Separator)) {
+	if strings.HasPrefix(path, "~/") || strings.HasPrefix(path, "~"+string(filepath.Separator)) {
 		if home, err := os.UserHomeDir(); err == nil {
 			return filepath.Join(home, path[2:])
 		}

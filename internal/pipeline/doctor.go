@@ -228,7 +228,7 @@ func DiagnoseMCPPlugins(ctx context.Context) []DiagnosticItem {
 									for _, entry := range entries {
 										if entry.IsDir() {
 											manifestPath := filepath.Join(dir, entry.Name(), "manifest.json")
-											//nolint:gosec // ReadFile path is constructed inside local workspace books directory
+											//nolint:gosec // ReadFile path is constructed inside resolved workspace directories
 											if manifestBytes, loadErr := os.ReadFile(manifestPath); loadErr == nil {
 												var rawManifest struct {
 													BookProperties struct {
