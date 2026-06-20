@@ -6,11 +6,16 @@
 
 This task implements custom configuration options in Pithos to allow manual overrides for image generation backend capabilities (`imagegen_force_cref` and `imagegen_force_sref`). This acts as an escape hatch to prevent contract rot if model capabilities are updated upstream before a code release is pushed.
 
+## User Review Required
+
+> [!NOTE]
+> **Escape Hatch:** Bypassing capabilities validation with local overrides allows developers to force execution with newer upstream models without waiting for a new Pithos version release.
+
 ## Proposed Changes
 
 ### Configuration Layer
 
-#### [MODIFY] [config.go](file:///Users/human/code/pithos/internal/config/config.go)
+#### [MODIFY] [config.go](file://../../internal/config/config.go)
 - Extend `Config` and `MCPConfig` structures:
   ```go
   type MCPConfig struct {
@@ -27,7 +32,7 @@ This task implements custom configuration options in Pithos to allow manual over
 
 ### Brew Pipeline
 
-#### [MODIFY] [brew.go](file:///Users/human/code/pithos/internal/pipeline/brew.go)
+#### [MODIFY] [brew.go](file://../../internal/pipeline/brew.go)
 - Update `checkBackendCapabilities` to check overrides:
   ```go
   if config.Cfg != nil && config.Cfg.MCP.ImageGenForceCref {
@@ -38,7 +43,7 @@ This task implements custom configuration options in Pithos to allow manual over
 
 ### Diagnostics Check
 
-#### [MODIFY] [doctor.go](file:///Users/human/code/pithos/internal/pipeline/doctor.go)
+#### [MODIFY] [doctor.go](file://../../internal/pipeline/doctor.go)
 - In `DiagnoseMCPPlugins`, apply configuration overrides to capability values before warnings checks:
   ```go
   if config.Cfg != nil && config.Cfg.MCP.ImageGenForceCref {
