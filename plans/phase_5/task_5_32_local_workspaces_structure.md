@@ -1,7 +1,9 @@
 # plan: Task 5.32: Adopt Local Workspaces & Cache Structure
 
-**Status:** Proposed
+**Status:** Completed
+**Date Completed:** 2026-06-20
 **Go Version:** 1.26.4
+**Unit Test Coverage:** 91.4% (Actual)
 
 This task migrates default book workspaces and configuration cache directories to the user home directory (`~/.local/share/pithos/`). This aligns with the Borch-AI standard (used by Kiln and Aeolian) to prevent cluttering the repository git tree and provide portability when running the Pithos CLI globally.
 

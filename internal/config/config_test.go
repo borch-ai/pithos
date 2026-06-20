@@ -500,3 +500,31 @@ func TestLoadConfig_ImageGenForceOverrides(t *testing.T) {
 		t.Errorf("expected MCP.ImageGenForceSref to be true, got false")
 	}
 }
+
+func TestConfig_ExpandTilde(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skip("skipping test because home directory is not resolvable")
+	}
+
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"empty string", "", ""},
+		{"tilde only", "~", home},
+		{"tilde prefix slash", "~/abc", filepath.Join(home, "abc")},
+		{"absolute path", "/abs/path", "/abs/path"},
+		{"relative path", "rel/path", "rel/path"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := expandTilde(tt.input)
+			if actual != tt.expected {
+				t.Errorf("expandTilde(%q) = %q; expected %q", tt.input, actual, tt.expected)
+			}
+		})
+	}
+}
