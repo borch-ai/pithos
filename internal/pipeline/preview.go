@@ -953,7 +953,8 @@ const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
     if (page.imagePath) {
       // Full Bleed Layout
       let mediaEl;
-      if (page.imagePath.toLowerCase().endsWith('.mp4') || page.imagePath.toLowerCase().endsWith('.webm')) {
+      const lowerPath = page.imagePath.toLowerCase();
+      if (lowerPath.endsWith('.mp4') || lowerPath.endsWith('.webm')) {
         mediaEl = document.createElement('video');
         mediaEl.className = 'page-background';
         mediaEl.src = page.imagePath;

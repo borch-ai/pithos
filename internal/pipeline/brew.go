@@ -996,13 +996,14 @@ func bootstrapCharacterReference(ctx context.Context, m *manifest.Manifest, opts
 
 	lowerExt := strings.ToLower(ext)
 	if lowerExt == ".mp4" || lowerExt == ".webm" {
-		if _, lookErr := lookPathFunc("ffmpeg"); lookErr != nil {
+		ffmpegPath, lookErr := lookPathFunc("ffmpeg")
+		if lookErr != nil {
 			return fmt.Errorf("ffmpeg not found in PATH: please install ffmpeg to extract static frames from video seeds for character portraits: %w", lookErr)
 		}
 		pngPath := filepath.Join(opts.OutputDir, "images", "character_seed.png")
 		fmt.Printf("Extracting static frame from video seed to %s...\n", pngPath)
 		// #nosec G204
-		cmd := execCommandContext(ctx, "ffmpeg", "-y", "-i", destPath, "-vframes", "1", "-f", "image2", pngPath)
+		cmd := execCommandContext(ctx, ffmpegPath, "-y", "-i", destPath, "-vframes", "1", "-f", "image2", pngPath)
 		if out, runErr := cmd.CombinedOutput(); runErr != nil {
 			return fmt.Errorf("failed to extract static frame from character seed video using ffmpeg: %w (output: %s)", runErr, string(out))
 		}
