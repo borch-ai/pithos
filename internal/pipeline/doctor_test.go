@@ -469,3 +469,65 @@ func TestDoctor_ImageGenCapabilitiesInvalidJSON(t *testing.T) {
 		t.Error("expected to find warning for image generation plugin")
 	}
 }
+
+func TestDoctor_PDFCheckHandshakeWarning(t *testing.T) {
+	origCfg := config.Cfg
+	defer func() { config.Cfg = origCfg }()
+
+	config.Cfg = &config.Config{
+		API: config.APIConfig{
+			GeminiKey: "dummy-gemini-key",
+		},
+		MCP: config.MCPConfig{
+			ImageGenPath: os.Args[0],
+			KDPMathPath:  os.Args[0],
+			SEOPath:      os.Args[0],
+			ViralPath:    os.Args[0],
+			TypstPath:    os.Args[0],
+			CloudPath:    os.Args[0],
+			PDFCheckPath: os.Args[0],
+		},
+	}
+
+	origNewLLM := newLLMClientFunc
+	newLLMClientFunc = func(modelName string, geminiKey, openaiKey string, httpClient *http.Client) (llm.LLMClient, error) {
+		return &mockPowerwordLLM{}, nil
+	}
+	defer func() { newLLMClientFunc = origNewLLM }()
+
+	origNewMCP := newPluginClientFunc
+	newPluginClientFunc = func(pType mcp.PluginType) mcpClientInterface {
+		if pType == mcp.PluginPDFCheck {
+			return &mockMcpClient{
+				binaryPath: os.Args[0],
+				startErr:   errors.New("handshake failed for pdfcheck"),
+			}
+		}
+		return &mockMcpClient{
+			binaryPath: os.Args[0],
+			startErr:   nil,
+		}
+	}
+	defer func() { newPluginClientFunc = origNewMCP }()
+
+	results, hasFailure := RunDiagnostics(context.Background())
+	if hasFailure {
+		t.Fatalf("expected diagnostics to not fail since pdfcheck is non-critical, got failure: %+v", results)
+	}
+
+	foundWarning := false
+	for _, item := range results {
+		if item.Name == "PDF Preflight Validation Plugin (pw-mcp-pdfcheck)" {
+			if item.Status != StatusWarning {
+				t.Errorf("expected StatusWarning, got %s", item.Status)
+			}
+			if !strings.Contains(item.Message, "handshake failed for pdfcheck") {
+				t.Errorf("unexpected message: %q", item.Message)
+			}
+			foundWarning = true
+		}
+	}
+	if !foundWarning {
+		t.Error("expected to find warning for PDF check plugin")
+	}
+}

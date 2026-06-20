@@ -30,7 +30,7 @@ This task extends the `pithos doctor` preflight check subcommand. It registers c
   * The configuration points to a valid file.
   * The binary is executable.
   * Pithos can successfully launch the process and complete the MCP connection handshake.
-- Elevate the unsupported `cref` status from a warning to a failure when seeding is requested:
+- Elevate the unsupported `cref` status from a warning to a failure when a character profile is defined/requested in any local book manifest:
   ```go
   if seedingRequested {
       status = StatusFail
