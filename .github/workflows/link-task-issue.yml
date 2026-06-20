@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   link:
-    uses: borch-ai/.github/.github/workflows/link-task-issue.yml@main
+    uses: borch-ai/.github/.github/workflows/link-task-issue.yml@2a8fb6a38a2c359f65a656de9cab65838d2e0bf8
     with:
       pr-number: ${{ github.event.pull_request.number }}
       base-ref: ${{ github.event.pull_request.base.ref }}
