@@ -1045,6 +1045,13 @@ func checkBackendCapabilities(ctx context.Context, mcpClient *mcp.PluginClient, 
 		return fmt.Errorf("failed to parse imagegen backend capabilities JSON: %w", err)
 	}
 
+	if config.Cfg != nil && config.Cfg.MCP.ImageGenForceCref {
+		caps.SupportsCref = true
+	}
+	if config.Cfg != nil && config.Cfg.MCP.ImageGenForceSref {
+		caps.SupportsSref = true
+	}
+
 	if characterProfile != "" && !caps.SupportsCref {
 		return fmt.Errorf("active imagegen backend [%s] does not support character references, but a character profile is defined; switch backend to midjourney or clean manifest character properties", caps.Backend)
 	}

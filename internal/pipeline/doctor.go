@@ -197,10 +197,24 @@ func DiagnoseMCPPlugins(ctx context.Context) []DiagnosticItem {
 						if caps.SupportsCref {
 							crefStr = "SUPPORTED"
 						}
+						if config.Cfg != nil && config.Cfg.MCP.ImageGenForceCref {
+							if !caps.SupportsCref {
+								caps.SupportsCref = true
+								crefStr = "SUPPORTED [overridden]"
+							}
+						}
+
 						srefStr := "UNSUPPORTED"
 						if caps.SupportsSref {
 							srefStr = "SUPPORTED"
 						}
+						if config.Cfg != nil && config.Cfg.MCP.ImageGenForceSref {
+							if !caps.SupportsSref {
+								caps.SupportsSref = true
+								srefStr = "SUPPORTED [overridden]"
+							}
+						}
+
 						msg = fmt.Sprintf("Connected successfully. Active backend: [%s] (cref: %s, sref: %s)", caps.Backend, crefStr, srefStr)
 
 						if !caps.SupportsCref {
