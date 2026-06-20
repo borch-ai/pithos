@@ -38,6 +38,7 @@ func TestBrew_Integration_RealSubprocess(t *testing.T) {
 		OutputDir:       tempDir,
 		Theme:           "Integration Test Theme",
 		TargetPageCount: 3,
+		NoBrainstorm:    true,
 	}
 	_, err := Initiate(optsInit)
 	if err != nil {
@@ -156,6 +157,7 @@ func TestBrew_Integration_ReviewFlow(t *testing.T) {
 		OutputDir:       tempDir,
 		Theme:           "Integration Review Theme",
 		TargetPageCount: 2,
+		NoBrainstorm:    true,
 	})
 	if err != nil {
 		t.Fatalf("failed to initiate book: %v", err)
@@ -407,6 +409,7 @@ func TestBrew_Integration_SelectivePageRedo(t *testing.T) {
 		OutputDir:       tempDir,
 		Theme:           "Integration Selective Theme",
 		TargetPageCount: 3,
+		NoBrainstorm:    true,
 	}
 	m, err := Initiate(optsInit)
 	if err != nil {
@@ -514,6 +517,7 @@ func TestAssemble_Integration_RealSubprocess(t *testing.T) {
 		OutputDir:       tempDir,
 		Theme:           "Integration Assemble Theme",
 		TargetPageCount: 3,
+		NoBrainstorm:    true,
 	}
 	m, err := Initiate(optsInit)
 	if err != nil {
@@ -668,5 +672,78 @@ func verifyAssembleOutputs(t *testing.T, tempDir string) {
 	}
 	if m2.Kiln.InteriorPDFPath == "" {
 		t.Error("expected Kiln interior PDF path to be populated")
+	}
+}
+
+func TestInitiate_Integration_Brainstorm(t *testing.T) {
+	origCfg := config.Cfg
+	defer func() { config.Cfg = origCfg }()
+
+	tempDir := t.TempDir()
+
+	// Mock Gemini response for visual guides
+	geminiMockResp := geminiResponse{
+		Candidates: []struct {
+			Content struct {
+				Parts []struct {
+					Text string `json:"text"`
+				} `json:"parts"`
+			} `json:"content"`
+		}{
+			{
+				Content: struct {
+					Parts []struct {
+						Text string `json:"text"`
+					} `json:"parts"`
+				}{
+					Parts: []struct {
+						Text string `json:"text"`
+					}{
+						{Text: `{"style_seed": "integration cosmic style", "character_profile": "integration astronaut dog"}`},
+					},
+				},
+			},
+		},
+	}
+
+	mockHttpClient := &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if strings.Contains(req.URL.Host, "generativelanguage") {
+				w := httptest.NewRecorder()
+				w.Header().Set("Content-Type", "application/json")
+				// Wrap in a slice to match the SDK's streaming transport expectations
+				if encErr := json.NewEncoder(w).Encode([]geminiResponse{geminiMockResp}); encErr != nil {
+					return nil, encErr
+				}
+				return w.Result(), nil
+			}
+			return nil, fmt.Errorf("unexpected request to: %s", req.URL)
+		}),
+	}
+
+	config.Cfg = &config.Config{
+		API: config.APIConfig{
+			GeminiKey: "mock-gemini-key",
+		},
+	}
+
+	opts := InitiateOptions{
+		OutputDir:       tempDir,
+		Theme:           "Integration Theme",
+		TargetPageCount: 15,
+		NoBrainstorm:    false, // Enabled brainstorming
+		HTTPClient:      mockHttpClient,
+	}
+
+	m, err := Initiate(opts)
+	if err != nil {
+		t.Fatalf("Initiate with brainstorming failed: %v", err)
+	}
+
+	if m.BookProperties.Style != "integration cosmic style" {
+		t.Errorf("expected style 'integration cosmic style', got %q", m.BookProperties.Style)
+	}
+	if m.BookProperties.CharacterProfile != "integration astronaut dog" {
+		t.Errorf("expected character profile 'integration astronaut dog', got %q", m.BookProperties.CharacterProfile)
 	}
 }

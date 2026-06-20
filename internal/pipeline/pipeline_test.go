@@ -293,6 +293,140 @@ func TestInitiate(t *testing.T) {
 	}
 }
 
+func TestInitiate_Brainstorm_Enabled(t *testing.T) {
+	origCfg := config.Cfg
+	defer func() { config.Cfg = origCfg }()
+
+	// Configure valid config so getLLMClient might fallback if needed, but we pass mock LLM client.
+	config.Cfg = &config.Config{
+		API: config.APIConfig{
+			GeminiKey: "fake-key",
+		},
+	}
+
+	tmpDir := t.TempDir()
+	mockClient := &mockLLM{
+		style:       "cosmic space style",
+		charProfile: "a cute little astronaut dog",
+	}
+	opts := InitiateOptions{
+		OutputDir:       tmpDir,
+		Theme:           "Space Dog Adventure",
+		TargetPageCount: 15,
+		NoBrainstorm:    false,
+		LLM:             mockClient,
+	}
+	m, err := Initiate(opts)
+	if err != nil {
+		t.Fatalf("Initiate failed: %v", err)
+	}
+	if m.BookProperties.Style != "cosmic space style" {
+		t.Errorf("expected style 'cosmic space style', got %q", m.BookProperties.Style)
+	}
+	if m.BookProperties.CharacterProfile != "a cute little astronaut dog" {
+		t.Errorf("expected character profile 'a cute little astronaut dog', got %q", m.BookProperties.CharacterProfile)
+	}
+}
+
+func TestInitiate_Brainstorm_Disabled(t *testing.T) {
+	origCfg := config.Cfg
+	defer func() { config.Cfg = origCfg }()
+
+	// Configure valid config so getLLMClient might fallback if needed, but we pass mock LLM client.
+	config.Cfg = &config.Config{
+		API: config.APIConfig{
+			GeminiKey: "fake-key",
+		},
+	}
+
+	tmpDir := t.TempDir()
+	mockClient := &mockLLM{
+		style:       "cosmic space style",
+		charProfile: "a cute little astronaut dog",
+	}
+	opts := InitiateOptions{
+		OutputDir:       tmpDir,
+		Theme:           "Space Dog Adventure",
+		TargetPageCount: 15,
+		NoBrainstorm:    true,
+		LLM:             mockClient,
+	}
+	m, err := Initiate(opts)
+	if err != nil {
+		t.Fatalf("Initiate failed: %v", err)
+	}
+	if m.BookProperties.Style != "" {
+		t.Errorf("expected style to be empty, got %q", m.BookProperties.Style)
+	}
+	if m.BookProperties.CharacterProfile != "" {
+		t.Errorf("expected character profile to be empty, got %q", m.BookProperties.CharacterProfile)
+	}
+}
+
+func TestInitiate_Brainstorm_NoTheme(t *testing.T) {
+	origCfg := config.Cfg
+	defer func() { config.Cfg = origCfg }()
+
+	// Configure valid config so getLLMClient might fallback if needed, but we pass mock LLM client.
+	config.Cfg = &config.Config{
+		API: config.APIConfig{
+			GeminiKey: "fake-key",
+		},
+	}
+
+	tmpDir := t.TempDir()
+	mockClient := &mockLLM{
+		style:       "cosmic space style",
+		charProfile: "a cute little astronaut dog",
+	}
+	opts := InitiateOptions{
+		OutputDir:       tmpDir,
+		Theme:           "",
+		TargetPageCount: 15,
+		NoBrainstorm:    false,
+		LLM:             mockClient,
+	}
+	m, err := Initiate(opts)
+	if err != nil {
+		t.Fatalf("Initiate failed: %v", err)
+	}
+	if m.BookProperties.Style != "" {
+		t.Errorf("expected style to be empty, got %q", m.BookProperties.Style)
+	}
+	if m.BookProperties.CharacterProfile != "" {
+		t.Errorf("expected character profile to be empty, got %q", m.BookProperties.CharacterProfile)
+	}
+}
+
+func TestInitiate_Brainstorm_NoAPIKeys(t *testing.T) {
+	origCfg := config.Cfg
+	defer func() { config.Cfg = origCfg }()
+
+	config.Cfg = &config.Config{
+		API: config.APIConfig{
+			GeminiKey: "",
+			OpenAIKey: "",
+		},
+	}
+
+	tmpDir := t.TempDir()
+	opts := InitiateOptions{
+		OutputDir:           tmpDir,
+		Theme:               "Space Theme",
+		TargetPageCount:     15,
+		NoBrainstorm:        false,
+		StrictBrainstorming: true,
+		LLM:                 nil, // Force standard client setup to fail
+	}
+	_, err := Initiate(opts)
+	if err == nil {
+		t.Fatal("expected Initiate to fail due to missing API keys, got nil")
+	}
+	if !strings.Contains(err.Error(), "--no-brainstorm") {
+		t.Errorf("expected error message to suggest --no-brainstorm, got: %v", err)
+	}
+}
+
 func TestInitiate_Errors(t *testing.T) {
 	// Empty OutputDir
 	_, err := Initiate(InitiateOptions{})

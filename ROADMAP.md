@@ -126,9 +126,9 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
 *   [ ] **Task 5.24: Graceful Image Backend Fallbacks**
     *   Implement fallback handling from OpenAI to Gemini Imagen (and vice-versa) when image generation fails due to credential or permission errors.
     *   [Implementation Plan](plans/phase_5/task_5_24_graceful_image_backend_fallbacks.md)
-*   [ ] **Task 5.25: Opt-in Brainstorming during Initiate**
-    *   Add a `--brainstorm` boolean flag to the `pithos initiate` command. If set, this flag initializes the LLM client using configured credentials and prompts the LLM to generate the `style_seed` and `character_profile` immediately, saving the drafts to the created manifest file.
-    *   [Implementation Plan](plans/phase_5/task_5_25_opt_in_initiate_brainstorming.md)
+*   [x] **Task 5.25: Opt-out Brainstorming during Initiate**
+    *   Automatically query the LLM to generate the `style_seed` and `character_profile` immediately during `pithos initiate` if a theme is provided. Provide a `--no-brainstorm` flag to opt out of this behavior.
+    *   [Implementation Plan](plans/phase_5/task_5_25_opt_out_initiate_brainstorming.md)
 *   [x] **Task 5.26: Automatic Browser Preview Opening**
     *   Automatically open the generated web preview visualizer in the default system browser after `pithos brew` or `pithos assemble` completes. Provide a `--silent` flag to allow opting out of this behavior in headless/CI environments.
     *   [Implementation Plan](plans/phase_5/task_5_26_auto_open_preview.md)
@@ -142,7 +142,7 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
     *   Query the `pw-mcp-imagegen` server's capabilities handshake before starting image generation. If the active backend (e.g. Google Imagen or OpenAI) does not support image-based character references (cref) but a character profile is defined, fail fast with a descriptive error to prevent API cost waste.
     *   [Implementation Plan](plans/phase_5/task_5_29_imagegen_capability_validation.md)
 *   [x] **Task 5.30: Preflight Diagnostics Doctor Extensions**
-    *   Extend the `pithos doctor` diagnostic checklist to verify the presence, configuration, and handshake success of the `pw-mcp-pdfcheck` server.
+    *   Extend the `pithos doctor` diagnostic checklist to verify the presence, configuration, and handshake success of the `pw-mcp-pdfcheck` server. Check and warn if manual overrides (`force_cref`, `force_sref`) are configured.
     *   [Implementation Plan](plans/phase_5/task_5_30_doctor_pdfcheck_check.md)
 *   [x] **Task 5.31: Imagegen Capability Overrides Configuration**
     *   Add configuration keys (`force_cref` and `force_sref`) in `.pithos.toml` and `.env` / environment variables. Parse them in config and propagate them or bypass capability checks in Pithos to allow manual capability overrides.
@@ -153,7 +153,7 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
     *   [Implementation Plan](plans/phase_5/task_5_32_local_workspaces_structure.md)
 *   [ ] **Task 5.33: Interactive CLI Prompt Wizards via Survey**
     *   Integrate `github.com/AlecAivazis/survey` for interactive user prompts.
-    *   Implement an interactive scaffolding wizard for `pithos initiate` when flags are omitted.
+    *   Implement an interactive scaffolding wizard for `pithos initiate` when flags are omitted, prompting the user whether to perform visual guide brainstorming.
     *   Implement interactive page multi-selection for selective redo in `pithos brew --pages`.
     *   [Implementation Plan](plans/phase_5/task_5_33_interactive_survey_prompts.md)
 *   [ ] **Task 5.34: List Local Book Workspaces (pithos ls)**
@@ -182,6 +182,10 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
     *   Implement a `pithos preview --watch` command using `fsnotify` to monitor local manuscript or config updates.
     *   Automatically trigger Typst recompilation and web preview regenerations on file saves.
     *   [Implementation Plan](plans/phase_5/task_5_39_preview_live_watcher.md)
+*   [ ] **Task 5.40: E2E CLI Subprocess Integration Test Suite**
+    *   Implement end-to-end integration tests that build the `pithos` binary on-the-fly and execute subprocess CLI commands.
+    *   Assert correct exit codes, stdout/stderr formatting, flag parsing, and interactive stdin prompt responses.
+    *   [Implementation Plan](plans/phase_5/task_5_40_e2e_cli_subprocess_tests.md)
 
 
 ### Interactive UI & Quality Enhancements
@@ -197,7 +201,7 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
     *   Implement an LLM response sanitization helper to strip markdown code blocks (e.g. ` ```json ... ``` `) and protect Pithos against parsing errors.
     *   [Implementation Plan](plans/phase_5/task_5_12_robust_json_parsing.md)
 *   [ ] **Task 5.13: Multi-Provider LLM Fallback & Retries**
-    *   Implement dynamic retries with exponential backoff and automatic provider switching (e.g., fall back to OpenAI if Gemini fails) to avoid rate limit halts in headless runs.
+    *   Implement dynamic retries with exponential backoff and automatic provider switching (e.g., fall back to OpenAI if Gemini fails) to avoid rate limit halts in headless runs. Apply fallback logic to both initiate-stage brainstorming and brew-stage manuscript generation.
     *   [Implementation Plan](plans/phase_5/task_5_13_multi_provider_fallback.md)
 *   [ ] **Task 5.14: Bubbletea TUI-Based Interactive Review Loop**
     *   Replace the raw file-editing loop with an interactive terminal review dashboard, enabling users to edit stanzas, customize prompts, and trigger select regeneration.

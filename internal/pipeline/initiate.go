@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,12 +16,17 @@ import (
 
 // InitiateOptions contains configuration fields for initializing a book workspace.
 type InitiateOptions struct {
-	OutputDir       string
-	Theme           string
-	Style           string
-	Format          string
-	TargetPageCount int
-	TrimSize        string
+	OutputDir           string
+	Theme               string
+	Style               string
+	Format              string
+	TargetPageCount     int
+	TrimSize            string
+	NoBrainstorm        bool
+	StrictBrainstorming bool
+	LLM                 LLMClient
+	HTTPClient          *http.Client
+	Context             context.Context
 }
 
 // Initiate scaffolds a new book project directory structure and writes the initial manifest.json.
@@ -71,12 +77,20 @@ func Initiate(opts InitiateOptions) (*manifest.Manifest, error) {
 	m.Kiln.Version = 1
 	m.Kiln.Milestones = []string{"initiate_complete"}
 
+	ctx := opts.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := brainstormVisualGuides(ctx, m, opts); err != nil {
+		return nil, err
+	}
+
 	if err := m.Save(); err != nil {
 		return nil, fmt.Errorf("failed to save initial manifest.json: %w", err)
 	}
 
 	// 5. Create initial Git checkpoint
-	if err := Checkpoint(context.Background(), opts.OutputDir, "Initial workspace setup"); err != nil {
+	if err := Checkpoint(ctx, opts.OutputDir, "Initial workspace setup"); err != nil {
 		return nil, fmt.Errorf("failed to create initial git checkpoint: %w", err)
 	}
 
@@ -110,4 +124,23 @@ func ConfirmOverwrite(r io.Reader, w io.Writer, path string) (bool, error) {
 	}
 	response = strings.ToLower(strings.TrimSpace(response))
 	return response == "y" || response == "yes", nil
+}
+
+func brainstormVisualGuides(ctx context.Context, m *manifest.Manifest, opts InitiateOptions) error {
+	if opts.NoBrainstorm || opts.Theme == "" {
+		return nil
+	}
+
+	llmClient, err := getLLMClient(opts.LLM, opts.HTTPClient)
+	if err != nil {
+		if !isTestEnv() || opts.LLM != nil || opts.StrictBrainstorming {
+			return fmt.Errorf("failed to initialize LLM client for brainstorming: %w. If you wish to skip brainstorming, run with --no-brainstorm", err)
+		}
+		return nil
+	}
+
+	if err := generateAndRecordVisualGuides(ctx, m, opts.Theme, llmClient); err != nil {
+		return err
+	}
+	return nil
 }

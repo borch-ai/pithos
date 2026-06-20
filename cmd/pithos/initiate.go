@@ -10,12 +10,13 @@ import (
 )
 
 var (
-	initiateOutput   string
-	initiateTheme    string
-	initiateStyle    string
-	initiateFormat   string
-	initiatePages    int
-	initiateTrimSize string
+	initiateOutput       string
+	initiateTheme        string
+	initiateStyle        string
+	initiateFormat       string
+	initiatePages        int
+	initiateTrimSize     string
+	initiateNoBrainstorm bool
 )
 
 var initiateCmd = &cobra.Command{
@@ -48,6 +49,8 @@ var initiateCmd = &cobra.Command{
 			Format:          initiateFormat,
 			TargetPageCount: initiatePages,
 			TrimSize:        initiateTrimSize,
+			NoBrainstorm:    initiateNoBrainstorm,
+			Context:         cmd.Context(),
 		}
 		m, err := pipeline.Initiate(opts)
 		if err != nil {
@@ -65,5 +68,6 @@ func init() {
 	initiateCmd.Flags().StringVar(&initiateFormat, "format", "paperback", "KDP print format (paperback or hardcover)")
 	initiateCmd.Flags().IntVar(&initiatePages, "pages", 15, "Target page count of the book")
 	initiateCmd.Flags().StringVar(&initiateTrimSize, "trim-size", "8.5x8.5", "Trim size of the book (e.g. 6x9, 8.5x8.5)")
+	initiateCmd.Flags().BoolVar(&initiateNoBrainstorm, "no-brainstorm", false, "Disable automated visual style and character profile brainstorming")
 	rootCmd.AddCommand(initiateCmd)
 }

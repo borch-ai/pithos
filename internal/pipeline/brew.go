@@ -190,18 +190,18 @@ func handleReviewCheckpoint(ctx context.Context, opts BrewOptions, m *manifest.M
 	return fmt.Errorf("%w: manuscript is available at %s. Edit the file, then run brew without --review to generate illustrations", ErrReviewPause, manuscriptPath)
 }
 
-func setupLLMClient(opts BrewOptions) (LLMClient, error) {
+func getLLMClient(llmOverride LLMClient, httpClient *http.Client) (LLMClient, error) {
 	switch {
-	case opts.LLM != nil:
-		return opts.LLM, nil
+	case llmOverride != nil:
+		return llmOverride, nil
 	case config.Cfg != nil && config.Cfg.API.GeminiKey != "":
-		pwClient, err := newLLMClientFunc("gemini-2.5-flash", config.Cfg.API.GeminiKey, "", opts.HTTPClient)
+		pwClient, err := newLLMClientFunc("gemini-2.5-flash", config.Cfg.API.GeminiKey, "", httpClient)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create gemini client: %w", err)
 		}
 		return &PowerwordClientAdapter{client: pwClient, modelName: "gemini-2.5-flash"}, nil
 	case config.Cfg != nil && config.Cfg.API.OpenAIKey != "":
-		pwClient, err := newLLMClientFunc("gpt-4o", "", config.Cfg.API.OpenAIKey, opts.HTTPClient)
+		pwClient, err := newLLMClientFunc("gpt-4o", "", config.Cfg.API.OpenAIKey, httpClient)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create openai client: %w", err)
 		}
@@ -211,7 +211,11 @@ func setupLLMClient(opts BrewOptions) (LLMClient, error) {
 	}
 }
 
-func generateAndRecordVisualGuides(ctx context.Context, m *manifest.Manifest, theme string, llmClient LLMClient, opts BrewOptions) error {
+func setupLLMClient(opts BrewOptions) (LLMClient, error) {
+	return getLLMClient(opts.LLM, opts.HTTPClient)
+}
+
+func generateAndRecordVisualGuides(ctx context.Context, m *manifest.Manifest, theme string, llmClient LLMClient) error {
 	styleVal, charProfileVal, guideUsage, err := llmClient.GenerateVisualGuides(ctx, theme)
 	if err != nil {
 		return fmt.Errorf("failed to generate visual style/character guides: %w", err)
@@ -266,7 +270,7 @@ func generateManuscript(ctx context.Context, m *manifest.Manifest, opts BrewOpti
 	}
 
 	if m.BookProperties.Style == "" || m.BookProperties.CharacterProfile == "" {
-		if err = generateAndRecordVisualGuides(ctx, m, theme, llmClient, opts); err != nil {
+		if err = generateAndRecordVisualGuides(ctx, m, theme, llmClient); err != nil {
 			return err
 		}
 	}
