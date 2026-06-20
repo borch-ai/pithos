@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -353,6 +354,10 @@ func generateIllustrations(ctx context.Context, m *manifest.Manifest, opts BrewO
 		return fmt.Errorf("failed to start MCP imagegen client: %w", err)
 	}
 	defer func() { _ = mcpClient.Stop() }()
+
+	if err := checkBackendCapabilities(ctx, mcpClient, m.BookProperties.CharacterProfile); err != nil {
+		return err
+	}
 
 	styleID := ""
 	if m.BookProperties.Style != "" {
@@ -1020,5 +1025,29 @@ func bootstrapCharacterReference(ctx context.Context, m *manifest.Manifest, opts
 	}
 
 	fmt.Printf("Character seed portrait uploaded successfully: %s\n", m.BookProperties.CharacterReferenceURL)
+	return nil
+}
+
+type imagegenCapabilities struct {
+	Backend      string `json:"backend"`
+	SupportsCref bool   `json:"supports_cref"`
+	SupportsSref bool   `json:"supports_sref"`
+}
+
+func checkBackendCapabilities(ctx context.Context, mcpClient *mcp.PluginClient, characterProfile string) error {
+	capJSON, err := mcpClient.CallTool(ctx, "imagegen_get_capabilities", nil)
+	if err != nil {
+		return fmt.Errorf("failed to query imagegen backend capabilities: %w", err)
+	}
+
+	var caps imagegenCapabilities
+	if err := json.Unmarshal([]byte(capJSON), &caps); err != nil {
+		return fmt.Errorf("failed to parse imagegen backend capabilities JSON: %w", err)
+	}
+
+	if characterProfile != "" && !caps.SupportsCref {
+		return fmt.Errorf("active imagegen backend [%s] does not support character references, but a character profile is defined; switch backend to midjourney or clean manifest character properties", caps.Backend)
+	}
+
 	return nil
 }

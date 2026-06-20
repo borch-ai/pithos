@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/borch-ai/pithos/internal/config"
@@ -15,6 +16,8 @@ import (
 type mockMcpClient struct {
 	binaryPath string
 	startErr   error
+	capText    string
+	callErr    error
 }
 
 func (m *mockMcpClient) ResolveBinaryPath() string {
@@ -27,6 +30,19 @@ func (m *mockMcpClient) Start(ctx context.Context) error {
 
 func (m *mockMcpClient) Stop() error {
 	return nil
+}
+
+func (m *mockMcpClient) CallTool(ctx context.Context, toolName string, args map[string]interface{}) (string, error) {
+	if m.callErr != nil {
+		return "", m.callErr
+	}
+	if toolName == "imagegen_get_capabilities" {
+		if m.capText != "" {
+			return m.capText, nil
+		}
+		return `{"backend":"google","supports_cref":false,"supports_sref":false}`, nil
+	}
+	return "", nil
 }
 
 type mockPowerwordLLM struct {
@@ -104,6 +120,7 @@ func TestDoctor_SuccessFlow(t *testing.T) {
 		return &mockMcpClient{
 			binaryPath: os.Args[0],
 			startErr:   nil,
+			capText:    `{"backend":"mock","supports_cref":true,"supports_sref":true}`,
 		}
 	}
 	defer func() { newPluginClientFunc = origNewMCP }()
@@ -253,5 +270,198 @@ func TestDoctor_DiagnoseMCPPlugins_NilConfig(t *testing.T) {
 	llmItems := DiagnoseLLMConnection(context.Background())
 	if len(llmItems) != 0 {
 		t.Errorf("expected 0 items when config is nil, got %d", len(llmItems))
+	}
+}
+
+func TestDoctor_ImageGenCapabilitiesWarning(t *testing.T) {
+	origCfg := config.Cfg
+	defer func() { config.Cfg = origCfg }()
+
+	config.Cfg = &config.Config{
+		API: config.APIConfig{
+			GeminiKey: "dummy-gemini-key",
+		},
+		MCP: config.MCPConfig{
+			ImageGenPath: os.Args[0],
+			KDPMathPath:  os.Args[0],
+			SEOPath:      os.Args[0],
+			ViralPath:    os.Args[0],
+			TypstPath:    os.Args[0],
+			CloudPath:    os.Args[0],
+		},
+	}
+
+	// Use isolated temp working directory to prevent clobbering developer's books directory
+	origWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get current working directory: %v", err)
+	}
+	tempWd := t.TempDir()
+	if err := os.Chdir(tempWd); err != nil {
+		t.Fatalf("failed to change directory to temp dir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origWd) }()
+
+	// Create temporary books directory with a manifest that requires character profiles
+	if err := os.MkdirAll("books/test-book", 0750); err != nil {
+		t.Fatalf("failed to create books dir: %v", err)
+	}
+
+	dummyManifest := `{"book_properties": {"character_profile": "A parodic frog"}}`
+	if err := os.WriteFile("books/test-book/manifest.json", []byte(dummyManifest), 0600); err != nil {
+		t.Fatalf("failed to write dummy manifest: %v", err)
+	}
+
+	// Mock LLM Client
+	origNewLLM := newLLMClientFunc
+	newLLMClientFunc = func(modelName string, geminiKey, openaiKey string, httpClient *http.Client) (llm.LLMClient, error) {
+		return &mockPowerwordLLM{}, nil
+	}
+	defer func() { newLLMClientFunc = origNewLLM }()
+
+	// Mock MCP Clients
+	origNewMCP := newPluginClientFunc
+	newPluginClientFunc = func(pType mcp.PluginType) mcpClientInterface {
+		return &mockMcpClient{
+			binaryPath: os.Args[0],
+			startErr:   nil,
+			capText:    `{"backend":"google","supports_cref":false,"supports_sref":false}`,
+		}
+	}
+	defer func() { newPluginClientFunc = origNewMCP }()
+
+	results, hasFailure := RunDiagnostics(context.Background())
+	if hasFailure {
+		t.Fatalf("expected warning status to not fail diagnostics, but it failed: %+v", results)
+	}
+
+	foundWarning := false
+	for _, item := range results {
+		if item.Name == "Image Generation Plugin (pw-mcp-imagegen)" {
+			if item.Status != StatusWarning {
+				t.Errorf("expected StatusWarning, got %s", item.Status)
+			}
+			expectedMsg := "Connected successfully. Active backend: [google] (cref: UNSUPPORTED, sref: UNSUPPORTED) - WARNING: active backend does not support cref, but local books request character profiles"
+			if item.Message != expectedMsg {
+				t.Errorf("expected message:\n%q\ngot:\n%q", expectedMsg, item.Message)
+			}
+			foundWarning = true
+		}
+	}
+
+	if !foundWarning {
+		t.Error("expected to find warning for image generation plugin")
+	}
+}
+
+func TestDoctor_ImageGenCapabilitiesError(t *testing.T) {
+	origCfg := config.Cfg
+	defer func() { config.Cfg = origCfg }()
+
+	config.Cfg = &config.Config{
+		API: config.APIConfig{
+			GeminiKey: "dummy-gemini-key",
+		},
+		MCP: config.MCPConfig{
+			ImageGenPath: os.Args[0],
+			KDPMathPath:  os.Args[0],
+			SEOPath:      os.Args[0],
+			ViralPath:    os.Args[0],
+			TypstPath:    os.Args[0],
+			CloudPath:    os.Args[0],
+		},
+	}
+
+	origNewLLM := newLLMClientFunc
+	newLLMClientFunc = func(modelName string, geminiKey, openaiKey string, httpClient *http.Client) (llm.LLMClient, error) {
+		return &mockPowerwordLLM{}, nil
+	}
+	defer func() { newLLMClientFunc = origNewLLM }()
+
+	origNewMCP := newPluginClientFunc
+	newPluginClientFunc = func(pType mcp.PluginType) mcpClientInterface {
+		return &mockMcpClient{
+			binaryPath: os.Args[0],
+			startErr:   nil,
+			callErr:    errors.New("capabilities lookup failed"),
+		}
+	}
+	defer func() { newPluginClientFunc = origNewMCP }()
+
+	results, hasFailure := RunDiagnostics(context.Background())
+	if hasFailure {
+		t.Fatalf("expected diagnostics to not fail, got failure: %+v", results)
+	}
+
+	foundWarning := false
+	for _, item := range results {
+		if item.Name == "Image Generation Plugin (pw-mcp-imagegen)" {
+			if item.Status != StatusWarning {
+				t.Errorf("expected StatusWarning, got %s", item.Status)
+			}
+			if !strings.Contains(item.Message, "but failed to get capabilities: capabilities lookup failed") {
+				t.Errorf("unexpected message: %q", item.Message)
+			}
+			foundWarning = true
+		}
+	}
+	if !foundWarning {
+		t.Error("expected to find warning for image generation plugin")
+	}
+}
+
+func TestDoctor_ImageGenCapabilitiesInvalidJSON(t *testing.T) {
+	origCfg := config.Cfg
+	defer func() { config.Cfg = origCfg }()
+
+	config.Cfg = &config.Config{
+		API: config.APIConfig{
+			GeminiKey: "dummy-gemini-key",
+		},
+		MCP: config.MCPConfig{
+			ImageGenPath: os.Args[0],
+			KDPMathPath:  os.Args[0],
+			SEOPath:      os.Args[0],
+			ViralPath:    os.Args[0],
+			TypstPath:    os.Args[0],
+			CloudPath:    os.Args[0],
+		},
+	}
+
+	origNewLLM := newLLMClientFunc
+	newLLMClientFunc = func(modelName string, geminiKey, openaiKey string, httpClient *http.Client) (llm.LLMClient, error) {
+		return &mockPowerwordLLM{}, nil
+	}
+	defer func() { newLLMClientFunc = origNewLLM }()
+
+	origNewMCP := newPluginClientFunc
+	newPluginClientFunc = func(pType mcp.PluginType) mcpClientInterface {
+		return &mockMcpClient{
+			binaryPath: os.Args[0],
+			startErr:   nil,
+			capText:    "invalid-json",
+		}
+	}
+	defer func() { newPluginClientFunc = origNewMCP }()
+
+	results, hasFailure := RunDiagnostics(context.Background())
+	if hasFailure {
+		t.Fatalf("expected diagnostics to not fail, got failure: %+v", results)
+	}
+
+	foundWarning := false
+	for _, item := range results {
+		if item.Name == "Image Generation Plugin (pw-mcp-imagegen)" {
+			if item.Status != StatusWarning {
+				t.Errorf("expected StatusWarning, got %s", item.Status)
+			}
+			if !strings.Contains(item.Message, "but capability response is not valid JSON") {
+				t.Errorf("unexpected message: %q", item.Message)
+			}
+			foundWarning = true
+		}
+	}
+	if !foundWarning {
+		t.Error("expected to find warning for image generation plugin")
 	}
 }
