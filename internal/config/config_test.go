@@ -16,11 +16,20 @@ func TestLoadConfig_Defaults(t *testing.T) {
 	_ = os.Unsetenv("PITHOS_MCP_VIRAL_PATH")
 	_ = os.Unsetenv("PITHOS_MCP_TYPST_PATH")
 	_ = os.Unsetenv("PITHOS_MCP_CLOUD_PATH")
+	_ = os.Unsetenv("PITHOS_MCP_IMAGEGEN_FORCE_CREF")
+	_ = os.Unsetenv("PITHOS_MCP_IMAGEGEN_FORCE_SREF")
 
 	// Load with empty string config path to trigger fallback/warning and defaults
 	cfg, err := LoadConfig("")
 	if err != nil {
 		t.Fatalf("expected no error with empty config path, got: %v", err)
+	}
+
+	if cfg.MCP.ImageGenForceCref {
+		t.Errorf("expected default ImageGenForceCref to be false, got true")
+	}
+	if cfg.MCP.ImageGenForceSref {
+		t.Errorf("expected default ImageGenForceSref to be false, got true")
 	}
 
 	if cfg.MCP.ImageGenPath != "pw-mcp-imagegen" {
@@ -455,5 +464,39 @@ func TestLoadConfig_CloudConfig_EnvOverride(t *testing.T) {
 	}
 	if cfg.Cloud.ProjectID != "env-project" {
 		t.Errorf("expected overridden cloud.project_id 'env-project', got '%s'", cfg.Cloud.ProjectID)
+	}
+}
+
+func TestLoadConfig_ImageGenForceOverrides(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos_overrides_test")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+	}()
+
+	_ = os.Setenv("PITHOS_MCP_IMAGEGEN_FORCE_CREF", "true")
+	_ = os.Setenv("PITHOS_MCP_IMAGEGEN_FORCE_SREF", "true")
+	defer func() {
+		_ = os.Unsetenv("PITHOS_MCP_IMAGEGEN_FORCE_CREF")
+		_ = os.Unsetenv("PITHOS_MCP_IMAGEGEN_FORCE_SREF")
+	}()
+
+	configFile := filepath.Join(tmpDir, "config.toml")
+	if wErr := os.WriteFile(configFile, []byte(""), 0600); wErr != nil {
+		t.Fatalf("failed to write config file: %v", wErr)
+	}
+
+	cfg, err := LoadConfig(configFile)
+	if err != nil {
+		t.Fatalf("expected no load error, got: %v", err)
+	}
+
+	if !cfg.MCP.ImageGenForceCref {
+		t.Errorf("expected MCP.ImageGenForceCref to be true, got false")
+	}
+	if !cfg.MCP.ImageGenForceSref {
+		t.Errorf("expected MCP.ImageGenForceSref to be true, got false")
 	}
 }

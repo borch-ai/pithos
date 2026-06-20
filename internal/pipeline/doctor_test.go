@@ -531,3 +531,87 @@ func TestDoctor_PDFCheckHandshakeWarning(t *testing.T) {
 		t.Error("expected to find warning for PDF check plugin")
 	}
 }
+
+func TestDoctor_ImageGenCapabilitiesOverrides(t *testing.T) {
+	origCfg := config.Cfg
+	defer func() { config.Cfg = origCfg }()
+
+	config.Cfg = &config.Config{
+		API: config.APIConfig{
+			GeminiKey: "dummy-gemini-key",
+		},
+		MCP: config.MCPConfig{
+			ImageGenPath:      os.Args[0],
+			KDPMathPath:       os.Args[0],
+			SEOPath:           os.Args[0],
+			ViralPath:         os.Args[0],
+			TypstPath:         os.Args[0],
+			CloudPath:         os.Args[0],
+			PDFCheckPath:      os.Args[0],
+			ImageGenForceCref: true,
+			ImageGenForceSref: true,
+		},
+	}
+
+	// Use isolated temp working directory to prevent clobbering developer's books directory
+	origWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get current working directory: %v", err)
+	}
+	tempWd := t.TempDir()
+	if err := os.Chdir(tempWd); err != nil {
+		t.Fatalf("failed to change directory to temp dir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origWd) }()
+
+	// Create temporary books directory with a manifest that requires character profiles
+	if err := os.MkdirAll("books/test-book", 0750); err != nil {
+		t.Fatalf("failed to create books dir: %v", err)
+	}
+
+	dummyManifest := `{"book_properties": {"character_profile": "A parodic frog"}}`
+	if err := os.WriteFile("books/test-book/manifest.json", []byte(dummyManifest), 0600); err != nil {
+		t.Fatalf("failed to write dummy manifest: %v", err)
+	}
+
+	// Mock LLM Client
+	origNewLLM := newLLMClientFunc
+	newLLMClientFunc = func(modelName string, geminiKey, openaiKey string, httpClient *http.Client) (llm.LLMClient, error) {
+		return &mockPowerwordLLM{}, nil
+	}
+	defer func() { newLLMClientFunc = origNewLLM }()
+
+	// Mock MCP Clients (backend reports cref/sref unsupported, but config overrides them)
+	origNewMCP := newPluginClientFunc
+	newPluginClientFunc = func(pType mcp.PluginType) mcpClientInterface {
+		return &mockMcpClient{
+			binaryPath: os.Args[0],
+			startErr:   nil,
+			capText:    `{"backend":"google","supports_cref":false,"supports_sref":false}`,
+		}
+	}
+	defer func() { newPluginClientFunc = origNewMCP }()
+
+	results, hasFailure := RunDiagnostics(context.Background())
+	if hasFailure {
+		t.Fatalf("expected diagnostics to pass with overrides enabled, but it failed: %+v", results)
+	}
+
+	foundPlugin := false
+	for _, item := range results {
+		if item.Name == "Image Generation Plugin (pw-mcp-imagegen)" {
+			if item.Status != StatusOk {
+				t.Errorf("expected StatusOk, got %s", item.Status)
+			}
+			expectedMsg := "Connected successfully. Active backend: [google] (cref: SUPPORTED [overridden], sref: SUPPORTED [overridden])"
+			if item.Message != expectedMsg {
+				t.Errorf("expected message:\n%q\ngot:\n%q", expectedMsg, item.Message)
+			}
+			foundPlugin = true
+		}
+	}
+
+	if !foundPlugin {
+		t.Error("expected to find status for image generation plugin")
+	}
+}

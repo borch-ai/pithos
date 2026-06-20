@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -91,6 +92,11 @@ func (m *mockLLM) Ping(ctx context.Context) error {
 	return m.err
 }
 
+var (
+	mockActiveCount    int32
+	mockMaxActiveCount int32
+)
+
 func setupMockImageGenServer(t *testing.T, ctx context.Context, serverTransport mcpsdk.Transport, generatedImagePath string) (*mcpsdk.ServerSession, func()) {
 	return setupMockImageGenServerWithCapabilities(t, ctx, serverTransport, generatedImagePath, "mock", true, true)
 }
@@ -142,6 +148,18 @@ func setupMockImageGenServerWithCapabilities(t *testing.T, ctx context.Context, 
 		_ = json.Unmarshal(req.Params.Arguments, &args)
 
 		if strings.Contains(args.Prompt, "SLEEP") {
+			atomic.AddInt32(&mockActiveCount, 1)
+			defer atomic.AddInt32(&mockActiveCount, -1)
+			for {
+				currMax := atomic.LoadInt32(&mockMaxActiveCount)
+				currActive := atomic.LoadInt32(&mockActiveCount)
+				if currActive <= currMax {
+					break
+				}
+				if atomic.CompareAndSwapInt32(&mockMaxActiveCount, currMax, currActive) {
+					break
+				}
+			}
 			time.Sleep(100 * time.Millisecond)
 		}
 
@@ -1246,6 +1264,7 @@ func TestBrew_Concurrency(t *testing.T) {
 	_, cleanupMCP := setupMockImageGenServer(t, ctx, serverTransport, dummySourceImage)
 	defer cleanupMCP()
 
+	atomic.StoreInt32(&mockMaxActiveCount, 0)
 	start := time.Now()
 	err = Brew(ctx, BrewOptions{
 		OutputDir:    tmpDir,
@@ -1257,10 +1276,16 @@ func TestBrew_Concurrency(t *testing.T) {
 	}
 	elapsed := time.Since(start)
 
-	// Since we sleep for 100ms for each SLEEP prompt, if they run in parallel, it should take less than 300ms.
-	// If they ran sequentially, it would take at least 400ms.
-	if elapsed >= 300*time.Millisecond {
-		t.Errorf("expected parallel execution to take less than 300ms, took %v", elapsed)
+	// Verify concurrent execution occurred by checking maximum active concurrent requests
+	maxActive := atomic.LoadInt32(&mockMaxActiveCount)
+	if maxActive <= 1 {
+		t.Errorf("expected concurrent execution (max active requests > 1), got max active: %d", maxActive)
+	}
+
+	// Since we sleep for 100ms for each SLEEP prompt, if they run in parallel, it should take less than 300ms under normal conditions.
+	// However, under throttled CI/CD test runners, scheduling overhead can exceed 300ms. We use a relaxed threshold of 1500ms to avoid flakes.
+	if elapsed >= 1500*time.Millisecond {
+		t.Errorf("expected parallel execution to take less than 1500ms, took %v", elapsed)
 	}
 
 	// Verify all pages completed

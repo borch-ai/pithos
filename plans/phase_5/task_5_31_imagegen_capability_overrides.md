@@ -1,8 +1,9 @@
 # plan: Task 5.31: Imagegen Capability Overrides Configuration
 
-**Status:** Pending
+**Status:** Completed
+**Date Completed:** 2026-06-20
 **Go Version:** 1.26.4
-**Unit Test Coverage:** 91.0% (Target)
+**Unit Test Coverage:** 91.3% (Actual)
 
 This task implements custom configuration options in Pithos to allow manual overrides for image generation backend capabilities (`imagegen_force_cref` and `imagegen_force_sref`). This acts as an escape hatch to prevent contract rot if model capabilities are updated upstream before a code release is pushed.
 

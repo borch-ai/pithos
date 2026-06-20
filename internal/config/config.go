@@ -26,13 +26,15 @@ type Config struct {
 
 // MCPConfig holds paths to local Powerword MCP server binaries.
 type MCPConfig struct {
-	ImageGenPath string `mapstructure:"imagegen_path"`
-	KDPMathPath  string `mapstructure:"kdp_math_path"`
-	SEOPath      string `mapstructure:"seo_path"`
-	ViralPath    string `mapstructure:"viral_path"`
-	TypstPath    string `mapstructure:"typst_path"`
-	CloudPath    string `mapstructure:"cloud_path"`
-	PDFCheckPath string `mapstructure:"pdfcheck_path"`
+	ImageGenPath      string `mapstructure:"imagegen_path"`
+	KDPMathPath       string `mapstructure:"kdp_math_path"`
+	SEOPath           string `mapstructure:"seo_path"`
+	ViralPath         string `mapstructure:"viral_path"`
+	TypstPath         string `mapstructure:"typst_path"`
+	CloudPath         string `mapstructure:"cloud_path"`
+	PDFCheckPath      string `mapstructure:"pdfcheck_path"`
+	ImageGenForceCref bool   `mapstructure:"imagegen_force_cref"`
+	ImageGenForceSref bool   `mapstructure:"imagegen_force_sref"`
 }
 
 // APIConfig holds API keys for LLM and content services.
@@ -72,6 +74,8 @@ func LoadConfig(cfgFile string) (*Config, error) {
 	v.SetDefault("mcp.typst_path", "")
 	v.SetDefault("mcp.cloud_path", "")
 	v.SetDefault("mcp.pdfcheck_path", "")
+	v.SetDefault("mcp.imagegen_force_cref", false)
+	v.SetDefault("mcp.imagegen_force_sref", false)
 	v.SetDefault("api.gemini_key", "")
 	v.SetDefault("api.openai_key", "")
 	v.SetDefault("telemetry.lamplighter_enabled", false)
