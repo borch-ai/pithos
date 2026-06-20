@@ -128,6 +128,7 @@ func DiagnoseMCPPlugins(ctx context.Context) []DiagnosticItem {
 		{mcp.PluginViral, "Viral Promotional/Video Plugin (pw-mcp-viral)", false},
 		{mcp.PluginTypst, "Typst Compiler Plugin (pw-mcp-typst)", true},
 		{mcp.PluginCloud, "Cloud Storage Plugin (pw-mcp-cloud)", false},
+		{mcp.PluginPDFCheck, "PDF Preflight Validation Plugin (pw-mcp-pdfcheck)", false},
 	}
 
 	for _, p := range plugins {
@@ -226,8 +227,8 @@ func DiagnoseMCPPlugins(ctx context.Context) []DiagnosticItem {
 								}
 							}
 							if seedingRequested {
-								status = StatusWarning
-								msg += " - WARNING: active backend does not support cref, but local books request character profiles"
+								status = StatusFail
+								msg += " - ERROR: active backend does not support cref, but local books request character profiles"
 							}
 						}
 					}
