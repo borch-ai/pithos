@@ -358,6 +358,7 @@ func configureTestEnvironment(t *testing.T, tempDir string, binaryPath string, o
 	t.Setenv("GOOGLE_BASE_URL", openaiURL)
 	t.Setenv("POWERWORD_WORKSPACE_ROOT", tempDir)
 	t.Setenv("POWERWORD_IMAGEGEN_BACKEND", "google")
+	t.Setenv("POWERWORD_IMAGEGEN_FORCE_CREF", "true")
 
 	//nolint:gosec // dummy key used for mock test configuration
 	pwTOML := `
@@ -366,6 +367,7 @@ openai = "dummy-key"
 gemini = "dummy-key"
 [plugins.imagegen]
 backend = "google"
+force_cref = true
 `
 	if err := os.WriteFile(filepath.Join(tempDir, "powerword.toml"), []byte(pwTOML), 0600); err != nil {
 		t.Fatalf("failed to write powerword.toml: %v", err)
