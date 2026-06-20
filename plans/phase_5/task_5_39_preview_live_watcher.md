@@ -30,7 +30,7 @@ This task implements a `pithos preview --watch` command that listens for edits t
   - Re-trigger the import parser to update stanzas in `manifest.json`.
   - Re-run `GenerateWebPreview` to refresh the visualizer's `data.js` database.
   - Re-compile the Typst PDF layout (if `pw-mcp-typst` path is configured).
-  - Print a styled Lip Gloss alert showing that recompilation succeeded.
+  - Print a styled Lipgloss alert showing that recompilation succeeded.
 
 ---
 

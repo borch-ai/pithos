@@ -94,10 +94,10 @@ Focus: Turning raw text and image assets into valid, print-ready files.
 *   [x] **Task 4.3: Verse Layout Formatting**
     *   Format stanza line breaks in Typst layouts instead of collapsing them into paragraphs.
     *   [Implementation Plan](plans/phase_4/task_4_3_verse_layout_formatting.md)
-*   [ ] **Task 4.4: Mixed Layout Templates**
+*   [x] **Task 4.4: Mixed Layout Templates**
     *   Support left-page text / right-page image mixed layouts per page in the layout engine.
     *   [Implementation Plan](plans/phase_4/task_4_4_mixed_layout_templates.md)
-*   [ ] **Task 4.5: Print-Ready PDF Preflight Validation (`pw-mcp-pdfcheck`)**
+*   [x] **Task 4.5: Print-Ready PDF Preflight Validation (`pw-mcp-pdfcheck`)**
     *   After compiling the final interior PDF, invoke the `pw-mcp-pdfcheck` plugin to run automated preflight checks (validation of PDF page geometry, margins, safe zones, embedded fonts, image DPI, and grayscale color space). Fail the assembly pipeline if critical errors are found.
     *   [Implementation Plan](plans/phase_4/task_4_5_pdfcheck_integration.md)
 
@@ -161,7 +161,7 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
     *   Scan the workspace root directory, locate subdirectories containing `manifest.json`, and parse book details (Theme, Format, Milestones, and Cost).
     *   Display the compiled book list in a clean, formatted table styled with `charmbracelet/lipgloss`.
     *   [Implementation Plan](plans/phase_5/task_5_34_list_workspaces_cmd.md)
-*   [ ] **Task 5.35: CLI Visual Styling & Diagnostics Formatting via Lip Gloss**
+*   [ ] **Task 5.35: CLI Visual Styling & Diagnostics Formatting via Lipgloss**
     *   Integrate `github.com/charmbracelet/lipgloss` styling framework.
     *   Format `pithos doctor` connectivity check list with colored success/error indicator badges.
     *   Style terminal summary cards (telemetry, token counts, and billable USD cost summaries) at the end of `brew` and `assemble` runs.

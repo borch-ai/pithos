@@ -1,4 +1,4 @@
-# plan: Task 5.35: CLI Visual Styling & Diagnostics Formatting via Lip Gloss
+# plan: Task 5.35: CLI Visual Styling & Diagnostics Formatting via Lipgloss
 
 **Status:** Proposed
 **Go Version:** 1.26.4
