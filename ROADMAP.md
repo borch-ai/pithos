@@ -186,6 +186,10 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
     *   Implement end-to-end integration tests that build the `pithos` binary on-the-fly and execute subprocess CLI commands.
     *   Assert correct exit codes, stdout/stderr formatting, flag parsing, and interactive stdin prompt responses.
     *   [Implementation Plan](plans/phase_5/task_5_40_e2e_cli_subprocess_tests.md)
+*   [ ] **Task 5.41: Character Seed Generation and Review Command**
+    *   Implement a dedicated `pithos character` subcommand to generate/regenerate the main character reference seed portrait based on the manifest profile.
+    *   Integrate visual seed validation and cloud storage upload prior to executing brew page illustration jobs.
+    *   [Implementation Plan](plans/phase_5/task_5_41_character_seed_review.md)
 
 
 ### Interactive UI & Quality Enhancements
