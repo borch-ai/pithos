@@ -2529,6 +2529,87 @@ func TestBrew_CapabilitiesQueryError(t *testing.T) {
 	}
 }
 
+func TestBrew_CharacterInvariantInjection_VideoSeed(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// 1. Write a dummy source video to be copied
+	dummySourceImage := filepath.Join(tmpDir, "source.mp4")
+	if err := os.WriteFile(dummySourceImage, []byte("fake-video-bytes"), 0600); err != nil {
+		t.Fatalf("failed to write source image: %v", err)
+	}
+
+	// 2. Initiate book
+	optsInit := InitiateOptions{
+		OutputDir:       tmpDir,
+		Theme:           "Invariant Test Theme",
+		TargetPageCount: 2,
+	}
+	mInit, err := Initiate(optsInit)
+	if err != nil {
+		t.Fatalf("failed to initiate: %v", err)
+	}
+
+	// Set character profile
+	mInit.BookProperties.CharacterProfile = "mock-char-profile"
+	mInit.Progress.ManuscriptGenerated = true
+	mInit.Progress.Pages = []manifest.PageState{
+		{PageIndex: 1, Status: manifest.StatusPending, Text: "Stanza 1 text", IllustrationPrompt: "Prompt 1"},
+		{PageIndex: 2, Status: manifest.StatusPending, Text: "Stanza 2 text", IllustrationPrompt: "Prompt 2"},
+	}
+
+	if err = mInit.Save(); err != nil {
+		t.Fatalf("failed to save manifest: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// 3. Setup mock ImageGen Server
+	imageGenClientTransport, imageGenServerTransport := mcpsdk.NewInMemoryTransports()
+	var requestsMu sync.Mutex
+	var imageGenRequests []generateRequest
+
+	imageGenServer, err := createMockImageGenServer(ctx, dummySourceImage, &imageGenRequests, &requestsMu)
+	if err != nil {
+		t.Fatalf("failed to create mock imagegen server: %v", err)
+	}
+
+	imageGenSession, err := imageGenServer.Connect(ctx, imageGenServerTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = imageGenSession.Close() }()
+
+	// 4. Setup mock Cloud Server
+	cloudClientTransport, cloudServerTransport := mcpsdk.NewInMemoryTransports()
+	var uploadPaths []string
+	cloudServer, err := createMockCloudServer(&uploadPaths, &requestsMu)
+	if err != nil {
+		t.Fatalf("failed to create mock cloud server: %v", err)
+	}
+
+	cloudSession, err := cloudServer.Connect(ctx, cloudServerTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = cloudSession.Close() }()
+
+	// 5. Run Brew
+	opts := BrewOptions{
+		OutputDir:         tmpDir,
+		MCPTransport:      imageGenClientTransport,
+		CloudMCPTransport: cloudClientTransport,
+	}
+
+	err = Brew(ctx, opts)
+	if err == nil {
+		t.Fatal("expected Brew to fail due to invalid mp4 format during ffmpeg extraction, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to extract static frame from character seed video") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
 func TestBrew_CapabilitiesInvalidJSON(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "pithos-brew-cap-json-err-*")
 	if err != nil {

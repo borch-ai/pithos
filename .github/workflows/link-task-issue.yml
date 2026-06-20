@@ -1,0 +1,14 @@
+name: Link Task Issue
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  link:
+    uses: borch-ai/.github/.github/workflows/link-task-issue.yml@main
+    secrets: inherit

@@ -147,6 +147,41 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
 *   [ ] **Task 5.31: Imagegen Capability Overrides Configuration**
     *   Add configuration keys (`force_cref` and `force_sref`) in `.pithos.toml` and `.env` / environment variables. Parse them in config and propagate them or bypass capability checks in Pithos to allow manual capability overrides.
     *   [Implementation Plan](plans/phase_5/task_5_31_imagegen_capability_overrides.md)
+*   [ ] **Task 5.32: Adopt Local Workspaces & Cache Structure**
+    *   Migrate default output and cache paths to use a dynamic home directory-based structure (`~/.local/share/pithos/`).
+    *   Update config defaults and path resolution logic in Pithos pipeline to resolve relative paths under `~/.local/share/pithos/workspaces/`.
+    *   [Implementation Plan](plans/phase_5/task_5_32_local_workspaces_structure.md)
+*   [ ] **Task 5.33: Interactive CLI Prompt Wizards via Survey**
+    *   Integrate `github.com/AlecAivazis/survey` for interactive user prompts.
+    *   Implement an interactive scaffolding wizard for `pithos initiate` when flags are omitted.
+    *   Implement interactive page multi-selection for selective redo in `pithos brew --pages`.
+    *   [Implementation Plan](plans/phase_5/task_5_33_interactive_survey_prompts.md)
+*   [ ] **Task 5.34: List Local Book Workspaces (pithos ls)**
+    *   Implement a `pithos ls` CLI command to list all books in local workspace directories.
+    *   Scan the workspace root directory, locate subdirectories containing `manifest.json`, and parse book details (Theme, Format, Milestones, and Cost).
+    *   Display the compiled book list in a clean, formatted table styled with `charmbracelet/lipgloss`.
+    *   [Implementation Plan](plans/phase_5/task_5_34_list_workspaces_cmd.md)
+*   [ ] **Task 5.35: CLI Visual Styling & Diagnostics Formatting via Lip Gloss**
+    *   Integrate `github.com/charmbracelet/lipgloss` styling framework.
+    *   Format `pithos doctor` connectivity check list with colored success/error indicator badges.
+    *   Style terminal summary cards (telemetry, token counts, and billable USD cost summaries) at the end of `brew` and `assemble` runs.
+    *   [Implementation Plan](plans/phase_5/task_5_35_cli_styling_lipgloss.md)
+*   [ ] **Task 5.36: Run Budget Limits & Cost Guardrails**
+    *   Add `--budget` CLI flag and `max_cost_usd` Viper config option.
+    *   Implement pre-generation cost estimates and halt pipeline execution if expected costs exceed budget constraints.
+    *   [Implementation Plan](plans/phase_5/task_5_36_cost_guardrails.md)
+*   [ ] **Task 5.37: E2E Pipeline Simulation & Dry-Run Mode**
+    *   Implement a `--dry-run` CLI flag to bypass live API and MCP invocations.
+    *   Mock LLM/image/video generator pipeline stages to verify structural commands, pathing, Typst compilation layouts, and preview generation logic.
+    *   [Implementation Plan](plans/phase_5/task_5_37_dry_run_simulation.md)
+*   [ ] **Task 5.38: Workspace Status Diagnostics & State Repair Utility**
+    *   Implement a `pithos status <book>` subcommand to print a formatted summary of book manifest checkpoints and completion states.
+    *   Implement a `pithos clean <book>` subcommand to clean up orphaned assets or reset selected page errors in `manifest.json`.
+    *   [Implementation Plan](plans/phase_5/task_5_38_workspace_repair_status.md)
+*   [ ] **Task 5.39: Hot-Reloading Workspace File Watcher**
+    *   Implement a `pithos preview --watch` command using `fsnotify` to monitor local manuscript or config updates.
+    *   Automatically trigger Typst recompilation and web preview regenerations on file saves.
+    *   [Implementation Plan](plans/phase_5/task_5_39_preview_live_watcher.md)
 
 
 ### Interactive UI & Quality Enhancements
