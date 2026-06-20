@@ -16,16 +16,17 @@ import (
 
 // InitiateOptions contains configuration fields for initializing a book workspace.
 type InitiateOptions struct {
-	OutputDir       string
-	Theme           string
-	Style           string
-	Format          string
-	TargetPageCount int
-	TrimSize        string
-	NoBrainstorm    bool
-	LLM             LLMClient
-	HTTPClient      *http.Client
-	Context         context.Context
+	OutputDir           string
+	Theme               string
+	Style               string
+	Format              string
+	TargetPageCount     int
+	TrimSize            string
+	NoBrainstorm        bool
+	StrictBrainstorming bool
+	LLM                 LLMClient
+	HTTPClient          *http.Client
+	Context             context.Context
 }
 
 // Initiate scaffolds a new book project directory structure and writes the initial manifest.json.
@@ -89,7 +90,7 @@ func Initiate(opts InitiateOptions) (*manifest.Manifest, error) {
 	}
 
 	// 5. Create initial Git checkpoint
-	if err := Checkpoint(context.Background(), opts.OutputDir, "Initial workspace setup"); err != nil {
+	if err := Checkpoint(ctx, opts.OutputDir, "Initial workspace setup"); err != nil {
 		return nil, fmt.Errorf("failed to create initial git checkpoint: %w", err)
 	}
 
@@ -132,7 +133,7 @@ func brainstormVisualGuides(ctx context.Context, m *manifest.Manifest, opts Init
 
 	llmClient, err := getLLMClient(opts.LLM, opts.HTTPClient)
 	if err != nil {
-		if !isTestEnv() || opts.LLM != nil || opts.Theme == "No Keys Theme" {
+		if !isTestEnv() || opts.LLM != nil || opts.StrictBrainstorming {
 			return fmt.Errorf("failed to initialize LLM client for brainstorming: %w. If you wish to skip brainstorming, run with --no-brainstorm", err)
 		}
 		return nil

@@ -411,11 +411,12 @@ func TestInitiate_Brainstorm_NoAPIKeys(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	opts := InitiateOptions{
-		OutputDir:       tmpDir,
-		Theme:           "No Keys Theme",
-		TargetPageCount: 15,
-		NoBrainstorm:    false,
-		LLM:             nil, // Force standard client setup to fail
+		OutputDir:           tmpDir,
+		Theme:               "Space Theme",
+		TargetPageCount:     15,
+		NoBrainstorm:        false,
+		StrictBrainstorming: true,
+		LLM:                 nil, // Force standard client setup to fail
 	}
 	_, err := Initiate(opts)
 	if err == nil {

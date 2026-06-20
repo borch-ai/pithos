@@ -12,21 +12,26 @@ If the theme is provided, the command will initialize the LLM client (reusing th
 If no theme is provided, scaffolding completes normally without brainstorming.
 If a theme is provided but API keys are missing/invalid, a helpful error is returned suggesting to configure API keys or run with `--no-brainstorm`.
 
+## User Review Required
+
+> [!NOTE]
+> **API Key Requirements**: If the user provides a theme during initiate and does not pass `--no-brainstorm`, the command will fail if the required API keys (Gemini or OpenAI) are not configured.
+
 ## Proposed Changes
 
 ### Command Layer
 
-#### [MODIFY] [initiate.go](file:///Users/human/code/pithos/cmd/pithos/initiate.go)
+#### [MODIFY] [initiate.go](file://../../cmd/pithos/initiate.go)
 - Added `initiateNoBrainstorm` boolean CLI flag bound to `--no-brainstorm`.
 - Passed `NoBrainstorm` and `Context` (propagating `cmd.Context()`) in `pipeline.InitiateOptions`.
 
 ### Pipeline Layer
 
-#### [MODIFY] [brew.go](file:///Users/human/code/pithos/internal/pipeline/brew.go)
+#### [MODIFY] [brew.go](file://../../internal/pipeline/brew.go)
 - Extracted client setup logic into `getLLMClient(llmOverride LLMClient, httpClient *http.Client) (LLMClient, error)`.
 - Simplified `generateAndRecordVisualGuides` to remove the unused `BrewOptions` parameter.
 
-#### [MODIFY] [initiate.go](file:///Users/human/code/pithos/internal/pipeline/initiate.go)
+#### [MODIFY] [initiate.go](file://../../internal/pipeline/initiate.go)
 - Updated `InitiateOptions` struct to include `NoBrainstorm`, `LLM`, `HTTPClient`, and `Context`.
 - Implemented `brainstormVisualGuides` helper function called during `Initiate` to construct the LLM client, run visual guide generation, and record properties in the manifest before saving.
 - Suppressed brainstorming in unit test environments where `opts.LLM == nil` and API keys are missing.
