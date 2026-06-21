@@ -127,7 +127,7 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
     *   Implement fallback handling from OpenAI to Gemini Imagen (and vice-versa) when image generation fails due to credential or permission errors.
     *   [Implementation Plan](plans/phase_5/task_5_24_graceful_image_backend_fallbacks.md)
 *   [x] **Task 5.25: Opt-out Brainstorming during Initiate**
-    *   Automatically query the LLM to generate the `style_seed` and `character_profile` immediately during `pithos initiate` if a theme is provided. Provide a `--no-brainstorm` flag to opt out of this behavior.
+    *   Automatically query the LLM to generate the book style (`book_properties.style`) and character profile immediately during `pithos initiate` if a theme is provided. Provide a `--no-brainstorm` flag to opt out of this behavior.
     *   [Implementation Plan](plans/phase_5/task_5_25_opt_out_initiate_brainstorming.md)
 *   [x] **Task 5.26: Automatic Browser Preview Opening**
     *   Automatically open the generated web preview visualizer in the default system browser after `pithos brew` or `pithos assemble` completes. Provide a `--silent` flag to allow opting out of this behavior in headless/CI environments.
@@ -186,6 +186,10 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
     *   Implement end-to-end integration tests that build the `pithos` binary on-the-fly and execute subprocess CLI commands.
     *   Assert correct exit codes, stdout/stderr formatting, flag parsing, and interactive stdin prompt responses.
     *   [Implementation Plan](plans/phase_5/task_5_40_e2e_cli_subprocess_tests.md)
+*   [ ] **Task 5.41: Character Seed Generation and Review Command**
+    *   Implement a dedicated `pithos character` subcommand to generate/regenerate the main character reference seed portrait based on the manifest profile.
+    *   Integrate visual seed validation and cloud storage upload prior to executing brew page illustration jobs.
+    *   [Implementation Plan](plans/phase_5/task_5_41_character_seed_review.md)
 
 
 ### Interactive UI & Quality Enhancements

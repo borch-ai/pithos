@@ -18,8 +18,8 @@ This task implements a dedicated E2E integration test suite that builds the `pit
 - Create a new integration test file to test the compiled binary.
 - Implement helper function `buildPithosBinary(t *testing.T) string` which builds `./cmd/pithos` into a temporary directory on-the-fly and caches it for the duration of the test run.
 - Write E2E tests:
-  - `TestCLI_Initiate_Basic`: Execute `./bin/pithos initiate` and verify it scaffolds the directories and manifest.json correctly.
-  - `TestCLI_Initiate_Brainstorm_OptOut`: Execute `./bin/pithos initiate --theme "turtle" --no-brainstorm` and verify the manifest has empty visual seeds.
+  - `TestCLI_Initiate_Basic`: Execute the dynamically built binary with `initiate` and verify it scaffolds the directories and `manifest.json` correctly.
+  - `TestCLI_Initiate_Brainstorm_OptOut`: Execute the dynamically built binary with `initiate --theme "turtle" --no-brainstorm` and verify the manifest has empty visual seeds.
   - `TestCLI_Initiate_Overwrite`: Verify overwrite prompts and responses on standard input (using `io.WriteString` to write "y\n" or "n\n" to standard input).
   - Verify exit codes are correct (e.g. exit code 0 on success, exit code 1 or 2 on flag/execution errors).
 
