@@ -115,7 +115,7 @@ func setupMockImageGenServerWithCapabilities(t *testing.T, ctx context.Context, 
 			"type": "object",
 		},
 	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
-		capsJSON := fmt.Sprintf(`{"backend":%q,"supports_cref":%t,"supports_sref":%t}`, backend, supportsCref, supportsSref)
+		capsJSON := fmt.Sprintf(`{"backend":%q,"supports_cref":%t,"supports_sref":%t,"output_type":"image"}`, backend, supportsCref, supportsSref)
 		return &mcpsdk.CallToolResult{
 			Content: []mcpsdk.Content{
 				&mcpsdk.TextContent{Text: capsJSON},
@@ -2489,7 +2489,7 @@ func createMockImageGenServer(ctx context.Context, dummySourceImage string, requ
 	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
 		return &mcpsdk.CallToolResult{
 			Content: []mcpsdk.Content{
-				&mcpsdk.TextContent{Text: `{"backend":"mock","supports_cref":true,"supports_sref":true}`},
+				&mcpsdk.TextContent{Text: `{"backend":"mock","supports_cref":true,"supports_sref":true,"output_type":"image"}`},
 			},
 		}, nil
 	})

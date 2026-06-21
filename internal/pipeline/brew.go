@@ -1057,7 +1057,7 @@ func bootstrapCharacterReferenceWithClient(ctx context.Context, m *manifest.Mani
 		return err
 	}
 
-	// Verify that character backend output type is "image"
+	// Verify that character backend output type is exactly "image"
 	capJSON, err := mcpClient.CallTool(ctx, "imagegen_get_capabilities", nil)
 	if err != nil {
 		return fmt.Errorf("failed to query capabilities for character backend: %w", err)
@@ -1066,8 +1066,9 @@ func bootstrapCharacterReferenceWithClient(ctx context.Context, m *manifest.Mani
 	if unmarshalErr := json.Unmarshal([]byte(capJSON), &caps); unmarshalErr != nil {
 		return fmt.Errorf("failed to parse capabilities: %w", unmarshalErr)
 	}
-	if caps.OutputType == "video" {
-		return fmt.Errorf("character backend %q has output type video; character seed portrait must be still image", backend)
+	outType := strings.ToLower(strings.TrimSpace(caps.OutputType))
+	if outType != "image" {
+		return fmt.Errorf("character backend %q has output type %q; character seed portrait must be still image (output_type must be \"image\")", backend, caps.OutputType)
 	}
 
 	actualStyleID := ""

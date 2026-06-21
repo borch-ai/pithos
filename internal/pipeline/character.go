@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/borch-ai/pithos/internal/config"
@@ -52,7 +53,7 @@ func GenerateCharacterSeed(ctx context.Context, opts CharacterOptions) error {
 	}
 
 	if previewErr := GenerateWebPreview(opts.OutputDir, m); previewErr != nil {
-		fmt.Printf("Warning: failed to generate web preview: %v\n", previewErr)
+		fmt.Fprintf(os.Stderr, "Warning: failed to generate web preview: %v\n", previewErr)
 	}
 
 	return nil
