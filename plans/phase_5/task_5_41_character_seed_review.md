@@ -1,6 +1,9 @@
 # plan: Task 5.41: Character Seed Generation and Review Command
-
-**Status:** Planned
+ 
+**Status:** Completed
+**Go Version:** 1.26.4
+**Date Completed:** 2026-06-21
+**Unit Test Coverage:** 91.2%
 
 This task implements a dedicated `pithos character` subcommand to generate/regenerate the main character reference seed portrait, enabling users to preview and review character consistency prior to generating stanzas and full-book illustrations. It adopts a dual-model configuration structure so that character seeds are generated cleanly using still-image models, while pages can be generated using video models.
 

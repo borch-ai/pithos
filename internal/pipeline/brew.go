@@ -324,7 +324,7 @@ func generateManuscript(ctx context.Context, m *manifest.Manifest, opts BrewOpti
 	return nil
 }
 
-//nolint:gocognit,funlen // Illustration loop handles MCP client lifecycle, style registration, and page checkpoint updates
+//nolint:gocognit,funlen,nestif // Illustration loop handles MCP client lifecycle, style registration, and page checkpoint updates
 func generateIllustrations(ctx context.Context, m *manifest.Manifest, opts BrewOptions) error {
 	var allowedPages map[int]bool
 	if len(opts.Pages) > 0 {
@@ -349,32 +349,82 @@ func generateIllustrations(ctx context.Context, m *manifest.Manifest, opts BrewO
 		return nil
 	}
 
-	mcpClient := mcp.NewPluginClient(mcp.PluginImageGen)
-	if opts.MCPTransport != nil {
-		mcpClient.SetTransport(opts.MCPTransport)
-	}
-
-	if err := mcpClient.Start(ctx); err != nil {
-		return fmt.Errorf("failed to start MCP imagegen client: %w", err)
-	}
-	defer func() { _ = mcpClient.Stop() }()
-
-	if err := checkBackendCapabilities(ctx, mcpClient, m.BookProperties.CharacterProfile); err != nil {
-		return err
-	}
-
-	styleID := ""
-	if m.BookProperties.Style != "" {
-		var err error
-		styleID, err = registerStyleProfile(ctx, mcpClient, m.BookProperties.Style)
-		if err != nil {
-			return err
+	charBackend := "imagen"
+	illusBackend := "imagen"
+	if config.Cfg != nil {
+		if config.Cfg.MCP.CharacterBackend != "" {
+			charBackend = config.Cfg.MCP.CharacterBackend
+		}
+		if config.Cfg.MCP.IllustrationBackend != "" {
+			illusBackend = config.Cfg.MCP.IllustrationBackend
 		}
 	}
 
-	// Character Seed Portrait Bootstrapping
-	if err := bootstrapCharacterReference(ctx, m, opts, mcpClient, styleID); err != nil {
-		return err
+	var mcpClient *mcp.PluginClient
+	var styleID string
+
+	if charBackend == illusBackend {
+		// Start a single imagegen client for both character reference and page illustrations
+		if illusBackend != "" {
+			_ = os.Setenv("POWERWORD_IMAGEGEN_BACKEND", illusBackend)
+		}
+		mcpClient = mcp.NewPluginClient(mcp.PluginImageGen)
+		if opts.MCPTransport != nil {
+			mcpClient.SetTransport(opts.MCPTransport)
+		}
+
+		if err := mcpClient.Start(ctx); err != nil {
+			return fmt.Errorf("failed to start MCP imagegen client: %w", err)
+		}
+		defer func() { _ = mcpClient.Stop() }()
+
+		if err := checkBackendCapabilities(ctx, mcpClient, m.BookProperties.CharacterProfile); err != nil {
+			return err
+		}
+
+		if m.BookProperties.Style != "" {
+			var err error
+			styleID, err = registerStyleProfile(ctx, mcpClient, m.BookProperties.Style)
+			if err != nil {
+				return err
+			}
+		}
+
+		// Bootstrap character reference using the same client
+		if err := bootstrapCharacterReferenceWithClient(ctx, m, opts.OutputDir, mcpClient, opts.CloudMCPTransport, charBackend); err != nil {
+			return err
+		}
+	} else {
+		// Bootstrap Character Seed Portrait (starts and stops its own client with charBackend)
+		if err := BootstrapCharacterReference(ctx, m, opts.OutputDir, opts.MCPTransport, opts.CloudMCPTransport, charBackend); err != nil {
+			return err
+		}
+
+		// Start the illustration backend MCP Client
+		if illusBackend != "" {
+			_ = os.Setenv("POWERWORD_IMAGEGEN_BACKEND", illusBackend)
+		}
+		mcpClient = mcp.NewPluginClient(mcp.PluginImageGen)
+		if opts.MCPTransport != nil {
+			mcpClient.SetTransport(opts.MCPTransport)
+		}
+
+		if err := mcpClient.Start(ctx); err != nil {
+			return fmt.Errorf("failed to start MCP imagegen client: %w", err)
+		}
+		defer func() { _ = mcpClient.Stop() }()
+
+		if err := checkBackendCapabilities(ctx, mcpClient, m.BookProperties.CharacterProfile); err != nil {
+			return err
+		}
+
+		if m.BookProperties.Style != "" {
+			var err error
+			styleID, err = registerStyleProfile(ctx, mcpClient, m.BookProperties.Style)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	concurrency := opts.Concurrency
@@ -974,16 +1024,66 @@ func getBestImageSize(trimSize string) string {
 	}
 }
 
-func bootstrapCharacterReference(ctx context.Context, m *manifest.Manifest, opts BrewOptions, mcpClient *mcp.PluginClient, styleID string) error {
+// BootstrapCharacterReference generates character seed portrait using the specified character backend.
+func BootstrapCharacterReference(ctx context.Context, m *manifest.Manifest, outputDir string, mcpTransport mcpsdk.Transport, cloudMCPTransport mcpsdk.Transport, backend string) error {
 	if m.BookProperties.CharacterReferenceURL != "" || m.BookProperties.CharacterProfile == "" {
 		return nil
+	}
+
+	if backend != "" {
+		_ = os.Setenv("POWERWORD_IMAGEGEN_BACKEND", backend)
+	}
+
+	mcpClient := mcp.NewPluginClient(mcp.PluginImageGen)
+	if mcpTransport != nil {
+		mcpClient.SetTransport(mcpTransport)
+	}
+
+	if err := mcpClient.Start(ctx); err != nil {
+		return fmt.Errorf("failed to start MCP imagegen client for character seed: %w", err)
+	}
+	defer func() { _ = mcpClient.Stop() }()
+
+	return bootstrapCharacterReferenceWithClient(ctx, m, outputDir, mcpClient, cloudMCPTransport, backend)
+}
+
+//nolint:gocognit,funlen // character reference bootstrapping involves capability validation, style registration, and GCS upload
+func bootstrapCharacterReferenceWithClient(ctx context.Context, m *manifest.Manifest, outputDir string, mcpClient *mcp.PluginClient, cloudMCPTransport mcpsdk.Transport, backend string) error {
+	if m.BookProperties.CharacterReferenceURL != "" || m.BookProperties.CharacterProfile == "" {
+		return nil
+	}
+
+	if err := checkBackendCapabilities(ctx, mcpClient, m.BookProperties.CharacterProfile); err != nil {
+		return err
+	}
+
+	// Verify that character backend output type is "image"
+	capJSON, err := mcpClient.CallTool(ctx, "imagegen_get_capabilities", nil)
+	if err != nil {
+		return fmt.Errorf("failed to query capabilities for character backend: %w", err)
+	}
+	var caps imagegenCapabilities
+	if unmarshalErr := json.Unmarshal([]byte(capJSON), &caps); unmarshalErr != nil {
+		return fmt.Errorf("failed to parse capabilities: %w", unmarshalErr)
+	}
+	if caps.OutputType == "video" {
+		return fmt.Errorf("character backend %q has output type video; character seed portrait must be still image", backend)
+	}
+
+	actualStyleID := ""
+	if m.BookProperties.Style != "" {
+		var styleErr error
+		actualStyleID, styleErr = registerStyleProfile(ctx, mcpClient, m.BookProperties.Style)
+		if styleErr != nil {
+			return styleErr
+		}
 	}
 
 	seedPrompt := "Detailed visual seed character portrait: " + m.BookProperties.CharacterProfile
 	imageSize := getBestImageSize(m.BookProperties.TrimSize)
 
 	fmt.Println("Generating character seed portrait...")
-	srcPath, err := generateImageRaw(ctx, mcpClient, seedPrompt, styleID, imageSize, "", nil)
+	srcPath, err := generateImageRaw(ctx, mcpClient, seedPrompt, actualStyleID, imageSize, "", nil)
 	if err != nil {
 		return fmt.Errorf("failed to generate character seed portrait: %w", err)
 	}
@@ -993,7 +1093,7 @@ func bootstrapCharacterReference(ctx context.Context, m *manifest.Manifest, opts
 		ext = ".png"
 	}
 
-	destPath := filepath.Join(opts.OutputDir, "images", "character_seed"+ext)
+	destPath := filepath.Join(outputDir, "images", "character_seed"+ext)
 	if copyErr := copyFile(srcPath, destPath); copyErr != nil {
 		return fmt.Errorf("failed to copy character seed image: %w", copyErr)
 	}
@@ -1004,7 +1104,7 @@ func bootstrapCharacterReference(ctx context.Context, m *manifest.Manifest, opts
 		if lookErr != nil {
 			return fmt.Errorf("ffmpeg not found in PATH: please install ffmpeg to extract static frames from video seeds for character portraits: %w", lookErr)
 		}
-		pngPath := filepath.Join(opts.OutputDir, "images", "character_seed.png")
+		pngPath := filepath.Join(outputDir, "images", "character_seed.png")
 		fmt.Printf("Extracting static frame from video seed to %s...\n", pngPath)
 		// #nosec G204
 		cmd := execCommandContext(ctx, ffmpegPath, "-y", "-i", destPath, "-vframes", "1", "-f", "image2", pngPath)
@@ -1016,8 +1116,8 @@ func bootstrapCharacterReference(ctx context.Context, m *manifest.Manifest, opts
 
 	// Initialize pw-mcp-cloud client
 	cloudClient := mcp.NewPluginClient(mcp.PluginCloud)
-	if opts.CloudMCPTransport != nil {
-		cloudClient.SetTransport(opts.CloudMCPTransport)
+	if cloudMCPTransport != nil {
+		cloudClient.SetTransport(cloudMCPTransport)
 	}
 
 	if startErr := cloudClient.Start(ctx); startErr != nil {
@@ -1052,6 +1152,7 @@ type imagegenCapabilities struct {
 	Backend      string `json:"backend"`
 	SupportsCref bool   `json:"supports_cref"`
 	SupportsSref bool   `json:"supports_sref"`
+	OutputType   string `json:"output_type"`
 }
 
 func checkBackendCapabilities(ctx context.Context, mcpClient *mcp.PluginClient, characterProfile string) error {
