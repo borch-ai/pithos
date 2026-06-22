@@ -14,14 +14,14 @@ This task implements autocomplete generation for the `pithos` CLI using Cobra's 
 
 ### Command Layer
 
-#### [NEW] [completion.go](file:///Users/human/code/pithos/cmd/pithos/completion.go)
+#### [NEW] [completion.go](file://../../cmd/pithos/completion.go)
 - Create a new Cobra command `completionCmd` for `pithos completion <shell>`.
 - Support options: `zsh`, `bash`, `fish`, `powershell`.
 - Use Cobra's built-in functions (e.g. `rootCmd.GenZshCompletion`) to output completion scripts to standard output.
 
 ### Pipeline Auto-Setup Integration
 
-#### [MODIFY] [setup.go](file:///Users/human/code/pithos/internal/pipeline/setup.go) (Task 5.43)
+#### [MODIFY] [setup.go](file://../../internal/pipeline/setup.go) (Task 5.43)
 - Extend `SetupMCPBinaries` or setup flow to:
   - Check if the current user's shell is Zsh (`$SHELL` contains `/zsh`).
   - Detect standard Oh-My-Zsh path: `~/.oh-my-zsh/`.

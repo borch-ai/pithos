@@ -14,14 +14,14 @@ This task implements a `pithos setup` subcommand to automate local developer onb
 
 ### Command Layer
 
-#### [NEW] [setup.go](file:///Users/human/code/pithos/cmd/pithos/setup.go)
+#### [NEW] [setup.go](file://../../cmd/pithos/setup.go)
 - Create Cobra command `setupCmd` for `pithos setup`.
 - Short: "Auto-compiles and sets up local MCP dependencies"
 - Executes `pipeline.SetupMCPBinaries()` and displays colored progress/output.
 
 ### Pipeline Engine
 
-#### [NEW] [setup.go](file:///Users/human/code/pithos/internal/pipeline/setup.go)
+#### [NEW] [setup.go](file://../../internal/pipeline/setup.go)
 - Define default install path: `~/.local/share/pithos/bin/`.
 - Implement `SetupMCPBinaries(options SetupOptions) error`:
   - Locate `../powerword` sibling repository.

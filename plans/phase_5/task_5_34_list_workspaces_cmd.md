@@ -2,6 +2,8 @@
 
 **Status:** Completed
 **Go Version:** 1.26.4
+**Date Completed:** 2026-06-22
+**Unit Test Coverage:** 94.7%
 
 This task implements a `pithos ls` subcommand to inspect and list book workspaces. By scanning the configured workspace root directory (which defaults to `~/.local/share/pithos/workspaces/`), Pithos will parse the `manifest.json` for each workspace and print a formatted table showing the book's properties, current milestones/progress, and accumulated costs.
 
@@ -14,7 +16,7 @@ This task implements a `pithos ls` subcommand to inspect and list book workspace
 
 ### Command Layer
 
-#### [NEW] [ls.go](file:///Users/human/code/pithos/cmd/pithos/ls.go)
+#### [NEW] [ls.go](file://../../cmd/pithos/ls.go)
 - Create a new Cobra command `lsCmd` for `pithos ls`.
 - Short: "List all book workspaces"
 - The command runner should:
@@ -25,7 +27,7 @@ This task implements a `pithos ls` subcommand to inspect and list book workspace
 
 ### Pipeline Engine
 
-#### [NEW] [ls.go](file:///Users/human/code/pithos/internal/pipeline/ls.go)
+#### [NEW] [ls.go](file://../../internal/pipeline/ls.go)
 - Implement a helper function `ListWorkspaces(workspaceRoot string) ([]BookSummary, error)` that scans a directory, reads `manifest.json` files, and returns parsed summaries.
 - Define `BookSummary` struct:
   ```go

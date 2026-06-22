@@ -14,7 +14,7 @@ This task introduces explicit schema version tracking in `manifest.json` and aut
 
 ### Manifest Schema Layer
 
-#### [MODIFY] [manifest.go](file:///Users/human/code/pithos/internal/manifest/manifest.go)
+#### [MODIFY] [manifest.go](file://../../internal/manifest/manifest.go)
 - Add a root-level `SchemaVersion int json:"schema_version"` to the `Manifest` struct.
 - Define a package constant `CurrentSchemaVersion = 2`.
 - Implement a series of migration functions:
