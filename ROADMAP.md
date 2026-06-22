@@ -11,6 +11,7 @@ Pithos is the **book factory** of the Borch-AI publishing stack. It is a determi
 - **Upstream**: **Kiln** orchestrates Pithos as a subprocess (`kiln forge`). Kiln supplies the validated niche concept; Pithos executes production.
 - **Downstream**: Pithos invokes `pw-mcp-imagegen`, `pw-mcp-kdp-math`, `pw-mcp-typst` (pending) from the Powerword MCP plugin network.
 - **Monitoring**: **Lamplighter** (Pithos Phase 5.1) provides mobile approval checkpoints during long brew/assemble runs.
+- **Telemetry**: **Lighthouse** receives pipeline execution costs, token counts, and stage durations via the shared `pkg/telemetry` HTTP adapter (Powerword Task 4.16). Opt-in via `LIGHTHOUSE_URL`.
 - **Sister Factory**: **Aeolian** operates as a parallel factory for the music segment; Pithos remains strictly focused on books, preserving decoupling.
 
 > [!NOTE]
@@ -186,7 +187,10 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
     *   Implement end-to-end integration tests that build the `pithos` binary on-the-fly and execute subprocess CLI commands.
     *   Assert correct exit codes, stdout/stderr formatting, flag parsing, and interactive stdin prompt responses.
     *   [Implementation Plan](plans/phase_5/task_5_40_e2e_cli_subprocess_tests.md)
-*   [ ] **Task 5.41: Character Seed Generation and Review Command**
+*   [ ] **Task 5.42: Lighthouse Telemetry Integration**
+    *   Confirm that Pithos sends pipeline execution metrics to Lighthouse via the `pkg/telemetry` HTTP adapter (Powerword Task 4.16). Verify that `brew` and `assemble` stage completions produce correct `SystemTelemetry` records (`project="pithos"`, `command=<stage>`, duration, cost, tokens). Add integration test assertions. Blocked on Powerword Task 4.16.
+    *   [Implementation Plan](plans/phase_5/task_5_42_lighthouse_telemetry.md)
+*   [x] **Task 5.41: Character Seed Generation and Review Command**
     *   Implement a dedicated `pithos character` subcommand to generate/regenerate the main character reference seed portrait based on the manifest profile.
     *   Integrate visual seed validation and cloud storage upload prior to executing brew page illustration jobs.
     *   [Implementation Plan](plans/phase_5/task_5_41_character_seed_review.md)

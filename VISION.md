@@ -22,6 +22,7 @@ Kiln (orchestrator)
             pw-mcp-kdp-math    (print math: margins, spine, bleed)
             pw-mcp-seo         (KDP metadata — Phase 4+)
             pkg/llm            (LLM access via Powerword)
+            pkg/telemetry  → Lighthouse (execution costs & tokens)
 ```
 
 **Kiln orchestrates Pithos** — `kiln forge` launches Pithos subprocesses (`initiate`, `brew`, `assemble`) and reads Pithos's `manifest.json` to track production milestones. Pithos does not call Kiln.
@@ -94,6 +95,7 @@ Key fields Kiln consumes:
 | PDF Layout | Typst binary (system dependency) via `pw-mcp-typst` |
 | State | `manifest.json` in workspace directory |
 | Telemetry | `github.com/borch-ai/powerword/pkg/telemetry` |
+| Observability | Lighthouse (opt-in via `LIGHTHOUSE_URL` — receives costs, tokens, stage durations) |
 
 ---
 
