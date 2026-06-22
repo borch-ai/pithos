@@ -34,6 +34,9 @@ This task adds cost verification checks and user budget constraints to Pithos. I
   - Print a detailed warning summary showing the estimated excess cost.
   - Interactively prompt the user to confirm whether to proceed, abort, or set a temporary override (using `survey.Confirm`).
   - If in headless mode (`--silent` or non-interactive stdout), fail-fast with a descriptive error.
+- Implement live dynamic budget checks:
+  - During concurrent generation of page text and illustrations, check the accumulated actual cost dynamically after each model call finishes.
+  - If the live cost exceeds the budget limits, immediately abort any remaining pending pages in the loop to prevent further cost leakage.
 
 ---
 

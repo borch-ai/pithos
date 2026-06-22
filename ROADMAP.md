@@ -157,7 +157,7 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
     *   Implement an interactive scaffolding wizard for `pithos initiate` when flags are omitted, prompting the user whether to perform visual guide brainstorming.
     *   Implement interactive page multi-selection for selective redo in `pithos brew --pages`.
     *   [Implementation Plan](plans/phase_5/task_5_33_interactive_survey_prompts.md)
-*   [ ] **Task 5.34: List Local Book Workspaces (pithos ls)**
+*   [x] **Task 5.34: List Local Book Workspaces (pithos ls)**
     *   Implement a `pithos ls` CLI command to list all books in local workspace directories.
     *   Scan the workspace root directory, locate subdirectories containing `manifest.json`, and parse book details (Theme, Format, Milestones, and Cost).
     *   Display the compiled book list in a clean, formatted table styled with `charmbracelet/lipgloss`.
@@ -194,6 +194,16 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
     *   Implement a dedicated `pithos character` subcommand to generate/regenerate the main character reference seed portrait based on the manifest profile.
     *   Integrate visual seed validation and cloud storage upload prior to executing brew page illustration jobs.
     *   [Implementation Plan](plans/phase_5/task_5_41_character_seed_review.md)
+*   [ ] **Task 5.43: Developer Auto-Setup Command (pithos setup)**
+    *   Automate discovery, compilation, and symlinking of local Powerword MCP binaries to simplify workspace onboarding.
+    *   [Implementation Plan](plans/phase_5/task_5_43_developer_setup.md)
+*   [ ] **Task 5.44: Manifest Versioning & Migration Guardrails**
+    *   Introduce schema version tracking in `manifest.json` and automatic structure migrations on load to prevent breaking Kiln or Lamplighter.
+    *   [Implementation Plan](plans/phase_5/task_5_44_manifest_migrations.md)
+*   [ ] **Task 5.45: Shell Autocompletion Support (Zsh/Oh-My-Zsh)**
+    *   Implement Cobra autocompletion subcommands and automate Zsh/Oh-My-Zsh completion script setup via the `setup` command.
+    *   [Implementation Plan](plans/phase_5/task_5_45_shell_completion.md)
+
 
 
 ### Interactive UI & Quality Enhancements
