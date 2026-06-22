@@ -28,10 +28,18 @@ func createManifestA(t *testing.T, tmpRoot string) {
 	manifestA.BookProperties.Theme = "Existential Dread"
 	manifestA.BookProperties.Format = "hardcover"
 	manifestA.BookProperties.TargetPageCount = 20
-	_ = manifestA.UpdatePageStatus(0, manifest.StatusCompleted, "img0.png")
-	_ = manifestA.UpdatePageStatus(1, manifest.StatusCompleted, "img1.png")
-	_ = manifestA.AddMilestone("initiate_complete")
-	_ = manifestA.AddMilestone("brew_complete")
+	if err := manifestA.UpdatePageStatus(0, manifest.StatusCompleted, "img0.png"); err != nil {
+		t.Fatalf("failed to update page status: %v", err)
+	}
+	if err := manifestA.UpdatePageStatus(1, manifest.StatusCompleted, "img1.png"); err != nil {
+		t.Fatalf("failed to update page status: %v", err)
+	}
+	if err := manifestA.AddMilestone("initiate_complete"); err != nil {
+		t.Fatalf("failed to add milestone: %v", err)
+	}
+	if err := manifestA.AddMilestone("brew_complete"); err != nil {
+		t.Fatalf("failed to add milestone: %v", err)
+	}
 	manifestA.Telemetry.TotalCostUSD = 1.25
 	if saveErr := manifestA.Save(); saveErr != nil {
 		t.Fatalf("failed to save manifest A: %v", saveErr)
@@ -47,7 +55,9 @@ func createManifestB(t *testing.T, tmpRoot string) {
 	manifestB.BookProperties.Theme = "Philosophical Sadness"
 	manifestB.BookProperties.Format = "paperback"
 	manifestB.BookProperties.TargetPageCount = 15
-	_ = manifestB.AddMilestone("initiate_complete")
+	if err := manifestB.AddMilestone("initiate_complete"); err != nil {
+		t.Fatalf("failed to add milestone: %v", err)
+	}
 	manifestB.Telemetry.TotalCostUSD = 0.40
 	if saveErr := manifestB.Save(); saveErr != nil {
 		t.Fatalf("failed to save manifest B: %v", saveErr)

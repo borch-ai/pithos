@@ -66,6 +66,9 @@ var lsCmd = &cobra.Command{
 				format = "-"
 			}
 			pagesStr := fmt.Sprintf("%d/%d", s.PageCount, s.TargetPageCount)
+			if s.TargetPageCount <= 0 {
+				pagesStr = fmt.Sprintf("%d/-", s.PageCount)
+			}
 			milestonesStr := strings.Join(s.Milestones, ", ")
 			if milestonesStr == "" {
 				milestonesStr = "-"

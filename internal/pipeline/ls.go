@@ -39,7 +39,10 @@ func ListWorkspaces(workspaceRoot string) ([]BookSummary, error) {
 
 		manifestPath := filepath.Join(workspaceRoot, entry.Name(), "manifest.json")
 		if _, err := os.Stat(manifestPath); err != nil {
-			continue
+			if os.IsNotExist(err) {
+				continue
+			}
+			return nil, err
 		}
 
 		m, err := manifest.LoadManifest(manifestPath)
