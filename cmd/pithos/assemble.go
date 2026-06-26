@@ -35,6 +35,13 @@ var assembleCmd = &cobra.Command{
 			return err
 		}
 
+		if !isTTY() {
+			fmt.Printf("pithos assemble: Successfully generated layout manifest parameters for %s format.\n", m.BookProperties.Format)
+			fmt.Printf("Calculated Dimensions (inches): Cover Width: %.3f, Cover Height: %.3f, Spine Width: %.3f\n",
+				m.KDPLayout.CoverWidthInches, m.KDPLayout.CoverHeightInches, m.KDPLayout.SpineWidth)
+			return nil
+		}
+
 		// Style the output using Lipgloss
 		titleStyle := lipgloss.NewStyle().
 			Bold(true).

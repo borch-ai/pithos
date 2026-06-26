@@ -107,8 +107,9 @@ var doctorCmd = &cobra.Command{
 			}
 
 			nameText := item.Name + ":"
-			if len(nameText) < 52 {
-				nameText += strings.Repeat(" ", 52-len(nameText))
+			visualWidth := lipgloss.Width(nameText)
+			if visualWidth < 52 {
+				nameText += strings.Repeat(" ", 52-visualWidth)
 			}
 			nameStr := styleName.Render(nameText)
 			msgStr := styleMessage.Render(item.Message)

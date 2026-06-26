@@ -152,6 +152,17 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 		pricing = config.Cfg.Pricing
 	}
 
+	if !isTTY() {
+		fmt.Println("----------------------------------------")
+		fmt.Print(tracker.FormatSummary(pricing))
+		if m.Telemetry.ImageGenerations > 0 {
+			fmt.Printf("- Image Generations: %d\n", m.Telemetry.ImageGenerations)
+		}
+		fmt.Printf("- Pipeline Total Cost: $%.5f\n", m.Telemetry.TotalCostUSD)
+		fmt.Println("----------------------------------------")
+		return nil
+	}
+
 	titleStyle := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("205")). // Hot pink
@@ -1200,4 +1211,12 @@ func checkBackendCapabilities(ctx context.Context, mcpClient *mcp.PluginClient, 
 	}
 
 	return nil
+}
+
+func isTTY() bool {
+	fi, err := os.Stdout.Stat()
+	if err != nil {
+		return false
+	}
+	return fi.Mode()&os.ModeCharDevice != 0
 }
