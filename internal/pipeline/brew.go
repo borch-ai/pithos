@@ -1213,7 +1213,7 @@ func checkBackendCapabilities(ctx context.Context, mcpClient *mcp.PluginClient, 
 	return nil
 }
 
-func isTTY() bool {
+var isTTY = func() bool {
 	fi, err := os.Stdout.Stat()
 	if err != nil {
 		return false

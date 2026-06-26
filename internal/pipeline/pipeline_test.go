@@ -1324,6 +1324,10 @@ func TestBrew_TelemetryCustomPricing(t *testing.T) {
 		LLM:          mockLLMClient,
 	}
 
+	oldIsTTY := isTTY
+	isTTY = func() bool { return true }
+	defer func() { isTTY = oldIsTTY }()
+
 	err = Brew(ctx, optsBrew)
 	if err != nil {
 		t.Fatalf("Brew failed: %v", err)
