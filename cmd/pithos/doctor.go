@@ -3,8 +3,11 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/borch-ai/pithos/internal/pipeline"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 	"github.com/spf13/cobra"
 )
 
@@ -16,53 +19,111 @@ var doctorCmd = &cobra.Command{
 		ctx := cmd.Context()
 		useColor := isTTY()
 
-		var (
-			green  = ""
-			red    = ""
-			yellow = ""
-			gray   = ""
-			bold   = ""
-			reset  = ""
-		)
-		if useColor {
-			green = "\033[32m"
-			red = "\033[31m"
-			yellow = "\033[33m"
-			gray = "\033[90m"
-			bold = "\033[1m"
-			reset = "\033[0m"
+		if !useColor {
+			lipgloss.SetColorProfile(termenv.Ascii)
+		} else {
+			lipgloss.SetColorProfile(termenv.ColorProfile())
 		}
 
-		fmt.Println("🏺 Running Pithos Preflight Diagnostics...")
-		fmt.Println("--------------------------------------------------")
+		// Define Lipgloss Styles
+		headerStyle := lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("205")). // Hot pink
+			MarginBottom(1)
+
+		dividerStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("99")) // Purple
+
+		styleOk := lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#1B2A1C")). // dark forest green
+			Background(lipgloss.Color("#A3E635")). // bright lime green
+			Width(8).
+			Align(lipgloss.Center)
+
+		styleFail := lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#FEE2E2")). // light red
+			Background(lipgloss.Color("#EF4444")). // bright red
+			Width(8).
+			Align(lipgloss.Center)
+
+		styleWarn := lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#FEF3C7")). // light yellow/amber
+			Background(lipgloss.Color("#F59E0B")). // bright amber
+			Width(8).
+			Align(lipgloss.Center)
+
+		styleSkip := lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#F3F4F6")). // light gray
+			Background(lipgloss.Color("#6B7280")). // slate gray
+			Width(8).
+			Align(lipgloss.Center)
+
+		styleName := lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#FFFFFF"))
+
+		styleMessage := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#9CA3AF")) // muted gray
+
+		successStyle := lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#A3E635")).
+			MarginTop(1)
+
+		failStyle := lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#EF4444")).
+			MarginTop(1)
+
+		fmt.Println(headerStyle.Render("🏺 Running Pithos Preflight Diagnostics..."))
+		divider := dividerStyle.Render("--------------------------------------------------------------------------------")
+		fmt.Println(divider)
 
 		results, hasFailure := pipeline.RunDiagnostics(ctx)
 
 		for _, item := range results {
-			var statusStr string
+			var badge string
 			switch item.Status {
 			case pipeline.StatusOk:
-				statusStr = fmt.Sprintf("%s[✔] OK     %s", green, reset)
+				badge = styleOk.Render("OK")
 			case pipeline.StatusFail:
-				statusStr = fmt.Sprintf("%s[✘] FAIL   %s", red, reset)
+				badge = styleFail.Render("FAIL")
 			case pipeline.StatusWarning:
-				statusStr = fmt.Sprintf("%s[!] WARN   %s", yellow, reset)
+				badge = styleWarn.Render("WARN")
 			case pipeline.StatusSkip:
-				statusStr = fmt.Sprintf("%s[-] SKIP   %s", gray, reset)
+				badge = styleSkip.Render("SKIP")
 			default:
-				statusStr = fmt.Sprintf("[%s]", item.Status)
+				badge = lipgloss.NewStyle().
+					Bold(true).
+					Foreground(lipgloss.Color("#F3F4F6")).
+					Background(lipgloss.Color("#374151")).
+					Width(8).
+					Align(lipgloss.Center).
+					Render(string(item.Status))
 			}
 
-			fmt.Printf("%s %s%-40s%s %s\n", statusStr, bold, item.Name+":", reset, item.Message)
+			nameText := item.Name + ":"
+			if len(nameText) < 52 {
+				nameText += strings.Repeat(" ", 52-len(nameText))
+			}
+			nameStr := styleName.Render(nameText)
+			msgStr := styleMessage.Render(item.Message)
+
+			// Print structured row: [BADGE] Name: Message
+			fmt.Printf("%s %s %s\n", badge, nameStr, msgStr)
 		}
 
-		fmt.Println("--------------------------------------------------")
+		fmt.Println(divider)
 		if hasFailure {
-			fmt.Printf("%s%sDiagnostics FAILED. Please resolve the errors above before running Pithos pipelines.%s\n", red, bold, reset)
+			fmt.Println(failStyle.Render("Diagnostics FAILED. Please resolve the errors above before running Pithos pipelines."))
 			return fmt.Errorf("diagnostics failed")
 		}
 
-		fmt.Printf("%s%sAll checks passed successfully! Pithos is ready.%s\n", green, bold, reset)
+		fmt.Println(successStyle.Render("All checks passed successfully! Pithos is ready."))
 		return nil
 	},
 }

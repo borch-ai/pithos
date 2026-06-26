@@ -17,6 +17,7 @@ import (
 	"github.com/borch-ai/pithos/internal/manifest"
 	"github.com/borch-ai/pithos/internal/mcp"
 	"github.com/borch-ai/powerword/pkg/telemetry"
+	"github.com/charmbracelet/lipgloss"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -151,13 +152,33 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 		pricing = config.Cfg.Pricing
 	}
 
-	fmt.Println("----------------------------------------")
-	fmt.Print(tracker.FormatSummary(pricing))
-	if m.Telemetry.ImageGenerations > 0 {
-		fmt.Printf("- Image Generations: %d\n", m.Telemetry.ImageGenerations)
+	titleStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("205")). // Hot pink
+		Padding(0, 1)
+
+	boxStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("99")). // Purple border
+		Padding(1, 2).
+		Margin(1, 0)
+
+	var sb strings.Builder
+	summaryText := tracker.FormatSummary(pricing)
+	if summaryText != "" {
+		sb.WriteString(strings.TrimSpace(summaryText))
+		sb.WriteString("\n")
 	}
-	fmt.Printf("- Pipeline Total Cost: $%.5f\n", m.Telemetry.TotalCostUSD)
-	fmt.Println("----------------------------------------")
+	if m.Telemetry.ImageGenerations > 0 {
+		fmt.Fprintf(&sb, "- Image Generations: %d\n", m.Telemetry.ImageGenerations)
+	}
+
+	costStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#A3E635")) // lime green
+	fmt.Fprintf(&sb, "- Pipeline Total Cost: %s", costStyle.Render(fmt.Sprintf("$%.5f", m.Telemetry.TotalCostUSD)))
+
+	titleStr := titleStyle.Render("TELEMETRY SUMMARY")
+	card := boxStyle.Render(titleStr + "\n\n" + sb.String())
+	fmt.Println(card)
 
 	return nil
 }
