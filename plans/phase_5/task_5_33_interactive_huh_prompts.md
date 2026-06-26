@@ -1,6 +1,8 @@
 # plan: Task 5.33: Interactive CLI Prompt Wizards via Huh
 
-**Status:** Proposed
+**Status:** Completed
+**Date Completed:** 2026-06-26
+**Unit Test Coverage:** 91.00%
 **Go Version:** 1.26.4
 
 This task integrates `github.com/charmbracelet/huh` into Pithos to provide interactive wizards and select inputs for key CLI subcommands. `huh` is a high-level interactive form library built on Bubbletea, native to the Charm ecosystem we already use for Lipgloss. This reduces reliance on manually typing complex flags or editing JSON files in hidden directories.

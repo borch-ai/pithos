@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -2009,6 +2010,84 @@ Stanza 3
 		t.Error("expected error when manuscript.md has edits outside selective page list, got nil")
 	} else if !strings.Contains(err.Error(), "not included in the selective page override list") {
 		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestBrew_InteractiveSelect(t *testing.T) {
+	// 1. Conflicting options validation
+	ctx := context.Background()
+	optsBoth := BrewOptions{
+		OutputDir: "/dummy",
+		Pages:     []int{1},
+		Select:    true,
+	}
+	err := Brew(ctx, optsBoth)
+	if err == nil || !strings.Contains(err.Error(), "cannot specify both --pages and --select") {
+		t.Errorf("expected error for both pages and select, got %v", err)
+	}
+
+	// 2. Non-TTY error
+	oldIsTTY := isTTY
+	isTTY = func() bool { return false }
+	defer func() { isTTY = oldIsTTY }()
+
+	optsSelectNonTTY := BrewOptions{
+		OutputDir: "/dummy",
+		Select:    true,
+	}
+	tmpDir := t.TempDir()
+	m := manifest.NewManifest(filepath.Join(tmpDir, "manifest.json"))
+	m.BookProperties.Theme = "Test Theme"
+	m.Progress.ManuscriptGenerated = true
+	m.Progress.Pages = []manifest.PageState{
+		{PageIndex: 1, Status: manifest.StatusCompleted, Text: "Page 1 Text"},
+		{PageIndex: 2, Status: manifest.StatusCompleted, Text: "Page 2 Text"},
+	}
+	if saveErr := m.Save(); saveErr != nil {
+		t.Fatalf("failed to save manifest: %v", saveErr)
+	}
+
+	optsSelectNonTTY.OutputDir = tmpDir
+	err = Brew(ctx, optsSelectNonTTY)
+	if err == nil || !strings.Contains(err.Error(), "interactive selection requires a TTY terminal") {
+		t.Errorf("expected TTY error, got %v", err)
+	}
+
+	// 3. Successful select
+	isTTY = func() bool { return true }
+	inR, inW := io.Pipe()
+	go func() {
+		// Toggle page 2 (choice 2), then confirm (choice 0)
+		_, _ = inW.Write([]byte("2\n"))
+		_, _ = inW.Write([]byte("0\n"))
+		_ = inW.Close()
+	}()
+
+	var buf strings.Builder
+	optsSelectSuccess := BrewOptions{
+		OutputDir: tmpDir,
+		Select:    true,
+		Review:    true,
+		Silent:    true,
+		In:        inR,
+		Out:       &buf,
+	}
+
+	err = Brew(ctx, optsSelectSuccess)
+	if err == nil || !errors.Is(err, ErrReviewPause) {
+		t.Errorf("expected ErrReviewPause, got %v", err)
+	}
+
+	// Verify that page 2 status was indeed reset to pending in the manifest on disk!
+	mLoaded, err := manifest.LoadManifest(filepath.Join(tmpDir, "manifest.json"))
+	if err != nil {
+		t.Fatalf("failed to load manifest: %v", err)
+	}
+	if mLoaded.Progress.Pages[0].Status != manifest.StatusCompleted {
+		t.Errorf("expected page 1 to remain completed, got %s", mLoaded.Progress.Pages[0].Status)
+	}
+	if mLoaded.Progress.Pages[1].Status != manifest.StatusPending {
+		t.Errorf("expected page 2 to be reset to pending, got %s", mLoaded.Progress.Pages[1].Status)
 	}
 }
 

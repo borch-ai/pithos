@@ -18,6 +18,7 @@ import (
 	"github.com/borch-ai/pithos/internal/mcp"
 	"github.com/borch-ai/pithos/internal/ui"
 	"github.com/borch-ai/powerword/pkg/telemetry"
+	"github.com/charmbracelet/huh"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -32,11 +33,14 @@ type BrewOptions struct {
 	Concurrency       int
 	Review            bool
 	Pages             []int
+	Select            bool
 	Silent            bool
 	MCPTransport      mcpsdk.Transport // For testing
 	CloudMCPTransport mcpsdk.Transport // For testing
 	LLM               LLMClient        // For testing
 	HTTPClient        *http.Client     // For testing
+	In                io.Reader        // For testing
+	Out               io.Writer        // For testing
 }
 
 // Brew executes the manuscript generation and page-by-page illustration generation.
@@ -48,10 +52,26 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 	}
 	opts.OutputDir = resolveBookPath(opts.OutputDir)
 
+	if len(opts.Pages) > 0 && opts.Select {
+		return errors.New("cannot specify both --pages and --select; please use one or the other")
+	}
+
 	manifestPath := filepath.Join(opts.OutputDir, "manifest.json")
 	m, err := manifest.LoadManifest(manifestPath)
 	if err != nil {
 		return fmt.Errorf("failed to load manifest from %s: %w", manifestPath, err)
+	}
+
+	if opts.Select {
+		selectedPages, err := promptSelectPages(m, opts)
+		if err != nil {
+			return err
+		}
+		if len(selectedPages) == 0 {
+			fmt.Println("No pages selected. Exiting.")
+			return nil
+		}
+		opts.Pages = selectedPages
 	}
 
 	// Validate and apply target pages redo/reset
@@ -1211,4 +1231,54 @@ var isTTY = func() bool {
 		return false
 	}
 	return fi.Mode()&os.ModeCharDevice != 0
+}
+
+func truncate(s string, maxLen int) string {
+	s = strings.ReplaceAll(s, "\n", " ")
+	s = strings.ReplaceAll(s, "\r", "")
+	if len(s) > maxLen {
+		return s[:maxLen-3] + "..."
+	}
+	return s
+}
+
+func promptSelectPages(m *manifest.Manifest, opts BrewOptions) ([]int, error) {
+	if !isTTY() {
+		return nil, errors.New("interactive selection requires a TTY terminal")
+	}
+	var selectedPages []int
+	var options []huh.Option[int]
+	for _, page := range m.Progress.Pages {
+		label := fmt.Sprintf("Page %d (%s): %s", page.PageIndex, page.Status, truncate(page.Text, 50))
+		options = append(options, huh.NewOption(label, page.PageIndex).Selected(page.Status != manifest.StatusCompleted))
+	}
+	if len(options) == 0 {
+		return nil, errors.New("no pages found in manifest to select")
+	}
+
+	in := opts.In
+	if in == nil {
+		in = os.Stdin
+	}
+	out := opts.Out
+	if out == nil {
+		out = os.Stdout
+	}
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewMultiSelect[int]().
+				Title("Select Pages to Brew/Regenerate").
+				Description("Use Space to toggle, Enter to confirm").
+				Options(options...).
+				Value(&selectedPages),
+		),
+	).WithInput(in).WithOutput(out)
+	form.WithAccessible(opts.In != nil || !isTTY())
+
+	if err := form.Run(); err != nil {
+		return nil, err
+	}
+
+	return selectedPages, nil
 }

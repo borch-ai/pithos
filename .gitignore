@@ -25,6 +25,7 @@ generated_images/
 .pithos-local-cache/
 .pithos.toml
 .powerword/
+pithos
 
 
 # IDEs
