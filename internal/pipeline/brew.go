@@ -16,8 +16,8 @@ import (
 	"github.com/borch-ai/pithos/internal/config"
 	"github.com/borch-ai/pithos/internal/manifest"
 	"github.com/borch-ai/pithos/internal/mcp"
+	"github.com/borch-ai/pithos/internal/ui"
 	"github.com/borch-ai/powerword/pkg/telemetry"
-	"github.com/charmbracelet/lipgloss"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -163,16 +163,8 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 		return nil
 	}
 
-	titleStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("205")). // Hot pink
-		Padding(0, 1)
-
-	boxStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("99")). // Purple border
-		Padding(1, 2).
-		Margin(1, 0)
+	titleStyle := ui.HeaderStyle.Padding(0, 1)
+	boxStyle := ui.BoxStyle
 
 	var sb strings.Builder
 	summaryText := tracker.FormatSummary(pricing)
@@ -184,7 +176,7 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 		fmt.Fprintf(&sb, "- Image Generations: %d\n", m.Telemetry.ImageGenerations)
 	}
 
-	costStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#A3E635")) // lime green
+	costStyle := ui.HighlightStyle
 	fmt.Fprintf(&sb, "- Pipeline Total Cost: %s", costStyle.Render(fmt.Sprintf("$%.5f", m.Telemetry.TotalCostUSD)))
 
 	titleStr := titleStyle.Render("TELEMETRY SUMMARY")

@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/borch-ai/pithos/internal/pipeline"
-	"github.com/charmbracelet/lipgloss"
+	"github.com/borch-ai/pithos/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -42,21 +42,12 @@ var assembleCmd = &cobra.Command{
 			return nil
 		}
 
-		// Style the output using Lipgloss
-		titleStyle := lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("205")). // Hot pink
-			Padding(0, 1)
-
-		boxStyle := lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("99")). // Purple border
-			Padding(1, 2).
-			Margin(1, 0)
-
-		keyStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FFFFFF"))
-		valStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#9CA3AF"))
-		highlightStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#A3E635")) // Lime green
+		// Style the output using centralized Lipgloss styles
+		titleStyle := ui.HeaderStyle.Padding(0, 1)
+		boxStyle := ui.BoxStyle
+		keyStyle := ui.KeyStyle
+		valStyle := ui.ValStyle
+		highlightStyle := ui.HighlightStyle
 
 		var sb strings.Builder
 		fmt.Fprintf(&sb, "%s %s\n", keyStyle.Render("Format:"), valStyle.Render(m.BookProperties.Format))
