@@ -1,9 +1,9 @@
-# plan: Task 5.33: Interactive CLI Prompt Wizards via Survey
+# plan: Task 5.33: Interactive CLI Prompt Wizards via Huh
 
 **Status:** Proposed
 **Go Version:** 1.26.4
 
-This task integrates `github.com/AlecAivazis/survey` into Pithos to provide interactive wizards and select inputs for key CLI subcommands. This reduces reliance on manually typing complex flags or editing JSON files in hidden directories.
+This task integrates `github.com/charmbracelet/huh` into Pithos to provide interactive wizards and select inputs for key CLI subcommands. `huh` is a high-level interactive form library built on Bubbletea, native to the Charm ecosystem we already use for Lipgloss. This reduces reliance on manually typing complex flags or editing JSON files in hidden directories.
 
 ## User Review Required
 
@@ -15,25 +15,25 @@ This task integrates `github.com/AlecAivazis/survey` into Pithos to provide inte
 ### Dependencies
 
 #### [MODIFY] [go.mod](file://../../go.mod)
-- Import `github.com/AlecAivazis/survey/v2` and download dependencies.
+- Import `github.com/charmbracelet/huh` and download dependencies.
 
 ### Interactive Scaffolding
 
 #### [MODIFY] [initiate.go](file://../../cmd/pithos/initiate.go)
 - Refactor the command runner to check if flags are set.
-- If run without required flags, prompt the user interactively for:
-  - Theme
-  - Format (paperback, hardcover) using a `Select` list
-  - Trim size (8.5x8.5, 6x9, etc.) using a `Select` list
-  - Target page count
-- Replace the custom confirmation logic with a clean `survey.Confirm` prompt.
+- If run without required flags, prompt the user interactively using a `huh.Form` for:
+  - Theme (`huh.NewInput`)
+  - Format (paperback, hardcover) using `huh.NewSelect`
+  - Trim size (8.5x8.5, 6x9, etc.) using `huh.NewSelect`
+  - Target page count (`huh.NewInput` with integer validation)
+- Replace the custom confirmation logic with a clean `huh.NewConfirm` prompt.
 
 ### Interactive Selective Redo
 
 #### [MODIFY] [brew.go](file://../../cmd/pithos/brew.go)
 - Implement a `--select` or dynamic prompt mode for `--pages` when running `pithos brew`.
-- Display a `MultiSelect` list displaying stanzas and their completion status.
-- Allow the user to check/uncheck pages to regenerate.
+- Display a `huh.NewMultiSelect` list showing stanzas and their completion status.
+- Allow the user to check/uncheck pages to regenerate using arrow keys and spacebar.
 
 ---
 
@@ -41,8 +41,9 @@ This task integrates `github.com/AlecAivazis/survey` into Pithos to provide inte
 
 ### Automated Tests
 - Implement unit tests for options parsing and conditional fallback.
-- Mock console inputs for the prompts inside test cases.
+- Mock console inputs for the prompts inside test cases (huh supports accessible mode for non-TTY/test environments).
 
 ### Manual Verification
 - Run `pithos initiate` in the terminal and confirm the prompt selections guide you through setup.
 - Run `pithos brew --pages` and verify you can check/uncheck stanzas using keyboard arrow keys and spacebar.
+
