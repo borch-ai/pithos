@@ -162,7 +162,7 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
     *   Scan the workspace root directory, locate subdirectories containing `manifest.json`, and parse book details (Theme, Format, Milestones, and Cost).
     *   Display the compiled book list in a clean, formatted table styled with `charmbracelet/lipgloss`.
     *   [Implementation Plan](plans/phase_5/task_5_34_list_workspaces_cmd.md)
-*   [ ] **Task 5.35: CLI Visual Styling & Diagnostics Formatting via Lipgloss**
+*   [x] **Task 5.35: CLI Visual Styling & Diagnostics Formatting via Lipgloss**
     *   Integrate `github.com/charmbracelet/lipgloss` styling framework.
     *   Format `pithos doctor` connectivity check list with colored success/error indicator badges.
     *   Style terminal summary cards (telemetry, token counts, and billable USD cost summaries) at the end of `brew` and `assemble` runs.

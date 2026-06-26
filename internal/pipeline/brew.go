@@ -16,6 +16,7 @@ import (
 	"github.com/borch-ai/pithos/internal/config"
 	"github.com/borch-ai/pithos/internal/manifest"
 	"github.com/borch-ai/pithos/internal/mcp"
+	"github.com/borch-ai/pithos/internal/ui"
 	"github.com/borch-ai/powerword/pkg/telemetry"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -151,13 +152,36 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 		pricing = config.Cfg.Pricing
 	}
 
-	fmt.Println("----------------------------------------")
-	fmt.Print(tracker.FormatSummary(pricing))
-	if m.Telemetry.ImageGenerations > 0 {
-		fmt.Printf("- Image Generations: %d\n", m.Telemetry.ImageGenerations)
+	if !isTTY() {
+		fmt.Println("----------------------------------------")
+		fmt.Print(tracker.FormatSummary(pricing))
+		if m.Telemetry.ImageGenerations > 0 {
+			fmt.Printf("- Image Generations: %d\n", m.Telemetry.ImageGenerations)
+		}
+		fmt.Printf("- Pipeline Total Cost: $%.5f\n", m.Telemetry.TotalCostUSD)
+		fmt.Println("----------------------------------------")
+		return nil
 	}
-	fmt.Printf("- Pipeline Total Cost: $%.5f\n", m.Telemetry.TotalCostUSD)
-	fmt.Println("----------------------------------------")
+
+	titleStyle := ui.HeaderStyle.Padding(0, 1)
+	boxStyle := ui.BoxStyle
+
+	var sb strings.Builder
+	summaryText := tracker.FormatSummary(pricing)
+	if summaryText != "" {
+		sb.WriteString(strings.TrimSpace(summaryText))
+		sb.WriteString("\n")
+	}
+	if m.Telemetry.ImageGenerations > 0 {
+		fmt.Fprintf(&sb, "- Image Generations: %d\n", m.Telemetry.ImageGenerations)
+	}
+
+	costStyle := ui.HighlightStyle
+	fmt.Fprintf(&sb, "- Pipeline Total Cost: %s", costStyle.Render(fmt.Sprintf("$%.5f", m.Telemetry.TotalCostUSD)))
+
+	titleStr := titleStyle.Render("TELEMETRY SUMMARY")
+	card := boxStyle.Render(titleStr + "\n\n" + sb.String())
+	fmt.Println(card)
 
 	return nil
 }
@@ -1179,4 +1203,12 @@ func checkBackendCapabilities(ctx context.Context, mcpClient *mcp.PluginClient, 
 	}
 
 	return nil
+}
+
+var isTTY = func() bool {
+	fi, err := os.Stdout.Stat()
+	if err != nil {
+		return false
+	}
+	return fi.Mode()&os.ModeCharDevice != 0
 }

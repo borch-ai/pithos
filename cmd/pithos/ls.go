@@ -6,6 +6,7 @@ import (
 
 	"github.com/borch-ai/pithos/internal/config"
 	"github.com/borch-ai/pithos/internal/pipeline"
+	"github.com/borch-ai/pithos/internal/ui"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/lipgloss/table"
 	"github.com/spf13/cobra"
@@ -35,14 +36,9 @@ var lsCmd = &cobra.Command{
 			return nil
 		}
 
-		// Style header and table using lipgloss
-		headerStyle := lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("205")). // Hot pink
-			Align(lipgloss.Center)
-
-		borderStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("99")) // Purple
+		// Style header and table using centralized Lipgloss styles
+		headerStyle := ui.HeaderStyle.Align(lipgloss.Center)
+		borderStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorPurple))
 
 		t := table.New().
 			Border(lipgloss.RoundedBorder()).
