@@ -8,7 +8,7 @@ This task implements a dedicated E2E integration test suite that builds the `pit
 ## User Review Required
 
 > [!NOTE]
-> None.
+> This task depends on **Task 5.37: E2E Pipeline Simulation & Dry-Run Mode**. To allow running these E2E subprocess tests in standard CI environments (where API keys and local MCP plugin installations are unavailable), the tests will invoke commands with the `--dry-run` flag.
 
 ## Proposed Changes
 
