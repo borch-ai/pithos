@@ -19,22 +19,22 @@ This task integrates `github.com/charmbracelet/log` into Pithos to replace raw `
 
 ### Centralized Logger Initialization
 
-#### [MODIFY] [cmd/pithos/root.go](file://../../cmd/pithos/root.go)
+#### [MODIFY] [root.go](file://../../cmd/pithos/root.go)
 - Initialize a global `*log.Logger` instance in the root command's `PersistentPreRunE` hook.
 - Set the log level to `Info` by default, toggled to `Debug` when a `--verbose` or `--debug` CLI flag is provided.
 - Configure output format: styled/colored for TTY, plain text for piped/redirected output.
 
 ### Pipeline Stage Logging
 
-#### [MODIFY] [internal/pipeline/brew.go](file://../../internal/pipeline/brew.go)
+#### [MODIFY] [brew.go](file://../../internal/pipeline/brew.go)
 - Replace ad-hoc `fmt.Printf` progress messages (e.g., "Generating page X...") with structured `log.Info` / `log.Debug` calls.
 - Emit structured key-value fields (e.g., `page`, `model`, `cost`) alongside human-readable messages.
 
-#### [MODIFY] [internal/pipeline/assemble.go](file://../../internal/pipeline/assemble.go)
+#### [MODIFY] [assemble.go](file://../../internal/pipeline/assemble.go)
 - Replace `fmt.Printf` stage announcements with `log.Info` calls.
 - Log PDF compilation progress and preflight results with structured metadata.
 
-#### [MODIFY] [internal/pipeline/initiate.go](file://../../internal/pipeline/initiate.go)
+#### [MODIFY] [initiate.go](file://../../internal/pipeline/initiate.go)
 - Replace workspace scaffolding print statements with structured log lines.
 
 ### Dry-Run Compatibility (Task 5.37)
