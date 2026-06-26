@@ -152,11 +152,11 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
     *   Migrate default output and cache paths to use a dynamic home directory-based structure (`~/.local/share/pithos/`).
     *   Update config defaults and path resolution logic in Pithos pipeline to resolve relative paths under `~/.local/share/pithos/workspaces/`.
     *   [Implementation Plan](plans/phase_5/task_5_32_local_workspaces_structure.md)
-*   [ ] **Task 5.33: Interactive CLI Prompt Wizards via Survey**
-    *   Integrate `github.com/AlecAivazis/survey` for interactive user prompts.
-    *   Implement an interactive scaffolding wizard for `pithos initiate` when flags are omitted, prompting the user whether to perform visual guide brainstorming.
-    *   Implement interactive page multi-selection for selective redo in `pithos brew --pages`.
-    *   [Implementation Plan](plans/phase_5/task_5_33_interactive_survey_prompts.md)
+*   [ ] **Task 5.33: Interactive CLI Prompt Wizards via Huh**
+    *   Integrate `github.com/charmbracelet/huh` (Charm-native interactive form library, built on Bubbletea) for interactive user prompts, replacing the previously planned `AlecAivazis/survey` dependency.
+    *   Implement an interactive scaffolding wizard for `pithos initiate` when flags are omitted, using `huh.Form` with `NewSelect`, `NewInput`, and `NewConfirm` components.
+    *   Implement interactive page multi-selection for selective redo in `pithos brew --pages` via `huh.NewMultiSelect`.
+    *   [Implementation Plan](plans/phase_5/task_5_33_interactive_huh_prompts.md)
 *   [x] **Task 5.34: List Local Book Workspaces (pithos ls)**
     *   Implement a `pithos ls` CLI command to list all books in local workspace directories.
     *   Scan the workspace root directory, locate subdirectories containing `manifest.json`, and parse book details (Theme, Format, Milestones, and Cost).
@@ -203,6 +203,11 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
 *   [ ] **Task 5.45: Shell Autocompletion Support (Zsh/Oh-My-Zsh)**
     *   Implement Cobra autocompletion subcommands and automate Zsh/Oh-My-Zsh completion script setup via the `setup` command.
     *   [Implementation Plan](plans/phase_5/task_5_45_shell_completion.md)
+*   [ ] **Task 5.46: Structured Pipeline Logging via charmbracelet/log**
+    *   Integrate `github.com/charmbracelet/log` to replace raw `fmt.Printf` pipeline output with levelled, color-coded, structured log lines.
+    *   Configure log level at root command level (`--debug` flag), with automatic plain-text fallback for non-TTY/CI environments.
+    *   Emit structured key-value fields (page, model, cost) alongside human-readable messages during `brew`, `assemble`, and `initiate` pipeline stages.
+    *   [Implementation Plan](plans/phase_5/task_5_46_structured_logging_charm.md)
 
 
 
@@ -329,9 +334,24 @@ Focus: Evolving Pithos into a modular, outline-driven book generation tool for t
     *   [Implementation Plan](plans/phase_6/task_6_13_audiobook_tts_narrator.md)
 
 
+---
 
+## Phase 7: Speculative — Charm Ecosystem Enhancements
 
+> [!NOTE]
+> **This phase is speculative and deferred.** These tasks represent nice-to-have TUI/CLI polish that leverages the broader `github.com/charmbracelet` ecosystem. Do not begin any Phase 7 task until the core Phase 5 interactive review loop (Task 5.14) is complete and stable.
 
+Focus: Elevating the Pithos terminal experience from functional to polished, using the full Charm toolkit.
 
-
-
+*   [ ] **Task 7.1: Manuscript Markdown Rendering via Glamour**
+    *   Integrate `github.com/charmbracelet/glamour` to render `manuscript.md` review content with styled headings, stanza blocks, and emphasis directly in the terminal.
+    *   Embed rendered markdown in the Bubbletea review TUI viewport (Task 5.14) to replace raw plain-text display.
+    *   [Implementation Plan](plans/phase_7/task_7_1_glamour_markdown_rendering.md)
+*   [ ] **Task 7.2: Spring Animations for TUI Transitions via Harmonica**
+    *   Integrate `github.com/charmbracelet/harmonica` for physics-based spring animation in the Bubbletea review TUI.
+    *   Apply smooth animations to image preview panel entry, progress bar acceleration, and stanza editor focus transitions.
+    *   [Implementation Plan](plans/phase_7/task_7_2_harmonica_tui_animations.md)
+*   [ ] **Task 7.3: SSH-Based Remote Pipeline Status via Wish**
+    *   Integrate `github.com/charmbracelet/wish` to expose an optional, lightweight SSH server within the Pithos process.
+    *   Allow remote querying of live pipeline status (current page, cost, errors) from a secondary terminal session or monitoring script, as an alternative to the Lamplighter WebRTC approach (Task 5.1).
+    *   [Implementation Plan](plans/phase_7/task_7_3_wish_ssh_status_server.md)
