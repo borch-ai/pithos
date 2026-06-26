@@ -156,7 +156,7 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
     *   Integrate `github.com/charmbracelet/huh` (Charm-native interactive form library, built on Bubbletea) for interactive user prompts, replacing the previously planned `AlecAivazis/survey` dependency.
     *   Implement an interactive scaffolding wizard for `pithos initiate` when flags are omitted, using `huh.Form` with `NewSelect`, `NewInput`, and `NewConfirm` components.
     *   Implement interactive page multi-selection for selective redo in `pithos brew --pages` via `huh.NewMultiSelect`.
-    *   [Implementation Plan](plans/phase_5/task_5_33_interactive_survey_prompts.md)
+    *   [Implementation Plan](plans/phase_5/task_5_33_interactive_huh_prompts.md)
 *   [x] **Task 5.34: List Local Book Workspaces (pithos ls)**
     *   Implement a `pithos ls` CLI command to list all books in local workspace directories.
     *   Scan the workspace root directory, locate subdirectories containing `manifest.json`, and parse book details (Theme, Format, Milestones, and Cost).
