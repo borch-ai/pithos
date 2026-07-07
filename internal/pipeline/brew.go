@@ -1265,6 +1265,12 @@ func bootstrapCharacterReferenceWithClient(ctx context.Context, m *manifest.Mani
 		return fmt.Errorf("failed to generate character seed portrait: %w", err)
 	}
 
+	var pricing map[string]telemetry.ModelPricing
+	if config.Cfg != nil {
+		pricing = config.Cfg.Pricing
+	}
+	m.RecordImageGeneration(pricing)
+
 	ext := filepath.Ext(srcPath)
 	if ext == "" {
 		ext = ".png"
