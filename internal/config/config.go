@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"sync"
+
 	"github.com/borch-ai/powerword/pkg/telemetry"
 	"github.com/spf13/viper"
 )
@@ -23,6 +25,12 @@ type Config struct {
 	Telemetry      TelemetryConfig                   `mapstructure:"telemetry"`
 	Pricing        map[string]telemetry.ModelPricing `mapstructure:"pricing"`
 	Cloud          CloudConfig                       `mapstructure:"cloud"`
+	Budget         BudgetConfig                      `mapstructure:"budget"`
+}
+
+// BudgetConfig holds run budget limits to prevent overspend.
+type BudgetConfig struct {
+	MaxCostUSD float64 `mapstructure:"max_cost_usd"`
 }
 
 // MCPConfig holds paths to local Powerword MCP server binaries.
@@ -96,6 +104,7 @@ func LoadConfig(cfgFile string) (*Config, error) {
 	v.SetDefault("cloud.bucket", "")
 	v.SetDefault("cloud.credentials_path", "")
 	v.SetDefault("cloud.project_id", "")
+	v.SetDefault("budget.max_cost_usd", 5.00)
 
 	if cfgFile != "" {
 		v.SetConfigFile(cfgFile)
@@ -285,4 +294,26 @@ func expandTilde(path string) string {
 		}
 	}
 	return path
+}
+
+// cfgMu protects concurrent read/write accesses to global config variables.
+var cfgMu sync.RWMutex
+
+// GetMaxCostUSD reads MaxCostUSD thread-safely.
+func (c *Config) GetMaxCostUSD() float64 {
+	cfgMu.RLock()
+	defer cfgMu.RUnlock()
+	if c == nil {
+		return 0
+	}
+	return c.Budget.MaxCostUSD
+}
+
+// SetMaxCostUSD writes MaxCostUSD thread-safely.
+func (c *Config) SetMaxCostUSD(val float64) {
+	cfgMu.Lock()
+	defer cfgMu.Unlock()
+	if c != nil {
+		c.Budget.MaxCostUSD = val
+	}
 }

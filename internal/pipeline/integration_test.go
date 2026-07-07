@@ -17,6 +17,7 @@ import (
 	"github.com/borch-ai/pithos/internal/config"
 	"github.com/borch-ai/pithos/internal/manifest"
 	"github.com/borch-ai/powerword/pkg/gitutil"
+	"github.com/borch-ai/powerword/pkg/telemetry"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -745,5 +746,61 @@ func TestInitiate_Integration_Brainstorm(t *testing.T) {
 	}
 	if m.BookProperties.CharacterProfile != "integration astronaut dog" {
 		t.Errorf("expected character profile 'integration astronaut dog', got %q", m.BookProperties.CharacterProfile)
+	}
+}
+
+func TestBrew_Integration_OverBudget(t *testing.T) {
+	origCfg := config.Cfg
+	defer func() { config.Cfg = origCfg }()
+
+	tempDir := t.TempDir()
+
+	// Initialize workspace
+	optsInit := InitiateOptions{
+		OutputDir:       tempDir,
+		Theme:           "Integration Budget Theme",
+		TargetPageCount: 3,
+		NoBrainstorm:    true,
+	}
+	m, err := Initiate(optsInit)
+	if err != nil {
+		t.Fatalf("failed to initiate book: %v", err)
+	}
+	m.BookProperties.Style = "mock-style"
+	m.BookProperties.CharacterProfile = "mock-character-profile"
+	m.BookProperties.CharacterReferenceURL = "http://example.com/character.png"
+	if err = m.Save(); err != nil {
+		t.Fatalf("failed to save manifest: %v", err)
+	}
+
+	// Set low budget in config
+	config.Cfg = &config.Config{
+		Pricing: map[string]telemetry.ModelPricing{
+			"imagegen": {Input: 40000.00},
+		},
+		Budget: config.BudgetConfig{
+			MaxCostUSD: 0.05, // low budget
+		},
+	}
+
+	optsBrew := BrewOptions{
+		OutputDir: tempDir,
+		LLM:       &mockLLM{stanzas: []string{"S1", "S2", "S3"}},
+		Budget:    0.0, // fallback to config
+	}
+
+	oldIsTTY := isTTY
+	isTTY = func() bool { return false } // headless
+	defer func() { isTTY = oldIsTTY }()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err = Brew(ctx, optsBrew)
+	if err == nil {
+		t.Fatalf("expected budget exceeded error, got nil")
+	}
+	if !strings.Contains(err.Error(), "budget exceeded") {
+		t.Errorf("expected budget exceeded error, got: %v", err)
 	}
 }

@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"io"
 	"net/http"
 	"os"
@@ -16,7 +19,9 @@ import (
 	"github.com/borch-ai/pithos/internal/config"
 	"github.com/borch-ai/pithos/internal/manifest"
 	"github.com/borch-ai/pithos/internal/mcp"
+	"github.com/borch-ai/pithos/internal/ui"
 	"github.com/borch-ai/powerword/pkg/telemetry"
+	"github.com/charmbracelet/huh"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -31,11 +36,16 @@ type BrewOptions struct {
 	Concurrency       int
 	Review            bool
 	Pages             []int
+	Select            bool
 	Silent            bool
 	MCPTransport      mcpsdk.Transport // For testing
 	CloudMCPTransport mcpsdk.Transport // For testing
 	LLM               LLMClient        // For testing
 	HTTPClient        *http.Client     // For testing
+	In                io.Reader        // For testing
+	Out               io.Writer        // For testing
+	DryRun            bool
+	Budget            float64
 }
 
 // Brew executes the manuscript generation and page-by-page illustration generation.
@@ -47,10 +57,25 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 	}
 	opts.OutputDir = resolveBookPath(opts.OutputDir)
 
+	if len(opts.Pages) > 0 && opts.Select {
+		return errors.New("cannot specify both --pages and --select; please use one or the other")
+	}
+
 	manifestPath := filepath.Join(opts.OutputDir, "manifest.json")
 	m, err := manifest.LoadManifest(manifestPath)
 	if err != nil {
 		return fmt.Errorf("failed to load manifest from %s: %w", manifestPath, err)
+	}
+
+	if opts.Select {
+		selectedPages, err := handleSelectPages(m, opts)
+		if err != nil {
+			return err
+		}
+		if len(selectedPages) == 0 {
+			return nil
+		}
+		opts.Pages = selectedPages
 	}
 
 	// Validate and apply target pages redo/reset
@@ -99,6 +124,11 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 				return err
 			}
 		}
+	}
+
+	// Verify budget constraints
+	if err := checkBudget(m, &opts); err != nil {
+		return err
 	}
 
 	// 1. Generate manuscript text if not yet generated
@@ -151,13 +181,36 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 		pricing = config.Cfg.Pricing
 	}
 
-	fmt.Println("----------------------------------------")
-	fmt.Print(tracker.FormatSummary(pricing))
-	if m.Telemetry.ImageGenerations > 0 {
-		fmt.Printf("- Image Generations: %d\n", m.Telemetry.ImageGenerations)
+	if !isTTY() {
+		fmt.Println("----------------------------------------")
+		fmt.Print(tracker.FormatSummary(pricing))
+		if m.Telemetry.ImageGenerations > 0 {
+			fmt.Printf("- Image Generations: %d\n", m.Telemetry.ImageGenerations)
+		}
+		fmt.Printf("- Pipeline Total Cost: $%.5f\n", m.Telemetry.TotalCostUSD)
+		fmt.Println("----------------------------------------")
+		return nil
 	}
-	fmt.Printf("- Pipeline Total Cost: $%.5f\n", m.Telemetry.TotalCostUSD)
-	fmt.Println("----------------------------------------")
+
+	titleStyle := ui.HeaderStyle.Padding(0, 1)
+	boxStyle := ui.BoxStyle
+
+	var sb strings.Builder
+	summaryText := tracker.FormatSummary(pricing)
+	if summaryText != "" {
+		sb.WriteString(strings.TrimSpace(summaryText))
+		sb.WriteString("\n")
+	}
+	if m.Telemetry.ImageGenerations > 0 {
+		fmt.Fprintf(&sb, "- Image Generations: %d\n", m.Telemetry.ImageGenerations)
+	}
+
+	costStyle := ui.HighlightStyle
+	fmt.Fprintf(&sb, "- Pipeline Total Cost: %s", costStyle.Render(fmt.Sprintf("$%.5f", m.Telemetry.TotalCostUSD)))
+
+	titleStr := titleStyle.Render("TELEMETRY SUMMARY")
+	card := boxStyle.Render(titleStr + "\n\n" + sb.String())
+	fmt.Println(card)
 
 	return nil
 }
@@ -243,7 +296,7 @@ func generateAndRecordVisualGuides(ctx context.Context, m *manifest.Manifest, th
 	return nil
 }
 
-//nolint:funlen // Manuscript generation pipeline step handles LLM client setup, text generation, and recording telemetry
+//nolint:funlen,gocognit,nestif // Manuscript generation pipeline step handles LLM client setup, text generation, and recording telemetry
 func generateManuscript(ctx context.Context, m *manifest.Manifest, opts BrewOptions) error {
 	if m.Progress.ManuscriptGenerated {
 		return nil
@@ -264,20 +317,53 @@ func generateManuscript(ctx context.Context, m *manifest.Manifest, opts BrewOpti
 		m.BookProperties.TargetPageCount = 15
 	}
 
-	llmClient, err := setupLLMClient(opts)
-	if err != nil {
-		return err
-	}
+	var stanzas []string
+	var prompts []string
+	var tokenUsage telemetry.TokenUsage
+	var modelName string
 
-	if m.BookProperties.Style == "" || m.BookProperties.CharacterProfile == "" {
-		if err = generateAndRecordVisualGuides(ctx, m, theme, llmClient); err != nil {
+	if opts.DryRun {
+		if m.BookProperties.Style == "" {
+			m.BookProperties.Style = "Simulated style description"
+		}
+		if m.BookProperties.CharacterProfile == "" {
+			m.BookProperties.CharacterProfile = "Simulated character profile"
+		}
+		stanzas = make([]string, pageCount)
+		prompts = make([]string, pageCount)
+		for i := 0; i < pageCount; i++ {
+			stanzas[i] = fmt.Sprintf("This is page %d simulated stanza.", i+1)
+			prompts[i] = fmt.Sprintf("Illustration prompt for page %d", i+1)
+		}
+		tokenUsage = telemetry.TokenUsage{
+			InputTokens:  100,
+			OutputTokens: 200,
+		}
+		modelName = "simulated-model"
+	} else {
+		llmClient, err := setupLLMClient(opts)
+		if err != nil {
 			return err
 		}
-	}
 
-	stanzas, prompts, tokenUsage, err := llmClient.GenerateStanzas(ctx, theme, pageCount, m.BookProperties.Style, m.BookProperties.CharacterProfile)
-	if err != nil {
-		return fmt.Errorf("manuscript text generation failed: %w", err)
+		if m.BookProperties.Style == "" || m.BookProperties.CharacterProfile == "" {
+			if err = generateAndRecordVisualGuides(ctx, m, theme, llmClient); err != nil {
+				return err
+			}
+		}
+
+		var genErr error
+		stanzas, prompts, tokenUsage, genErr = llmClient.GenerateStanzas(ctx, theme, pageCount, m.BookProperties.Style, m.BookProperties.CharacterProfile)
+		if genErr != nil {
+			return fmt.Errorf("manuscript text generation failed: %w", genErr)
+		}
+
+		switch client := llmClient.(type) {
+		case *PowerwordClientAdapter:
+			modelName = client.modelName
+		default:
+			modelName = "unknown"
+		}
 	}
 
 	if len(stanzas) != pageCount {
@@ -299,15 +385,6 @@ func generateManuscript(ctx context.Context, m *manifest.Manifest, opts BrewOpti
 		}
 	}
 	m.Progress.ManuscriptGenerated = true
-
-	// Record token usage
-	var modelName string
-	switch client := llmClient.(type) {
-	case *PowerwordClientAdapter:
-		modelName = client.modelName
-	default:
-		modelName = "unknown"
-	}
 
 	var pricing map[string]telemetry.ModelPricing
 	if config.Cfg != nil {
@@ -346,6 +423,55 @@ func generateIllustrations(ctx context.Context, m *manifest.Manifest, opts BrewO
 	}
 
 	if len(pendingPages) == 0 {
+		return nil
+	}
+
+	if opts.DryRun {
+		if m.BookProperties.CharacterProfile != "" && m.BookProperties.CharacterReferenceURL == "" {
+			charSeedDest := filepath.Join(opts.OutputDir, "images", "character_seed.png")
+			if err := writeDummyPNG(charSeedDest); err != nil {
+				return fmt.Errorf("failed to write simulated character seed PNG: %w", err)
+			}
+			m.BookProperties.CharacterReferenceURL = "http://storage.googleapis.com/simulated-bucket/character_seed.png"
+			if err := m.Save(); err != nil {
+				return fmt.Errorf("failed to save manifest after setting character reference URL: %w", err)
+			}
+		}
+
+		for _, page := range pendingPages {
+			actualCost := m.GetTotalCost()
+			budget := 5.00
+			if opts.Budget > 0 {
+				budget = opts.Budget
+			} else if config.Cfg != nil {
+				if cfgMax := config.Cfg.GetMaxCostUSD(); cfgMax > 0 {
+					budget = cfgMax
+				}
+			}
+			if actualCost > budget {
+				return fmt.Errorf("budget exceeded during execution: actual cost $%.4f exceeds budget limit $%.4f", actualCost, budget)
+			}
+
+			if err := m.UpdatePageStatus(page.PageIndex, manifest.StatusGeneratingImages, ""); err != nil {
+				return fmt.Errorf("failed to update page %d status to generating: %w", page.PageIndex, err)
+			}
+			imgName := fmt.Sprintf("page_%d.png", page.PageIndex)
+			destPath := filepath.Join(opts.OutputDir, "images", imgName)
+			if err := writeDummyPNG(destPath); err != nil {
+				return fmt.Errorf("failed to write simulated page PNG: %w", err)
+			}
+
+			var pricing map[string]telemetry.ModelPricing
+			if config.Cfg != nil {
+				pricing = config.Cfg.Pricing
+			}
+			m.RecordImageGeneration(pricing)
+
+			relPath := filepath.Join("images", imgName)
+			if err := m.UpdatePageStatus(page.PageIndex, manifest.StatusCompleted, relPath); err != nil {
+				return fmt.Errorf("failed to update page %d status to completed: %w", page.PageIndex, err)
+			}
+		}
 		return nil
 	}
 
@@ -396,7 +522,7 @@ func generateIllustrations(ctx context.Context, m *manifest.Manifest, opts BrewO
 		}
 	} else {
 		// Bootstrap Character Seed Portrait (starts and stops its own client with charBackend)
-		if err := BootstrapCharacterReference(ctx, m, opts.OutputDir, opts.MCPTransport, opts.CloudMCPTransport, charBackend); err != nil {
+		if err := BootstrapCharacterReference(ctx, m, opts.OutputDir, opts.MCPTransport, opts.CloudMCPTransport, charBackend, opts.DryRun); err != nil {
 			return err
 		}
 
@@ -441,13 +567,48 @@ func generateIllustrations(ctx context.Context, m *manifest.Manifest, opts BrewO
 	var errsMu sync.Mutex
 	var workerErrors []error
 
+	brewCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 Loop:
 	for _, page := range pendingPages {
+		// Compute per-image cost for look-ahead budget check
+		var pricing map[string]telemetry.ModelPricing
+		if config.Cfg != nil {
+			pricing = config.Cfg.Pricing
+		}
+		imageCost := 0.04
+		if pricing != nil {
+			if p, ok := pricing["imagegen"]; ok {
+				imageCost = p.Input / 1_000_000.0
+			}
+		}
+
+		// Check budget limit dynamically before dispatching each worker.
+		// Use a look-ahead (actualCost + imageCost) so concurrent goroutines
+		// can't collectively overspend by more than one image's worth.
+		actualCost := m.GetTotalCost()
+		budget := 5.00
+		if opts.Budget > 0 {
+			budget = opts.Budget
+		} else if config.Cfg != nil {
+			if cfgMax := config.Cfg.GetMaxCostUSD(); cfgMax > 0 {
+				budget = cfgMax
+			}
+		}
+		if actualCost+imageCost > budget {
+			errsMu.Lock()
+			workerErrors = append(workerErrors, fmt.Errorf("budget exceeded during execution: actual cost $%.4f exceeds budget limit $%.4f", actualCost, budget))
+			errsMu.Unlock()
+			cancel()
+			break Loop
+		}
+
 		select {
 		case sem <- struct{}{}:
-		case <-ctx.Done():
+		case <-brewCtx.Done():
 			errsMu.Lock()
-			workerErrors = append(workerErrors, ctx.Err())
+			workerErrors = append(workerErrors, brewCtx.Err())
 			errsMu.Unlock()
 			break Loop
 		}
@@ -456,6 +617,26 @@ Loop:
 		go func(p *manifest.PageState) {
 			defer wg.Done()
 			defer func() { <-sem }()
+
+			// Check live budget limit before doing work
+			actualCost := m.GetTotalCost()
+			budget := 5.00
+			if opts.Budget > 0 {
+				budget = opts.Budget
+			} else if config.Cfg != nil {
+				if cfgMax := config.Cfg.GetMaxCostUSD(); cfgMax > 0 {
+					budget = cfgMax
+				}
+			}
+			if actualCost > budget {
+				errsMu.Lock()
+				workerErrors = append(workerErrors, fmt.Errorf("budget exceeded: actual cost $%.4f exceeds budget limit $%.4f", actualCost, budget))
+				errsMu.Unlock()
+				// Revert to pending
+				_ = m.UpdatePageStatus(p.PageIndex, manifest.StatusPending, "")
+				cancel()
+				return
+			}
 
 			// 1. Update status to generating
 			if err := m.UpdatePageStatus(p.PageIndex, manifest.StatusGeneratingImages, ""); err != nil {
@@ -483,7 +664,7 @@ Loop:
 				charWeight = &w
 			}
 			imageSize := getBestImageSize(m.BookProperties.TrimSize)
-			imgPath, err := generateSingleImage(ctx, mcpClient, p.PageIndex, prompt, styleID, opts.OutputDir, imageSize, m.BookProperties.CharacterReferenceURL, charWeight)
+			imgPath, err := generateSingleImage(brewCtx, mcpClient, p.PageIndex, prompt, styleID, opts.OutputDir, imageSize, m.BookProperties.CharacterReferenceURL, charWeight)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error generating image for page %d: %v\n", p.PageIndex, err)
 				// Revert to pending
@@ -1025,9 +1206,18 @@ func getBestImageSize(trimSize string) string {
 }
 
 // BootstrapCharacterReference generates character seed portrait using the specified character backend.
-func BootstrapCharacterReference(ctx context.Context, m *manifest.Manifest, outputDir string, mcpTransport mcpsdk.Transport, cloudMCPTransport mcpsdk.Transport, backend string) error {
+func BootstrapCharacterReference(ctx context.Context, m *manifest.Manifest, outputDir string, mcpTransport mcpsdk.Transport, cloudMCPTransport mcpsdk.Transport, backend string, dryRun bool) error {
 	if m.BookProperties.CharacterReferenceURL != "" || m.BookProperties.CharacterProfile == "" {
 		return nil
+	}
+
+	if dryRun {
+		charSeedDest := filepath.Join(outputDir, "images", "character_seed.png")
+		if err := writeDummyPNG(charSeedDest); err != nil {
+			return fmt.Errorf("failed to write simulated character seed PNG: %w", err)
+		}
+		m.BookProperties.CharacterReferenceURL = "http://storage.googleapis.com/simulated-bucket/character_seed.png"
+		return m.Save()
 	}
 
 	if backend != "" {
@@ -1088,6 +1278,12 @@ func bootstrapCharacterReferenceWithClient(ctx context.Context, m *manifest.Mani
 	if err != nil {
 		return fmt.Errorf("failed to generate character seed portrait: %w", err)
 	}
+
+	var pricing map[string]telemetry.ModelPricing
+	if config.Cfg != nil {
+		pricing = config.Cfg.Pricing
+	}
+	m.RecordImageGeneration(pricing)
 
 	ext := filepath.Ext(srcPath)
 	if ext == "" {
@@ -1178,5 +1374,226 @@ func checkBackendCapabilities(ctx context.Context, mcpClient *mcp.PluginClient, 
 		return fmt.Errorf("active imagegen backend [%s] does not support character references, but a character profile is defined; switch backend to midjourney or clean manifest character properties", caps.Backend)
 	}
 
+	return nil
+}
+
+var isTTY = func() bool {
+	fi, err := os.Stdout.Stat()
+	if err != nil {
+		return false
+	}
+	return fi.Mode()&os.ModeCharDevice != 0
+}
+
+func truncate(s string, maxLen int) string {
+	s = strings.ReplaceAll(s, "\n", " ")
+	s = strings.ReplaceAll(s, "\r", "")
+	if maxLen < 3 {
+		maxLen = 3
+	}
+	runes := []rune(s)
+	if len(runes) > maxLen {
+		return string(runes[:maxLen-3]) + "..."
+	}
+	return s
+}
+
+func promptSelectPages(m *manifest.Manifest, opts BrewOptions) ([]int, error) {
+	if !isTTY() {
+		return nil, errors.New("interactive selection requires a TTY terminal")
+	}
+	var selectedPages []int
+	var options []huh.Option[int]
+	for _, page := range m.Progress.Pages {
+		label := fmt.Sprintf("Page %d (%s): %s", page.PageIndex, page.Status, truncate(page.Text, 50))
+		options = append(options, huh.NewOption(label, page.PageIndex).Selected(page.Status != manifest.StatusCompleted))
+	}
+	if len(options) == 0 {
+		return nil, errors.New("no pages found in manifest to select")
+	}
+
+	in := opts.In
+	if in == nil {
+		in = os.Stdin
+	}
+	out := opts.Out
+	if out == nil {
+		out = os.Stdout
+	}
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewMultiSelect[int]().
+				Title("Select Pages to Brew/Regenerate").
+				Description("Use Space to toggle, Enter to confirm").
+				Options(options...).
+				Value(&selectedPages),
+		),
+	).WithInput(in).WithOutput(out)
+	form.WithAccessible(opts.In != nil)
+
+	if err := form.Run(); err != nil {
+		return nil, err
+	}
+
+	return selectedPages, nil
+}
+
+// handleSelectPages prompts the user to select pages, handles empty selections gracefully,
+// and returns the chosen page indices.
+func handleSelectPages(m *manifest.Manifest, opts BrewOptions) ([]int, error) {
+	selectedPages, err := promptSelectPages(m, opts)
+	if err != nil {
+		return nil, err
+	}
+	if len(selectedPages) == 0 {
+		out := opts.Out
+		if out == nil {
+			out = os.Stdout
+		}
+		_, _ = fmt.Fprintln(out, "No pages selected. Exiting.")
+	}
+	return selectedPages, nil
+}
+
+// writeDummyPNG creates a minimal valid PNG at destPath.
+func writeDummyPNG(destPath string) error {
+	dir := filepath.Dir(destPath)
+	if err := os.MkdirAll(dir, 0750); err != nil {
+		return fmt.Errorf("failed to create directory structure for dummy PNG: %w", err)
+	}
+	img := image.NewRGBA(image.Rect(0, 0, 1, 1))
+	img.Set(0, 0, color.RGBA{R: 200, G: 200, B: 200, A: 255})
+	//nolint:gosec // destPath is validated temporary/workspace destination
+	f, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = f.Close() }()
+	return png.Encode(f, img)
+}
+
+// checkBudget estimates cost of run and prompts/aborts if it exceeds configured/requested budget limit.
+// estimateCost estimates the expected cost for images and LLM stanzas for the current run.
+// countPendingImages counts the number of pages that still need illustration generations.
+func countPendingImages(m *manifest.Manifest, opts *BrewOptions) int {
+	var allowedPages map[int]bool
+	if len(opts.Pages) > 0 {
+		allowedPages = make(map[int]bool, len(opts.Pages))
+		for _, pIdx := range opts.Pages {
+			allowedPages[pIdx] = true
+		}
+	}
+	expectedImageCount := 0
+	for _, page := range m.Progress.Pages {
+		if allowedPages != nil && !allowedPages[page.PageIndex] {
+			continue
+		}
+		if page.Status != manifest.StatusCompleted || page.ImagePath == "" {
+			expectedImageCount++
+		}
+	}
+	return expectedImageCount
+}
+
+// estimateCost estimates the expected cost for images and LLM stanzas for the current run.
+func estimateCost(m *manifest.Manifest, opts *BrewOptions) (float64, float64) {
+	var pricing map[string]telemetry.ModelPricing
+	if config.Cfg != nil {
+		pricing = config.Cfg.Pricing
+	}
+
+	imageCost := 0.04
+	if pricing != nil {
+		if p, ok := pricing["imagegen"]; ok {
+			imageCost = p.Input / 1_000_000.0
+		}
+	}
+
+	expectedImageCount := 0
+	if !m.Progress.ManuscriptGenerated {
+		expectedImageCount = m.BookProperties.TargetPageCount
+		if expectedImageCount <= 0 {
+			expectedImageCount = 15
+		}
+	} else {
+		expectedImageCount = countPendingImages(m, opts)
+	}
+
+	if m.BookProperties.CharacterProfile != "" && m.BookProperties.CharacterReferenceURL == "" {
+		expectedImageCount++
+	}
+
+	expectedImageCost := float64(expectedImageCount) * imageCost
+
+	expectedLlmCost := 0.0
+	if !m.Progress.ManuscriptGenerated {
+		expectedLlmCost = 0.01
+	}
+
+	return expectedImageCost, expectedLlmCost
+}
+
+// checkBudget estimates cost of run and prompts/aborts if it exceeds configured/requested budget limit.
+func checkBudget(m *manifest.Manifest, opts *BrewOptions) error {
+	expectedImageCost, expectedLlmCost := estimateCost(m, opts)
+
+	currentCost := m.GetTotalCost()
+	totalEstimatedCost := currentCost + expectedImageCost + expectedLlmCost
+
+	budget := 5.00
+	if opts.Budget > 0 {
+		budget = opts.Budget
+	} else if config.Cfg != nil {
+		if cfgMax := config.Cfg.GetMaxCostUSD(); cfgMax > 0 {
+			budget = cfgMax
+		}
+	}
+
+	if totalEstimatedCost <= budget {
+		return nil
+	}
+
+	out := opts.Out
+	if out == nil {
+		out = os.Stdout
+	}
+
+	// Print warnings
+	warnTitle := ui.FailStyle.Render("⚠️  BUDGET WARNING: The estimated cost of this run exceeds your budget limit.")
+	_, _ = fmt.Fprintln(out, warnTitle)
+	_, _ = fmt.Fprintf(out, "  Current Cost:              $%.4f\n", currentCost)
+	_, _ = fmt.Fprintf(out, "  Estimated Additional Cost: $%.4f\n", expectedImageCost+expectedLlmCost)
+	_, _ = fmt.Fprintf(out, "  Total Estimated Cost:      $%.4f\n", totalEstimatedCost)
+	_, _ = fmt.Fprintf(out, "  Budget Limit:              $%.4f\n", budget)
+	_, _ = fmt.Fprintf(out, "  Excess Cost:               $%.4f\n\n", totalEstimatedCost-budget)
+
+	if !isTTY() || opts.Silent {
+		return fmt.Errorf("budget exceeded: estimated cost $%.4f exceeds budget limit $%.4f", totalEstimatedCost, budget)
+	}
+
+	in := opts.In
+	if in == nil {
+		in = os.Stdin
+	}
+
+	var proceed bool
+	confirm := huh.NewConfirm().
+		Title("Do you want to proceed anyway?").
+		Value(&proceed).
+		WithTheme(huh.ThemeCharm())
+
+	form := huh.NewForm(huh.NewGroup(confirm)).WithInput(in).WithOutput(out)
+	form.WithAccessible(opts.In != nil)
+	if err := form.Run(); err != nil {
+		return fmt.Errorf("prompt error: %w", err)
+	}
+
+	if !proceed {
+		return fmt.Errorf("run aborted: estimated cost $%.4f exceeds budget limit $%.4f", totalEstimatedCost, budget)
+	}
+
+	_, _ = fmt.Fprintln(out, ui.SuccessStyle.Render("Proceeding with custom budget override for this run."))
+	opts.Budget = totalEstimatedCost
 	return nil
 }

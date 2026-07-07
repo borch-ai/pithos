@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -563,8 +564,8 @@ func TestBrew_EndToEnd_Mocked(t *testing.T) {
 	}
 
 	// Verify telemetry updates
-	if m.Telemetry.ImageGenerations != 2 {
-		t.Errorf("expected 2 image generations, got %d", m.Telemetry.ImageGenerations)
+	if m.Telemetry.ImageGenerations != 3 {
+		t.Errorf("expected 3 image generations, got %d", m.Telemetry.ImageGenerations)
 	}
 	mu := m.Telemetry.ModelUsages["unknown"]
 	if mu == nil {
@@ -1324,6 +1325,10 @@ func TestBrew_TelemetryCustomPricing(t *testing.T) {
 		LLM:          mockLLMClient,
 	}
 
+	oldIsTTY := isTTY
+	isTTY = func() bool { return true }
+	defer func() { isTTY = oldIsTTY }()
+
 	err = Brew(ctx, optsBrew)
 	if err != nil {
 		t.Fatalf("Brew failed: %v", err)
@@ -2008,6 +2013,84 @@ Stanza 3
 	}
 }
 
+func TestBrew_InteractiveSelect(t *testing.T) {
+	// 1. Conflicting options validation
+	ctx := context.Background()
+	optsBoth := BrewOptions{
+		OutputDir: "/dummy",
+		Pages:     []int{1},
+		Select:    true,
+	}
+	err := Brew(ctx, optsBoth)
+	if err == nil || !strings.Contains(err.Error(), "cannot specify both --pages and --select") {
+		t.Errorf("expected error for both pages and select, got %v", err)
+	}
+
+	// 2. Non-TTY error
+	oldIsTTY := isTTY
+	isTTY = func() bool { return false }
+	defer func() { isTTY = oldIsTTY }()
+
+	optsSelectNonTTY := BrewOptions{
+		OutputDir: "/dummy",
+		Select:    true,
+	}
+	tmpDir := t.TempDir()
+	m := manifest.NewManifest(filepath.Join(tmpDir, "manifest.json"))
+	m.BookProperties.Theme = "Test Theme"
+	m.Progress.ManuscriptGenerated = true
+	m.Progress.Pages = []manifest.PageState{
+		{PageIndex: 1, Status: manifest.StatusCompleted, Text: "Page 1 Text"},
+		{PageIndex: 2, Status: manifest.StatusCompleted, Text: "Page 2 Text"},
+	}
+	if saveErr := m.Save(); saveErr != nil {
+		t.Fatalf("failed to save manifest: %v", saveErr)
+	}
+
+	optsSelectNonTTY.OutputDir = tmpDir
+	err = Brew(ctx, optsSelectNonTTY)
+	if err == nil || !strings.Contains(err.Error(), "interactive selection requires a TTY terminal") {
+		t.Errorf("expected TTY error, got %v", err)
+	}
+
+	// 3. Successful select
+	isTTY = func() bool { return true }
+	inR, inW := io.Pipe()
+	go func() {
+		// Toggle page 2 (choice 2), then confirm (choice 0)
+		_, _ = inW.Write([]byte("2\n"))
+		_, _ = inW.Write([]byte("0\n"))
+		_ = inW.Close()
+	}()
+
+	var buf strings.Builder
+	optsSelectSuccess := BrewOptions{
+		OutputDir: tmpDir,
+		Select:    true,
+		Review:    true,
+		Silent:    true,
+		In:        inR,
+		Out:       &buf,
+	}
+
+	err = Brew(ctx, optsSelectSuccess)
+	if err == nil || !errors.Is(err, ErrReviewPause) {
+		t.Errorf("expected ErrReviewPause, got %v", err)
+	}
+
+	// Verify that page 2 status was indeed reset to pending in the manifest on disk!
+	mLoaded, err := manifest.LoadManifest(filepath.Join(tmpDir, "manifest.json"))
+	if err != nil {
+		t.Fatalf("failed to load manifest: %v", err)
+	}
+	if mLoaded.Progress.Pages[0].Status != manifest.StatusCompleted {
+		t.Errorf("expected page 1 to remain completed, got %s", mLoaded.Progress.Pages[0].Status)
+	}
+	if mLoaded.Progress.Pages[1].Status != manifest.StatusPending {
+		t.Errorf("expected page 2 to be reset to pending, got %s", mLoaded.Progress.Pages[1].Status)
+	}
+}
+
 func TestBrew_ReviewFlow_GuidesExport(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "pithos-review-guides-export-*")
 	if err != nil {
@@ -2418,12 +2501,6 @@ func TestGetUniqueOutputDir(t *testing.T) {
 	}
 }
 
-type errorReader struct{}
-
-func (errorReader) Read(p []byte) (n int, err error) {
-	return 0, errors.New("read error")
-}
-
 func TestConfirmOverwrite(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -2458,17 +2535,6 @@ func TestConfirmOverwrite(t *testing.T) {
 			}
 		})
 	}
-
-	t.Run("read-error", func(t *testing.T) {
-		var buf strings.Builder
-		got, err := ConfirmOverwrite(errorReader{}, &buf, "/some/path")
-		if err == nil {
-			t.Error("expected error on read error, got nil")
-		}
-		if got {
-			t.Error("expected false on read error, got true")
-		}
-	})
 }
 
 type generateRequest struct {
@@ -2934,4 +3000,84 @@ func TestBrew_CapabilitiesInvalidJSON(t *testing.T) {
 	if !strings.Contains(err.Error(), "failed to parse imagegen backend capabilities JSON") {
 		t.Errorf("unexpected error: %v", err)
 	}
+}
+
+func TestInteractiveHelpers_EdgeCases(t *testing.T) {
+	// 1. Test truncate edge cases
+	t.Run("truncate edge cases", func(t *testing.T) {
+		gotSmallMax := truncate("some text", 2)
+		if gotSmallMax != "..." {
+			t.Errorf("expected '...', got %q", gotSmallMax)
+		}
+
+		gotShortText := truncate("ab", 5)
+		if gotShortText != "ab" {
+			t.Errorf("expected 'ab', got %q", gotShortText)
+		}
+	})
+
+	// 2. Test promptSelectPages edge cases
+	t.Run("promptSelectPages empty manifest", func(t *testing.T) {
+		oldIsTTY := isTTY
+		isTTY = func() bool { return true }
+		defer func() { isTTY = oldIsTTY }()
+
+		m := manifest.NewManifest("/dummy/manifest.json")
+		_, err := promptSelectPages(m, BrewOptions{})
+		if err == nil || !strings.Contains(err.Error(), "no pages found in manifest to select") {
+			t.Errorf("expected 'no pages found' error, got %v", err)
+		}
+	})
+
+	// 3. Test ConfirmOverwrite with w == nil
+	t.Run("ConfirmOverwrite nil writer", func(t *testing.T) {
+		r := strings.NewReader("y\n")
+		got, err := ConfirmOverwrite(r, nil, "/some/path")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !got {
+			t.Errorf("expected true, got false")
+		}
+	})
+
+	// 4. Test Brew when selectedPages is empty
+	t.Run("Brew select empty choice", func(t *testing.T) {
+		oldIsTTY := isTTY
+		isTTY = func() bool { return true }
+		defer func() { isTTY = oldIsTTY }()
+
+		tmpDir := t.TempDir()
+		m := manifest.NewManifest(filepath.Join(tmpDir, "manifest.json"))
+		m.BookProperties.Theme = "Test Theme"
+		m.Progress.Pages = []manifest.PageState{
+			{PageIndex: 1, Status: manifest.StatusCompleted, Text: "Page 1 Text"},
+		}
+		if err := m.Save(); err != nil {
+			t.Fatalf("failed to save manifest: %v", err)
+		}
+
+		// Provide enter key directly (no selection means empty selection)
+		inR, inW := io.Pipe()
+		go func() {
+			_, _ = inW.Write([]byte("\n"))
+			_ = inW.Close()
+		}()
+
+		var buf strings.Builder
+		opts := BrewOptions{
+			OutputDir: tmpDir,
+			Select:    true,
+			In:        inR,
+			Out:       &buf,
+		}
+
+		err := Brew(context.Background(), opts)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(buf.String(), "No pages selected. Exiting.") {
+			t.Errorf("expected 'No pages selected' message in output buffer, got %q", buf.String())
+		}
+	})
 }

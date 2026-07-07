@@ -1,7 +1,6 @@
 package pipeline
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -9,9 +8,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/borch-ai/pithos/internal/manifest"
+	"github.com/charmbracelet/huh"
 )
 
 // InitiateOptions contains configuration fields for initializing a book workspace.
@@ -27,6 +26,7 @@ type InitiateOptions struct {
 	LLM                 LLMClient
 	HTTPClient          *http.Client
 	Context             context.Context
+	DryRun              bool
 }
 
 // Initiate scaffolds a new book project directory structure and writes the initial manifest.json.
@@ -116,18 +116,40 @@ func GetUniqueOutputDir(baseDir string) string {
 
 // ConfirmOverwrite prompts the user via r/w to confirm overwriting an existing directory.
 func ConfirmOverwrite(r io.Reader, w io.Writer, path string) (bool, error) {
-	_, _ = fmt.Fprintf(w, "The output directory %s already exists. Are you sure you want to reuse this directory and overwrite its manifest.json? (y/N): ", path)
-	reader := bufio.NewReader(r)
-	response, err := reader.ReadString('\n')
-	if err != nil && err != io.EOF {
+	if r == nil {
+		r = os.Stdin
+	}
+	if w == nil {
+		w = os.Stdout
+	}
+
+	var confirm bool
+	f := huh.NewConfirm().
+		Title(fmt.Sprintf("Directory %s already exists. overwrite?", path)).
+		Description("Are you sure you want to reuse this directory and overwrite its manifest.json?").
+		Value(&confirm)
+
+	form := huh.NewForm(huh.NewGroup(f)).WithInput(r).WithOutput(w)
+	form.WithAccessible(r != os.Stdin || !isTTY())
+
+	if err := form.Run(); err != nil {
 		return false, err
 	}
-	response = strings.ToLower(strings.TrimSpace(response))
-	return response == "y" || response == "yes", nil
+	return confirm, nil
 }
 
 func brainstormVisualGuides(ctx context.Context, m *manifest.Manifest, opts InitiateOptions) error {
 	if opts.NoBrainstorm || opts.Theme == "" {
+		return nil
+	}
+
+	if opts.DryRun {
+		if m.BookProperties.Style == "" {
+			m.BookProperties.Style = "Simulated style description"
+		}
+		if m.BookProperties.CharacterProfile == "" {
+			m.BookProperties.CharacterProfile = "Simulated character profile"
+		}
 		return nil
 	}
 

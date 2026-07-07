@@ -414,6 +414,13 @@ func (m *Manifest) UpdateTotalCost(pricing map[string]telemetry.ModelPricing) {
 	m.updateTotalCostLocked(pricing)
 }
 
+// GetTotalCost returns the accumulated total cost USD thread-safely.
+func (m *Manifest) GetTotalCost() float64 {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.Telemetry.TotalCostUSD
+}
+
 // updateTotalCostLocked computes the total cost USD without acquiring the lock (expects lock to be held).
 func (m *Manifest) updateTotalCostLocked(pricing map[string]telemetry.ModelPricing) {
 	tracker := telemetry.NewUsageTracker()
