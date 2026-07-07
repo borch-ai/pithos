@@ -63,12 +63,11 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 	}
 
 	if opts.Select {
-		selectedPages, err := promptSelectPages(m, opts)
+		selectedPages, err := handleSelectPages(m, opts)
 		if err != nil {
 			return err
 		}
 		if len(selectedPages) == 0 {
-			fmt.Println("No pages selected. Exiting.")
 			return nil
 		}
 		opts.Pages = selectedPages
@@ -1236,8 +1235,12 @@ var isTTY = func() bool {
 func truncate(s string, maxLen int) string {
 	s = strings.ReplaceAll(s, "\n", " ")
 	s = strings.ReplaceAll(s, "\r", "")
-	if len(s) > maxLen {
-		return s[:maxLen-3] + "..."
+	if maxLen < 3 {
+		maxLen = 3
+	}
+	runes := []rune(s)
+	if len(runes) > maxLen {
+		return string(runes[:maxLen-3]) + "..."
 	}
 	return s
 }
@@ -1274,11 +1277,28 @@ func promptSelectPages(m *manifest.Manifest, opts BrewOptions) ([]int, error) {
 				Value(&selectedPages),
 		),
 	).WithInput(in).WithOutput(out)
-	form.WithAccessible(opts.In != nil || !isTTY())
+	form.WithAccessible(opts.In != nil)
 
 	if err := form.Run(); err != nil {
 		return nil, err
 	}
 
+	return selectedPages, nil
+}
+
+// handleSelectPages prompts the user to select pages, handles empty selections gracefully,
+// and returns the chosen page indices.
+func handleSelectPages(m *manifest.Manifest, opts BrewOptions) ([]int, error) {
+	selectedPages, err := promptSelectPages(m, opts)
+	if err != nil {
+		return nil, err
+	}
+	if len(selectedPages) == 0 {
+		out := opts.Out
+		if out == nil {
+			out = os.Stdout
+		}
+		_, _ = fmt.Fprintln(out, "No pages selected. Exiting.")
+	}
 	return selectedPages, nil
 }

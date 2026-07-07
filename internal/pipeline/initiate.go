@@ -115,10 +115,11 @@ func GetUniqueOutputDir(baseDir string) string {
 
 // ConfirmOverwrite prompts the user via r/w to confirm overwriting an existing directory.
 func ConfirmOverwrite(r io.Reader, w io.Writer, path string) (bool, error) {
-	if r != nil {
-		if _, err := r.Read(make([]byte, 0)); err != nil {
-			return false, err
-		}
+	if r == nil {
+		r = os.Stdin
+	}
+	if w == nil {
+		w = os.Stdout
 	}
 
 	var confirm bool
