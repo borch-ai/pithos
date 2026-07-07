@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/borch-ai/pithos/internal/config"
+	"github.com/borch-ai/pithos/internal/logger"
 	"github.com/borch-ai/pithos/internal/manifest"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -54,7 +54,7 @@ func GenerateCharacterSeed(ctx context.Context, opts CharacterOptions) error {
 	}
 
 	if previewErr := GenerateWebPreview(opts.OutputDir, m); previewErr != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to generate web preview: %v\n", previewErr)
+		logger.Warn("Failed to generate web preview", "error", previewErr)
 	}
 
 	return nil

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/borch-ai/pithos/internal/logger"
 	"github.com/borch-ai/powerword/pkg/gitutil"
 )
 
@@ -16,7 +17,7 @@ import (
 func Checkpoint(ctx context.Context, dir string, message string) error {
 	// 1. Checks if the system has git in PATH. If not, outputs a warning and returns nil.
 	if _, err := exec.LookPath("git"); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: 'git' executable not found in PATH; skipping checkpointing: %v\n", err)
+		logger.Warn("git executable not found in PATH; skipping checkpointing", "error", err)
 		return nil
 	}
 

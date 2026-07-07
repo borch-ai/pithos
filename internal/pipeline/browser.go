@@ -2,13 +2,14 @@ package pipeline
 
 import (
 	"context"
-	"fmt"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/borch-ai/pithos/internal/logger"
 )
 
 var (
@@ -67,7 +68,7 @@ func openBrowser(ctx context.Context, urlStr string) error {
 
 func triggerBrowserOpen(ctx context.Context, urlStr string) {
 	if err := openBrowser(ctx, urlStr); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to automatically open browser preview: %v\n", err)
+		logger.Warn("Failed to automatically open browser preview", "error", err)
 	}
 }
 
