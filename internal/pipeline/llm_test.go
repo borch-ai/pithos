@@ -32,6 +32,10 @@ func (m *mockPWClient) ListModels(ctx context.Context) ([]string, error) {
 	return nil, nil
 }
 
+func (m *mockPWClient) Embed(ctx context.Context, texts []string) ([][]float32, error) {
+	return nil, nil
+}
+
 func TestPowerwordClientAdapter_GenerateStanzas_Success(t *testing.T) {
 	mockMsg := &llm.Message{
 		Role:    llm.RoleAssistant,

@@ -64,6 +64,10 @@ func (m *mockPowerwordLLM) ListModels(ctx context.Context) ([]string, error) {
 	return nil, nil
 }
 
+func (m *mockPowerwordLLM) Embed(ctx context.Context, texts []string) ([][]float32, error) {
+	return nil, nil
+}
+
 func TestDoctor_NilConfig(t *testing.T) {
 	origCfg := config.Cfg
 	config.Cfg = nil

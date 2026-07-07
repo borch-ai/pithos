@@ -17,6 +17,7 @@ import (
 	"sync"
 
 	"github.com/borch-ai/pithos/internal/config"
+	"github.com/borch-ai/pithos/internal/logger"
 	"github.com/borch-ai/pithos/internal/manifest"
 	"github.com/borch-ai/pithos/internal/mcp"
 	"github.com/borch-ai/pithos/internal/ui"
@@ -119,7 +120,7 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 			return importErr
 		}
 		if changed {
-			fmt.Println("Successfully imported edits from manuscript.md.")
+			logger.Info("Successfully imported edits from manuscript.md")
 			if err := Checkpoint(ctx, opts.OutputDir, "Imported manuscript edits from review"); err != nil {
 				return err
 			}
@@ -154,11 +155,11 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 	}
 
 	if previewErr := GenerateWebPreview(opts.OutputDir, m); previewErr != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to generate web preview: %v\n", previewErr)
+		logger.Warn("Failed to generate web preview", "error", previewErr)
 	} else {
 		previewPath := filepath.Join(opts.OutputDir, "web_preview", "preview.html")
 		urlStr := formatFileURL(previewPath)
-		fmt.Printf("\nWeb preview generated: open %s in your browser to flip through the book!\n\n", urlStr)
+		logger.Info("Web preview generated", "url", urlStr)
 		if !opts.Silent {
 			triggerBrowserOpen(ctx, urlStr)
 		}
@@ -230,11 +231,11 @@ func handleReviewCheckpoint(ctx context.Context, opts BrewOptions, m *manifest.M
 	}
 
 	if previewErr := GenerateWebPreview(opts.OutputDir, m); previewErr != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to generate web preview: %v\n", previewErr)
+		logger.Warn("Failed to generate web preview", "error", previewErr)
 	} else {
 		previewPath := filepath.Join(opts.OutputDir, "web_preview", "preview.html")
 		urlStr := formatFileURL(previewPath)
-		fmt.Printf("\nWeb preview generated: open %s in your browser to flip through the book!\n\n", urlStr)
+		logger.Info("Web preview generated", "url", urlStr)
 		if !opts.Silent {
 			triggerBrowserOpen(ctx, urlStr)
 		}
@@ -666,10 +667,10 @@ Loop:
 			imageSize := getBestImageSize(m.BookProperties.TrimSize)
 			imgPath, err := generateSingleImage(brewCtx, mcpClient, p.PageIndex, prompt, styleID, opts.OutputDir, imageSize, m.BookProperties.CharacterReferenceURL, charWeight)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error generating image for page %d: %v\n", p.PageIndex, err)
+				logger.Error("Error generating image", "page", p.PageIndex, "error", err)
 				// Revert to pending
 				if revertErr := m.UpdatePageStatus(p.PageIndex, manifest.StatusPending, ""); revertErr != nil {
-					fmt.Fprintf(os.Stderr, "Error reverting page %d status: %v\n", p.PageIndex, revertErr)
+					logger.Error("Error reverting page status", "page", p.PageIndex, "error", revertErr)
 				}
 				errsMu.Lock()
 				workerErrors = append(workerErrors, err)
@@ -1273,7 +1274,7 @@ func bootstrapCharacterReferenceWithClient(ctx context.Context, m *manifest.Mani
 	seedPrompt := "Detailed visual seed character portrait: " + m.BookProperties.CharacterProfile
 	imageSize := getBestImageSize(m.BookProperties.TrimSize)
 
-	fmt.Println("Generating character seed portrait...")
+	logger.Info("Generating character seed portrait...")
 	srcPath, err := generateImageRaw(ctx, mcpClient, seedPrompt, actualStyleID, imageSize, "", nil)
 	if err != nil {
 		return fmt.Errorf("failed to generate character seed portrait: %w", err)
@@ -1302,7 +1303,7 @@ func bootstrapCharacterReferenceWithClient(ctx context.Context, m *manifest.Mani
 			return fmt.Errorf("ffmpeg not found in PATH: please install ffmpeg to extract static frames from video seeds for character portraits: %w", lookErr)
 		}
 		pngPath := filepath.Join(outputDir, "images", "character_seed.png")
-		fmt.Printf("Extracting static frame from video seed to %s...\n", pngPath)
+		logger.Info("Extracting static frame from video seed", "path", pngPath)
 		// #nosec G204
 		cmd := execCommandContext(ctx, ffmpegPath, "-y", "-i", destPath, "-vframes", "1", "-f", "image2", pngPath)
 		if out, runErr := cmd.CombinedOutput(); runErr != nil {
@@ -1327,7 +1328,7 @@ func bootstrapCharacterReferenceWithClient(ctx context.Context, m *manifest.Mani
 		return fmt.Errorf("failed to resolve absolute path of character seed image: %w", err)
 	}
 
-	fmt.Printf("Uploading character seed portrait to cloud storage from %s...\n", absPath)
+	logger.Info("Uploading character seed portrait to cloud storage", "path", absPath)
 	uploadArgs := map[string]interface{}{
 		"local_path": absPath,
 	}
@@ -1341,7 +1342,7 @@ func bootstrapCharacterReferenceWithClient(ctx context.Context, m *manifest.Mani
 		return fmt.Errorf("failed to save manifest after setting character reference URL: %w", err)
 	}
 
-	fmt.Printf("Character seed portrait uploaded successfully: %s\n", m.BookProperties.CharacterReferenceURL)
+	logger.Info("Character seed portrait uploaded successfully", "url", m.BookProperties.CharacterReferenceURL)
 	return nil
 }
 

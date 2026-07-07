@@ -29,7 +29,11 @@ This task implements a `pithos setup` subcommand to automate local developer onb
     - Verify subdirectory exists under `../powerword/cmd/`.
     - Run `go build -o ~/.local/share/pithos/bin/<mcp_name> .` asynchronously or sequentially.
     - If the build succeeds, log success.
-    - If `powerword` is not found, verify if system binaries exist in `$PATH`.
+    - If `powerword` sibling repository is not found:
+      - Attempt to query GitHub Releases for the `powerword` repository for the latest release tag.
+      - Download precompiled binaries corresponding to the user's OS and CPU architecture.
+      - Install them into `~/.local/share/pithos/bin/`.
+      - If GitHub access fails, verify if system binaries exist in `$PATH`.
   - Print recommended `.pithos.toml` configuration template pointing to the local `~/.local/share/pithos/bin/` paths.
 
 ---
