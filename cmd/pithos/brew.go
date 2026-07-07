@@ -19,6 +19,7 @@ var (
 	brewPagesStr    string
 	brewSilent      bool
 	brewSelect      bool
+	brewBudget      float64
 )
 
 var brewCmd = &cobra.Command{
@@ -60,6 +61,7 @@ var brewCmd = &cobra.Command{
 			Select:      brewSelect,
 			Silent:      brewSilent,
 			DryRun:      rootDryRun,
+			Budget:      brewBudget,
 		}
 		err := pipeline.Brew(cmd.Context(), opts)
 		if err != nil {
@@ -82,5 +84,6 @@ func init() {
 	brewCmd.Flags().StringVar(&brewPagesStr, "pages", "", "Comma-separated list of page numbers to regenerate (e.g. 2,4)")
 	brewCmd.Flags().BoolVar(&brewSelect, "select", false, "Interactively select pages to regenerate")
 	brewCmd.Flags().BoolVar(&brewSilent, "silent", false, "Silence automatic opening of web preview in the browser")
+	brewCmd.Flags().Float64Var(&brewBudget, "budget", 0.0, "Budget limit in USD for this run")
 	rootCmd.AddCommand(brewCmd)
 }

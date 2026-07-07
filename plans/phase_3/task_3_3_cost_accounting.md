@@ -2,8 +2,8 @@
 
 **Status:** Completed
 **Go Version:** 1.26.4
-**Date Completed:** 2026-06-12
-**Unit Test Coverage:** 92.30% (meets strict >91% threshold requirement)
+**Date Completed:** 2026-07-07
+**Unit Test Coverage:** 91.10% (meets strict >91% threshold requirement)
 
 Implement tracking and logging of token counts and API consumption costs across the Pithos generation pipeline. Metrics should be stored in the book manifest so developers and monitors can track usage and budget.
 
@@ -59,6 +59,20 @@ Implement tracking and logging of token counts and API consumption costs across 
 - Increment the image generation count when the MCP client completes illustrations.
 - Accumulate metrics and save the updated manifest state at each checkpoint.
 
+### Budget Enforcement
+
+#### [MODIFY] [config.go](file://../../internal/config/config.go)
+- Add `BudgetConfig` containing `MaxCostUSD` representing the budget limit.
+- Add thread-safe getter `GetMaxCostUSD()` and setter `SetMaxCostUSD()` using a RWMutex to safeguard dynamic runtime budget changes in tests.
+
+#### [MODIFY] [brew.go](file://../../cmd/pithos/brew.go)
+- Bind `--budget` CLI flag to override the default budget threshold.
+
+#### [MODIFY] [brew.go](file://../../internal/pipeline/brew.go)
+- Implement `estimateCost(m *manifest.Manifest, opts *BrewOptions)` to project overall costs (LLM generation + pending/missing image generations).
+- Implement `checkBudget(ctx, m, opts)` which alerts the user if the estimated cost exceeds the budget. In interactive TTY mode, prompts the user using `huh.Confirm` to either proceed or abort; in headless mode or with the `--silent` flag, aborts immediately.
+- Enforce dynamic runtime budget checks inside the concurrency workers in `generateIllustrations` to stop execution midway if dynamic cost exceeds the limit.
+
 ---
 
 ## Verification Plan
@@ -69,8 +83,18 @@ Implement tracking and logging of token counts and API consumption costs across 
   * Parsing of token usage schemas from Gemini and OpenAI REST responses.
   * Correct updates of telemetry metrics in the manifest structure using the imported library.
   * Correct calculation of total costs (LLM + images).
+  * Pre-run budget checking under budget and over budget (under headless and TTY modes).
+  * Prompt abort / proceed overrides.
+  * Dynamic budget checks midway through parallel image generation.
+  * Direct cost estimation and specific page allowed filtering tests.
+  * Direct config getter/setter concurrency race condition tests.
+- Integration tests verifying:
+  * Full-pipeline budget limit checks block the execution when exceeding cost threshold via `TestBrew_Integration_OverBudget` in [integration_test.go](file://../../internal/pipeline/integration_test.go).
+
 
 ### Manual Verification
 - Execute `pithos initiate` and run a short `pithos brew` execution.
 - Inspect the generated `manifest.json` file under the target folder to ensure token counts and estimated costs match pricing schedules defined in the shared `powerword` config.
+- Run `pithos brew --budget 0.05` to manually trigger budget warning prompt and abort/proceed actions.
+
 

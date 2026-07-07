@@ -45,6 +45,7 @@ type BrewOptions struct {
 	In                io.Reader        // For testing
 	Out               io.Writer        // For testing
 	DryRun            bool
+	Budget            float64
 }
 
 // Brew executes the manuscript generation and page-by-page illustration generation.
@@ -123,6 +124,11 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 				return err
 			}
 		}
+	}
+
+	// Verify budget constraints
+	if err := checkBudget(ctx, m, &opts); err != nil {
+		return err
 	}
 
 	// 1. Generate manuscript text if not yet generated
@@ -433,6 +439,19 @@ func generateIllustrations(ctx context.Context, m *manifest.Manifest, opts BrewO
 		}
 
 		for _, page := range pendingPages {
+			actualCost := m.GetTotalCost()
+			budget := 5.00
+			if opts.Budget > 0 {
+				budget = opts.Budget
+			} else if config.Cfg != nil {
+				if cfgMax := config.Cfg.GetMaxCostUSD(); cfgMax > 0 {
+					budget = cfgMax
+				}
+			}
+			if actualCost > budget {
+				return fmt.Errorf("budget exceeded during execution: actual cost $%.4f exceeds budget limit $%.4f", actualCost, budget)
+			}
+
 			if err := m.UpdatePageStatus(page.PageIndex, manifest.StatusGeneratingImages, ""); err != nil {
 				return fmt.Errorf("failed to update page %d status to generating: %w", page.PageIndex, err)
 			}
@@ -550,6 +569,23 @@ func generateIllustrations(ctx context.Context, m *manifest.Manifest, opts BrewO
 
 Loop:
 	for _, page := range pendingPages {
+		// Check budget limit dynamically
+		actualCost := m.GetTotalCost()
+		budget := 5.00
+		if opts.Budget > 0 {
+			budget = opts.Budget
+		} else if config.Cfg != nil {
+			if cfgMax := config.Cfg.GetMaxCostUSD(); cfgMax > 0 {
+				budget = cfgMax
+			}
+		}
+		if actualCost > budget {
+			errsMu.Lock()
+			workerErrors = append(workerErrors, fmt.Errorf("budget exceeded during execution: actual cost $%.4f exceeds budget limit $%.4f", actualCost, budget))
+			errsMu.Unlock()
+			break Loop
+		}
+
 		select {
 		case sem <- struct{}{}:
 		case <-ctx.Done():
@@ -563,6 +599,25 @@ Loop:
 		go func(p *manifest.PageState) {
 			defer wg.Done()
 			defer func() { <-sem }()
+
+			// Check live budget limit before doing work
+			actualCost := m.GetTotalCost()
+			budget := 5.00
+			if opts.Budget > 0 {
+				budget = opts.Budget
+			} else if config.Cfg != nil {
+				if cfgMax := config.Cfg.GetMaxCostUSD(); cfgMax > 0 {
+					budget = cfgMax
+				}
+			}
+			if actualCost > budget {
+				errsMu.Lock()
+				workerErrors = append(workerErrors, fmt.Errorf("budget exceeded: actual cost $%.4f exceeds budget limit $%.4f", actualCost, budget))
+				errsMu.Unlock()
+				// Revert to pending
+				_ = m.UpdatePageStatus(p.PageIndex, manifest.StatusPending, "")
+				return
+			}
 
 			// 1. Update status to generating
 			if err := m.UpdatePageStatus(p.PageIndex, manifest.StatusGeneratingImages, ""); err != nil {
@@ -1391,4 +1446,129 @@ func writeDummyPNG(destPath string) error {
 	}
 	defer func() { _ = f.Close() }()
 	return png.Encode(f, img)
+}
+
+// checkBudget estimates cost of run and prompts/aborts if it exceeds configured/requested budget limit.
+// estimateCost estimates the expected cost for images and LLM stanzas for the current run.
+// countPendingImages counts the number of pages that still need illustration generations.
+func countPendingImages(m *manifest.Manifest, opts *BrewOptions) int {
+	var allowedPages map[int]bool
+	if len(opts.Pages) > 0 {
+		allowedPages = make(map[int]bool, len(opts.Pages))
+		for _, pIdx := range opts.Pages {
+			allowedPages[pIdx] = true
+		}
+	}
+	expectedImageCount := 0
+	for _, page := range m.Progress.Pages {
+		if allowedPages != nil && !allowedPages[page.PageIndex] {
+			continue
+		}
+		if page.Status != manifest.StatusCompleted || page.ImagePath == "" {
+			expectedImageCount++
+		}
+	}
+	return expectedImageCount
+}
+
+// estimateCost estimates the expected cost for images and LLM stanzas for the current run.
+func estimateCost(m *manifest.Manifest, opts *BrewOptions) (float64, float64) {
+	var pricing map[string]telemetry.ModelPricing
+	if config.Cfg != nil {
+		pricing = config.Cfg.Pricing
+	}
+
+	imageCost := 0.04
+	if pricing != nil {
+		if p, ok := pricing["imagegen"]; ok {
+			imageCost = p.Input / 1_000_000.0
+		}
+	}
+
+	expectedImageCount := 0
+	if !m.Progress.ManuscriptGenerated {
+		expectedImageCount = m.BookProperties.TargetPageCount
+		if expectedImageCount <= 0 {
+			expectedImageCount = 15
+		}
+	} else {
+		expectedImageCount = countPendingImages(m, opts)
+	}
+
+	if m.BookProperties.CharacterProfile != "" && m.BookProperties.CharacterReferenceURL == "" {
+		expectedImageCount++
+	}
+
+	expectedImageCost := float64(expectedImageCount) * imageCost
+
+	expectedLlmCost := 0.0
+	if !m.Progress.ManuscriptGenerated {
+		expectedLlmCost = 0.01
+	}
+
+	return expectedImageCost, expectedLlmCost
+}
+
+// checkBudget estimates cost of run and prompts/aborts if it exceeds configured/requested budget limit.
+func checkBudget(ctx context.Context, m *manifest.Manifest, opts *BrewOptions) error {
+	expectedImageCost, expectedLlmCost := estimateCost(m, opts)
+
+	currentCost := m.GetTotalCost()
+	totalEstimatedCost := currentCost + expectedImageCost + expectedLlmCost
+
+	budget := 5.00
+	if opts.Budget > 0 {
+		budget = opts.Budget
+	} else if config.Cfg != nil {
+		if cfgMax := config.Cfg.GetMaxCostUSD(); cfgMax > 0 {
+			budget = cfgMax
+		}
+	}
+
+	if totalEstimatedCost <= budget {
+		return nil
+	}
+
+	out := opts.Out
+	if out == nil {
+		out = os.Stdout
+	}
+
+	// Print warnings
+	warnTitle := ui.FailStyle.Render("⚠️  BUDGET WARNING: The estimated cost of this run exceeds your budget limit.")
+	_, _ = fmt.Fprintln(out, warnTitle)
+	_, _ = fmt.Fprintf(out, "  Current Cost:              $%.4f\n", currentCost)
+	_, _ = fmt.Fprintf(out, "  Estimated Additional Cost: $%.4f\n", expectedImageCost+expectedLlmCost)
+	_, _ = fmt.Fprintf(out, "  Total Estimated Cost:      $%.4f\n", totalEstimatedCost)
+	_, _ = fmt.Fprintf(out, "  Budget Limit:              $%.4f\n", budget)
+	_, _ = fmt.Fprintf(out, "  Excess Cost:               $%.4f\n\n", totalEstimatedCost-budget)
+
+	if !isTTY() || opts.Silent {
+		return fmt.Errorf("budget exceeded: estimated cost $%.4f exceeds budget limit $%.4f", totalEstimatedCost, budget)
+	}
+
+	in := opts.In
+	if in == nil {
+		in = os.Stdin
+	}
+
+	var proceed bool
+	confirm := huh.NewConfirm().
+		Title("Do you want to proceed anyway?").
+		Value(&proceed).
+		WithTheme(huh.ThemeCharm())
+
+	form := huh.NewForm(huh.NewGroup(confirm)).WithInput(in).WithOutput(out)
+	form.WithAccessible(opts.In != nil)
+	if err := form.Run(); err != nil {
+		return fmt.Errorf("prompt error: %w", err)
+	}
+
+	if !proceed {
+		return fmt.Errorf("run aborted: estimated cost $%.4f exceeds budget limit $%.4f", totalEstimatedCost, budget)
+	}
+
+	_, _ = fmt.Fprintln(out, ui.SuccessStyle.Render("Proceeding with custom budget override for this run."))
+	opts.Budget = totalEstimatedCost
+	return nil
 }
