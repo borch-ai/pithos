@@ -27,6 +27,7 @@ type AssembleOptions struct {
 	KDPMathTransport  mcpsdk.Transport // For testing
 	TypstTransport    mcpsdk.Transport // For testing
 	PDFCheckTransport mcpsdk.Transport // For testing
+	DryRun            bool
 }
 
 type geometryResult struct {
@@ -179,6 +180,13 @@ func compileInteriorPDF(ctx context.Context, opts AssembleOptions, m *manifest.M
 	imagesDir := filepath.Join(opts.InputDir, "images")
 	outputPath := filepath.Join(opts.InputDir, "interior.pdf")
 
+	if opts.DryRun {
+		if err := os.WriteFile(outputPath, []byte("SIMULATED PDF CONTENT"), 0600); err != nil {
+			return "", fmt.Errorf("failed to write simulated PDF: %w", err)
+		}
+		return outputPath, nil
+	}
+
 	trimSize := opts.TrimSize
 	if trimSize == "" {
 		trimSize = "6x9"
@@ -261,6 +269,10 @@ func parseTrimSize(trimSize string) (float64, float64, error) {
 }
 
 func runPDFPreflightCheck(ctx context.Context, opts AssembleOptions, m *manifest.Manifest, pdfPath string) error {
+	if opts.DryRun {
+		return nil
+	}
+
 	expectedWidth, expectedHeight, err := parseTrimSize(m.BookProperties.TrimSize)
 	if err != nil {
 		return fmt.Errorf("failed to parse trim size %q: %w", m.BookProperties.TrimSize, err)
@@ -378,6 +390,18 @@ func validateCoverPDF(ctx context.Context, mcpClient *mcp.PluginClient, coverPDF
 
 func fetchGeometry(ctx context.Context, opts AssembleOptions, pageCount int, format string) (geometryResult, error) {
 	var geom geometryResult
+
+	if opts.DryRun {
+		geom = geometryResult{
+			SpineWidthInches:  0.15,
+			CoverWidthInches:  12.5,
+			CoverHeightInches: 9.25,
+			CoverWidthPoints:  900.0,
+			CoverHeightPoints: 666.0,
+			SpineTextEligible: false,
+		}
+		return geom, nil
+	}
 
 	trimSize := opts.TrimSize
 	if trimSize == "" {

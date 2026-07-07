@@ -171,7 +171,7 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
     *   Add `--budget` CLI flag and `max_cost_usd` Viper config option.
     *   Implement pre-generation cost estimates and halt pipeline execution if expected costs exceed budget constraints.
     *   [Implementation Plan](plans/phase_5/task_5_36_cost_guardrails.md)
-*   [ ] **Task 5.37: E2E Pipeline Simulation & Dry-Run Mode**
+*   [x] **Task 5.37: E2E Pipeline Simulation & Dry-Run Mode**
     *   Implement a `--dry-run` CLI flag to bypass live API and MCP invocations.
     *   Mock LLM/image/video generator pipeline stages to verify structural commands, pathing, Typst compilation layouts, and preview generation logic.
     *   [Implementation Plan](plans/phase_5/task_5_37_dry_run_simulation.md)

@@ -29,6 +29,7 @@ var assembleCmd = &cobra.Command{
 			TrimSize:  assembleTrimSize,
 			PaperType: assemblePaperType,
 			Silent:    assembleSilent,
+			DryRun:    rootDryRun,
 		}
 		m, err := pipeline.Assemble(cmd.Context(), opts)
 		if err != nil {

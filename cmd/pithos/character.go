@@ -15,6 +15,7 @@ var characterCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		opts := pipeline.CharacterOptions{
 			OutputDir: characterOutput,
+			DryRun:    rootDryRun,
 		}
 		return pipeline.GenerateCharacterSeed(cmd.Context(), opts)
 	},

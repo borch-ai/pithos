@@ -17,6 +17,7 @@ type CharacterOptions struct {
 	OutputDir         string
 	MCPTransport      mcpsdk.Transport // For tests
 	CloudMCPTransport mcpsdk.Transport // For tests
+	DryRun            bool
 }
 
 // GenerateCharacterSeed implements the character seed generation logic.
@@ -44,7 +45,7 @@ func GenerateCharacterSeed(ctx context.Context, opts CharacterOptions) error {
 		charBackend = config.Cfg.MCP.CharacterBackend
 	}
 
-	if err := BootstrapCharacterReference(ctx, m, opts.OutputDir, opts.MCPTransport, opts.CloudMCPTransport, charBackend); err != nil {
+	if err := BootstrapCharacterReference(ctx, m, opts.OutputDir, opts.MCPTransport, opts.CloudMCPTransport, charBackend, opts.DryRun); err != nil {
 		return err
 	}
 
