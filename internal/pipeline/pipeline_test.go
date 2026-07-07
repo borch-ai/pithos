@@ -564,8 +564,8 @@ func TestBrew_EndToEnd_Mocked(t *testing.T) {
 	}
 
 	// Verify telemetry updates
-	if m.Telemetry.ImageGenerations != 2 {
-		t.Errorf("expected 2 image generations, got %d", m.Telemetry.ImageGenerations)
+	if m.Telemetry.ImageGenerations != 3 {
+		t.Errorf("expected 3 image generations, got %d", m.Telemetry.ImageGenerations)
 	}
 	mu := m.Telemetry.ModelUsages["unknown"]
 	if mu == nil {

@@ -303,6 +303,8 @@ func TestCleanJSONText(t *testing.T) {
 		{"Here is the JSON:\n```json\n{\"foo\": \"bar\"}\n```", "{\"foo\": \"bar\"}"},
 		{"```\n{\"foo\": \"bar\"}\n```\nSome trailing explanation.", "{\"foo\": \"bar\"}"},
 		{"Some prefix\n```\n{\"foo\": \"bar\"}\n```\nSome suffix", "{\"foo\": \"bar\"}"},
+		{"```json\n{\"foo\": \"bar\"}", "{\"foo\": \"bar\"}"},
+		{"```{\"foo\": \"bar\"}", "{\"foo\": \"bar\"}"},
 	}
 
 	for _, tc := range tests {
