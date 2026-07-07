@@ -127,7 +127,7 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 	}
 
 	// Verify budget constraints
-	if err := checkBudget(ctx, m, &opts); err != nil {
+	if err := checkBudget(m, &opts); err != nil {
 		return err
 	}
 
@@ -572,7 +572,21 @@ func generateIllustrations(ctx context.Context, m *manifest.Manifest, opts BrewO
 
 Loop:
 	for _, page := range pendingPages {
-		// Check budget limit dynamically
+		// Compute per-image cost for look-ahead budget check
+		var pricing map[string]telemetry.ModelPricing
+		if config.Cfg != nil {
+			pricing = config.Cfg.Pricing
+		}
+		imageCost := 0.04
+		if pricing != nil {
+			if p, ok := pricing["imagegen"]; ok {
+				imageCost = p.Input / 1_000_000.0
+			}
+		}
+
+		// Check budget limit dynamically before dispatching each worker.
+		// Use a look-ahead (actualCost + imageCost) so concurrent goroutines
+		// can't collectively overspend by more than one image's worth.
 		actualCost := m.GetTotalCost()
 		budget := 5.00
 		if opts.Budget > 0 {
@@ -582,7 +596,7 @@ Loop:
 				budget = cfgMax
 			}
 		}
-		if actualCost > budget {
+		if actualCost+imageCost > budget {
 			errsMu.Lock()
 			workerErrors = append(workerErrors, fmt.Errorf("budget exceeded during execution: actual cost $%.4f exceeds budget limit $%.4f", actualCost, budget))
 			errsMu.Unlock()
@@ -1521,7 +1535,7 @@ func estimateCost(m *manifest.Manifest, opts *BrewOptions) (float64, float64) {
 }
 
 // checkBudget estimates cost of run and prompts/aborts if it exceeds configured/requested budget limit.
-func checkBudget(ctx context.Context, m *manifest.Manifest, opts *BrewOptions) error {
+func checkBudget(m *manifest.Manifest, opts *BrewOptions) error {
 	expectedImageCost, expectedLlmCost := estimateCost(m, opts)
 
 	currentCost := m.GetTotalCost()

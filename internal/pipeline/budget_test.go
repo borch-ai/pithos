@@ -365,14 +365,14 @@ func TestCheckBudget_Direct(t *testing.T) {
 		Silent: true,
 	}
 	// Estimated: 2 pages * 0.04 + 0.01 LLM = 0.09 > 0.05
-	err := checkBudget(context.Background(), m, &opts)
+	err := checkBudget(m, &opts)
 	if err == nil || !strings.Contains(err.Error(), "budget exceeded") {
 		t.Errorf("expected budget exceeded, got: %v", err)
 	}
 
 	// 2. Under budget nil config
 	opts.Budget = 0.15
-	err = checkBudget(context.Background(), m, &opts)
+	err = checkBudget(m, &opts)
 	if err != nil {
 		t.Errorf("expected no error, got: %v", err)
 	}
@@ -388,7 +388,7 @@ func TestCheckBudget_Direct(t *testing.T) {
 	}
 	opts.Budget = 0.0
 	// Estimated: 2 pages * 0.10 + 0.01 LLM = 0.21 > 0.05
-	err = checkBudget(context.Background(), m, &opts)
+	err = checkBudget(m, &opts)
 	if err == nil || !strings.Contains(err.Error(), "budget exceeded") {
 		t.Errorf("expected budget exceeded, got: %v", err)
 	}
@@ -396,7 +396,7 @@ func TestCheckBudget_Direct(t *testing.T) {
 	// 4. TargetPageCount <= 0 fallback
 	m.BookProperties.TargetPageCount = 0
 	config.Cfg.Budget.MaxCostUSD = 1.00
-	err = checkBudget(context.Background(), m, &opts)
+	err = checkBudget(m, &opts)
 	if err == nil || !strings.Contains(err.Error(), "budget exceeded") {
 		t.Errorf("expected budget exceeded, got: %v", err)
 	}
@@ -408,14 +408,14 @@ func TestCheckBudget_Direct(t *testing.T) {
 		{PageIndex: 2, Status: manifest.StatusPending},
 	}
 	config.Cfg.Budget.MaxCostUSD = 0.05
-	err = checkBudget(context.Background(), m, &opts)
+	err = checkBudget(m, &opts)
 	if err == nil || !strings.Contains(err.Error(), "budget exceeded") {
 		t.Errorf("expected budget exceeded, got: %v", err)
 	}
 
 	// 6. With specific pages allowed
 	opts.Pages = []int{1}
-	err = checkBudget(context.Background(), m, &opts)
+	err = checkBudget(m, &opts)
 	if err != nil {
 		t.Errorf("expected no error, got: %v", err)
 	}
