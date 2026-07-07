@@ -1,7 +1,9 @@
 # plan: Task 5.36: Run Budget Limits & Cost Guardrails
 
-**Status:** Proposed
+**Status:** Completed — merged in [PR #57](https://github.com/borch-ai/pithos/pull/57) (squash commit `443f63ca`)
+**Date Completed:** 2026-07-07
 **Go Version:** 1.26.4
+**Unit Test Coverage:** 91.1%
 
 This task adds cost verification checks and user budget constraints to Pithos. It prevents accidental overspend and rate cap breaches during long automated runs of `pithos brew` or `pithos assemble`.
 

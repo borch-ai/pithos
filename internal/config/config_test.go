@@ -528,3 +528,27 @@ func TestConfig_ExpandTilde(t *testing.T) {
 		})
 	}
 }
+
+func TestBudgetConfig(t *testing.T) {
+	cfg := &Config{
+		Budget: BudgetConfig{
+			MaxCostUSD: 5.00,
+		},
+	}
+
+	if val := cfg.GetMaxCostUSD(); val != 5.00 {
+		t.Errorf("expected 5.00, got %f", val)
+	}
+
+	cfg.SetMaxCostUSD(10.00)
+	if val := cfg.GetMaxCostUSD(); val != 10.00 {
+		t.Errorf("expected 10.00, got %f", val)
+	}
+
+	var nilCfg *Config
+	if val := nilCfg.GetMaxCostUSD(); val != 0.0 {
+		t.Errorf("expected 0.0, got %f", val)
+	}
+
+	nilCfg.SetMaxCostUSD(5.0) // should not panic
+}
