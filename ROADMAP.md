@@ -152,7 +152,7 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
     *   Migrate default output and cache paths to use a dynamic home directory-based structure (`~/.local/share/pithos/`).
     *   Update config defaults and path resolution logic in Pithos pipeline to resolve relative paths under `~/.local/share/pithos/workspaces/`.
     *   [Implementation Plan](plans/phase_5/task_5_32_local_workspaces_structure.md)
-*   [ ] **Task 5.33: Interactive CLI Prompt Wizards via Huh**
+*   [x] **Task 5.33: Interactive CLI Prompt Wizards via Huh**
     *   Integrate `github.com/charmbracelet/huh` (Charm-native interactive form library, built on Bubbletea) for interactive user prompts, replacing the previously planned `AlecAivazis/survey` dependency.
     *   Implement an interactive scaffolding wizard for `pithos initiate` when flags are omitted, using `huh.Form` with `NewSelect`, `NewInput`, and `NewConfirm` components.
     *   Implement interactive page multi-selection for selective redo in `pithos brew --pages` via `huh.NewMultiSelect`.
