@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/borch-ai/pithos/internal/logger"
 	"github.com/borch-ai/pithos/internal/manifest"
 	"github.com/borch-ai/pithos/internal/mcp"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -151,7 +152,7 @@ func Assemble(ctx context.Context, opts AssembleOptions) (*manifest.Manifest, er
 
 	// Regenerate web preview with updated KDP layout calculations
 	if previewErr := GenerateWebPreview(opts.InputDir, m); previewErr != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to regenerate web preview: %v\n", previewErr)
+		logger.Warn("Failed to regenerate web preview", "error", previewErr)
 	} else if !opts.Silent {
 		previewPath := filepath.Join(opts.InputDir, "web_preview", "preview.html")
 		triggerBrowserOpen(ctx, formatFileURL(previewPath))
@@ -330,12 +331,12 @@ func validateInteriorPDF(ctx context.Context, mcpClient *mcp.PluginClient, pdfPa
 	}
 
 	if !checkRes.Valid || len(checkRes.Errors) > 0 {
-		fmt.Fprintf(os.Stderr, "Interior PDF Preflight Validation failed for %s:\n", pdfPath)
+		logger.Error("Interior PDF Preflight Validation failed", "path", pdfPath)
 		for _, e := range checkRes.Errors {
-			fmt.Fprintf(os.Stderr, "  - ERROR: %s\n", e)
+			logger.Error("  - ERROR", "msg", e)
 		}
 		for _, w := range checkRes.Warnings {
-			fmt.Fprintf(os.Stderr, "  - WARNING: %s\n", w)
+			logger.Warn("  - WARNING", "msg", w)
 		}
 		return fmt.Errorf("interior PDF check reported errors: %v", checkRes.Errors)
 	}
@@ -376,12 +377,12 @@ func validateCoverPDF(ctx context.Context, mcpClient *mcp.PluginClient, coverPDF
 	}
 
 	if !coverCheckRes.Valid || len(coverCheckRes.Errors) > 0 {
-		fmt.Fprintf(os.Stderr, "Cover PDF Preflight Validation failed for %s:\n", coverPDFPath)
+		logger.Error("Cover PDF Preflight Validation failed", "path", coverPDFPath)
 		for _, e := range coverCheckRes.Errors {
-			fmt.Fprintf(os.Stderr, "  - ERROR: %s\n", e)
+			logger.Error("  - ERROR", "msg", e)
 		}
 		for _, w := range coverCheckRes.Warnings {
-			fmt.Fprintf(os.Stderr, "  - WARNING: %s\n", w)
+			logger.Warn("  - WARNING", "msg", w)
 		}
 		return fmt.Errorf("cover PDF check reported errors: %v", coverCheckRes.Errors)
 	}

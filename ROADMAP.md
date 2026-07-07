@@ -167,7 +167,7 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
     *   Format `pithos doctor` connectivity check list with colored success/error indicator badges.
     *   Style terminal summary cards (telemetry, token counts, and billable USD cost summaries) at the end of `brew` and `assemble` runs.
     *   [Implementation Plan](plans/phase_5/task_5_35_cli_styling_lipgloss.md)
-*   [ ] **Task 5.36: Run Budget Limits & Cost Guardrails**
+*   [x] **Task 5.36: Run Budget Limits & Cost Guardrails**
     *   Add `--budget` CLI flag and `max_cost_usd` Viper config option.
     *   Implement pre-generation cost estimates and halt pipeline execution if expected costs exceed budget constraints.
     *   [Implementation Plan](plans/phase_5/task_5_36_cost_guardrails.md)
@@ -195,7 +195,7 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
     *   Integrate visual seed validation and cloud storage upload prior to executing brew page illustration jobs.
     *   [Implementation Plan](plans/phase_5/task_5_41_character_seed_review.md)
 *   [ ] **Task 5.43: Developer Auto-Setup Command (pithos setup)**
-    *   Automate discovery, compilation, and symlinking of local Powerword MCP binaries to simplify workspace onboarding.
+    *   Automate discovery, compilation, and symlinking of local Powerword MCP binaries to simplify workspace onboarding. Fallback to downloading precompiled binaries from GitHub Releases if sibling repository is missing.
     *   [Implementation Plan](plans/phase_5/task_5_43_developer_setup.md)
 *   [ ] **Task 5.44: Manifest Versioning & Migration Guardrails**
     *   Introduce schema version tracking in `manifest.json` and automatic structure migrations on load to prevent breaking Kiln or Lamplighter.
@@ -203,11 +203,20 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
 *   [ ] **Task 5.45: Shell Autocompletion Support (Zsh/Oh-My-Zsh)**
     *   Implement Cobra autocompletion subcommands and automate Zsh/Oh-My-Zsh completion script setup via the `setup` command.
     *   [Implementation Plan](plans/phase_5/task_5_45_shell_completion.md)
-*   [ ] **Task 5.46: Structured Pipeline Logging via charmbracelet/log**
+*   [x] **Task 5.46: Structured Pipeline Logging via charmbracelet/log**
     *   Integrate `github.com/charmbracelet/log` to replace raw `fmt.Printf` pipeline output with levelled, color-coded, structured log lines.
     *   Configure log level at root command level (`--debug` flag), with automatic plain-text fallback for non-TTY/CI environments.
     *   Emit structured key-value fields (page, model, cost) alongside human-readable messages during `brew`, `assemble`, and `initiate` pipeline stages.
     *   [Implementation Plan](plans/phase_5/task_5_46_structured_logging_charm.md)
+*   [ ] **Task 5.47: Workspace Cache Management Command (pithos cache)**
+    *   Add a `cache` subcommand with `status` and `prune` actions to inspect and clean local workspace files.
+    *   [Implementation Plan](plans/phase_5/task_5_47_cache_management.md)
+*   [ ] **Task 5.48: Aggregated Telemetry Reporting Command (pithos telemetry)**
+    *   Add a `telemetry` subcommand to summarize historical model usage, token count, and total USD cost across all book workspaces.
+    *   [Implementation Plan](plans/phase_5/task_5_48_aggregated_telemetry.md)
+*   [ ] **Task 5.49: Doctor System Dependency Diagnostics**
+    *   Extend `pithos doctor` to check for essential external binaries (ffmpeg, typst) and verify Service Account credential / cloud storage permissions.
+    *   [Implementation Plan](plans/phase_5/task_5_49_doctor_dependency_diagnostics.md)
 
 
 
@@ -229,6 +238,8 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
 *   [ ] **Task 5.14: Bubbletea TUI-Based Interactive Review Loop**
     *   Replace the raw file-editing loop with an interactive terminal review dashboard, enabling users to edit stanzas, customize prompts, and trigger select regeneration.
     *   [ ] **Task 5.14.1: TUI & Web Preview Sync**: Automatically regenerate `data.js` and refresh the web previewer workspace upon TUI-based stanzas or illustration updates to allow live-reloading.
+    *   [ ] **Task 5.14.2: Manuscript Markdown Rendering via Glamour**: Integrate `charmbracelet/glamour` to render styled markdown headings, stanzas, and formatting within the Bubbletea TUI review viewport.
+    *   [ ] **Task 5.14.3: Spring Animations via Harmonica**: Integrate physics-based spring animations for smooth transitions of panels and focuses in the TUI review dashboard.
     *   [Implementation Plan](plans/phase_5/task_5_14_bubbletea_tui_review.md)
 *   [ ] **Task 5.15: Multi-Model Illustration Variations & Selection**
     *   Generate illustration variations in parallel using multiple configured image models.
@@ -343,15 +354,7 @@ Focus: Evolving Pithos into a modular, outline-driven book generation tool for t
 
 Focus: Elevating the Pithos terminal experience from functional to polished, using the full Charm toolkit.
 
-*   [ ] **Task 7.1: Manuscript Markdown Rendering via Glamour**
-    *   Integrate `github.com/charmbracelet/glamour` to render `manuscript.md` review content with styled headings, stanza blocks, and emphasis directly in the terminal.
-    *   Embed rendered markdown in the Bubbletea review TUI viewport (Task 5.14) to replace raw plain-text display.
-    *   [Implementation Plan](plans/phase_7/task_7_1_glamour_markdown_rendering.md)
-*   [ ] **Task 7.2: Spring Animations for TUI Transitions via Harmonica**
-    *   Integrate `github.com/charmbracelet/harmonica` for physics-based spring animation in the Bubbletea review TUI.
-    *   Apply smooth animations to image preview panel entry, progress bar acceleration, and stanza editor focus transitions.
-    *   [Implementation Plan](plans/phase_7/task_7_2_harmonica_tui_animations.md)
-*   [ ] **Task 7.3: SSH-Based Remote Pipeline Status via Wish**
+*   [ ] **Task 7.1: SSH-Based Remote Pipeline Status via Wish**
     *   Integrate `github.com/charmbracelet/wish` to expose an optional, lightweight SSH server within the Pithos process.
     *   Allow remote querying of live pipeline status (current page, cost, errors) from a secondary terminal session or monitoring script, as an alternative to the Lamplighter WebRTC approach (Task 5.1).
     *   [Implementation Plan](plans/phase_7/task_7_3_wish_ssh_status_server.md)

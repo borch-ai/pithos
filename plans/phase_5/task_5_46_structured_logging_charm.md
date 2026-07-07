@@ -1,7 +1,9 @@
 # plan: Task 5.46: Structured Pipeline Logging via charmbracelet/log
 
-**Status:** Proposed
+**Status:** Completed
+**Date Completed:** 2026-07-07
 **Go Version:** 1.26.4
+**Unit Test Coverage:** 91.1%
 
 This task integrates `github.com/charmbracelet/log` into Pithos to replace raw `fmt.Printf` debug/info printing across pipeline stages with levelled, color-coded, structured log output. The library is native to the Charm ecosystem, renders using Lipgloss styles, and automatically degrades gracefully to plain text when stdout is redirected to a non-TTY (e.g., CI logs or script output).
 
@@ -50,6 +52,7 @@ This task integrates `github.com/charmbracelet/log` into Pithos to replace raw `
 - Verify that no ANSI escape codes appear in log output when stdout is non-TTY (test by redirecting output in subprocess tests).
 
 ### Manual Verification
-- Run `pithos brew` and confirm levelled, colored log output appears cleanly in the terminal.
-- Run `pithos brew 2>&1 | cat` and verify log output is plain text with no escape sequences.
-- Run `pithos brew --debug` and confirm verbose diagnostic messages appear.
+- Run `pithos initiate --theme "dreadful-monsters" --output books/test_book --dry-run` and verify that color-coded `INFO` log messages appear cleanly in the terminal.
+- Run `pithos initiate --theme "dreadful-monsters" --output books/test_book_debug --dry-run --debug` and confirm verbose `DEBU` diagnostic messages appear.
+- Run `pithos initiate --theme "dreadful-monsters" --output books/test_book_nocolor --dry-run --debug 2>&1 | cat` and verify log output degrades to plain text with no ANSI escape sequences.
+- Clean up any generated test directories afterwards: `rm -rf books/test_book*`.

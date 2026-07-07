@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/borch-ai/pithos/internal/logger"
 	"github.com/borch-ai/pithos/internal/manifest"
 	"github.com/charmbracelet/huh"
 )
@@ -35,6 +36,7 @@ func Initiate(opts InitiateOptions) (*manifest.Manifest, error) {
 		return nil, errors.New("output directory is required")
 	}
 	opts.OutputDir = resolveBookPath(opts.OutputDir)
+	logger.Info("Initiating book workspace", "dir", opts.OutputDir, "theme", opts.Theme)
 
 	// Default target page count to 15 if not specified or invalid
 	if opts.TargetPageCount <= 0 {
@@ -94,6 +96,7 @@ func Initiate(opts InitiateOptions) (*manifest.Manifest, error) {
 		return nil, fmt.Errorf("failed to create initial git checkpoint: %w", err)
 	}
 
+	logger.Info("Initial workspace setup complete and git checkpoint created", "dir", opts.OutputDir)
 	return m, nil
 }
 
@@ -142,8 +145,10 @@ func brainstormVisualGuides(ctx context.Context, m *manifest.Manifest, opts Init
 	if opts.NoBrainstorm || opts.Theme == "" {
 		return nil
 	}
+	logger.Info("Brainstorming book style and character profile...", "theme", opts.Theme)
 
 	if opts.DryRun {
+		logger.Debug("Simulating brainstorming in dry-run mode")
 		if m.BookProperties.Style == "" {
 			m.BookProperties.Style = "Simulated style description"
 		}
@@ -164,5 +169,7 @@ func brainstormVisualGuides(ctx context.Context, m *manifest.Manifest, opts Init
 	if err := generateAndRecordVisualGuides(ctx, m, opts.Theme, llmClient); err != nil {
 		return err
 	}
+	logger.Info("Brainstorming complete")
+	logger.Debug("Brainstorming results", "style", m.BookProperties.Style, "character", m.BookProperties.CharacterProfile)
 	return nil
 }
