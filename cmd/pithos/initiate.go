@@ -110,6 +110,7 @@ var initiateCmd = &cobra.Command{
 			TrimSize:        initiateTrimSize,
 			NoBrainstorm:    initiateNoBrainstorm,
 			Context:         cmd.Context(),
+			DryRun:          rootDryRun,
 		}
 		m, err := pipeline.Initiate(opts)
 		if err != nil {

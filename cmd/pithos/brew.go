@@ -59,6 +59,7 @@ var brewCmd = &cobra.Command{
 			Pages:       pages,
 			Select:      brewSelect,
 			Silent:      brewSilent,
+			DryRun:      rootDryRun,
 		}
 		err := pipeline.Brew(cmd.Context(), opts)
 		if err != nil {

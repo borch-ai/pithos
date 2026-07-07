@@ -26,6 +26,7 @@ type InitiateOptions struct {
 	LLM                 LLMClient
 	HTTPClient          *http.Client
 	Context             context.Context
+	DryRun              bool
 }
 
 // Initiate scaffolds a new book project directory structure and writes the initial manifest.json.
@@ -139,6 +140,16 @@ func ConfirmOverwrite(r io.Reader, w io.Writer, path string) (bool, error) {
 
 func brainstormVisualGuides(ctx context.Context, m *manifest.Manifest, opts InitiateOptions) error {
 	if opts.NoBrainstorm || opts.Theme == "" {
+		return nil
+	}
+
+	if opts.DryRun {
+		if m.BookProperties.Style == "" {
+			m.BookProperties.Style = "Simulated style description"
+		}
+		if m.BookProperties.CharacterProfile == "" {
+			m.BookProperties.CharacterProfile = "Simulated character profile"
+		}
 		return nil
 	}
 

@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"io"
 	"net/http"
 	"os"
@@ -41,6 +44,7 @@ type BrewOptions struct {
 	HTTPClient        *http.Client     // For testing
 	In                io.Reader        // For testing
 	Out               io.Writer        // For testing
+	DryRun            bool
 }
 
 // Brew executes the manuscript generation and page-by-page illustration generation.
@@ -286,7 +290,7 @@ func generateAndRecordVisualGuides(ctx context.Context, m *manifest.Manifest, th
 	return nil
 }
 
-//nolint:funlen // Manuscript generation pipeline step handles LLM client setup, text generation, and recording telemetry
+//nolint:funlen,gocognit,nestif // Manuscript generation pipeline step handles LLM client setup, text generation, and recording telemetry
 func generateManuscript(ctx context.Context, m *manifest.Manifest, opts BrewOptions) error {
 	if m.Progress.ManuscriptGenerated {
 		return nil
@@ -307,20 +311,53 @@ func generateManuscript(ctx context.Context, m *manifest.Manifest, opts BrewOpti
 		m.BookProperties.TargetPageCount = 15
 	}
 
-	llmClient, err := setupLLMClient(opts)
-	if err != nil {
-		return err
-	}
+	var stanzas []string
+	var prompts []string
+	var tokenUsage telemetry.TokenUsage
+	var modelName string
 
-	if m.BookProperties.Style == "" || m.BookProperties.CharacterProfile == "" {
-		if err = generateAndRecordVisualGuides(ctx, m, theme, llmClient); err != nil {
+	if opts.DryRun {
+		if m.BookProperties.Style == "" {
+			m.BookProperties.Style = "Simulated style description"
+		}
+		if m.BookProperties.CharacterProfile == "" {
+			m.BookProperties.CharacterProfile = "Simulated character profile"
+		}
+		stanzas = make([]string, pageCount)
+		prompts = make([]string, pageCount)
+		for i := 0; i < pageCount; i++ {
+			stanzas[i] = fmt.Sprintf("This is page %d simulated stanza.", i+1)
+			prompts[i] = fmt.Sprintf("Illustration prompt for page %d", i+1)
+		}
+		tokenUsage = telemetry.TokenUsage{
+			InputTokens:  100,
+			OutputTokens: 200,
+		}
+		modelName = "simulated-model"
+	} else {
+		llmClient, err := setupLLMClient(opts)
+		if err != nil {
 			return err
 		}
-	}
 
-	stanzas, prompts, tokenUsage, err := llmClient.GenerateStanzas(ctx, theme, pageCount, m.BookProperties.Style, m.BookProperties.CharacterProfile)
-	if err != nil {
-		return fmt.Errorf("manuscript text generation failed: %w", err)
+		if m.BookProperties.Style == "" || m.BookProperties.CharacterProfile == "" {
+			if err = generateAndRecordVisualGuides(ctx, m, theme, llmClient); err != nil {
+				return err
+			}
+		}
+
+		var genErr error
+		stanzas, prompts, tokenUsage, genErr = llmClient.GenerateStanzas(ctx, theme, pageCount, m.BookProperties.Style, m.BookProperties.CharacterProfile)
+		if genErr != nil {
+			return fmt.Errorf("manuscript text generation failed: %w", genErr)
+		}
+
+		switch client := llmClient.(type) {
+		case *PowerwordClientAdapter:
+			modelName = client.modelName
+		default:
+			modelName = "unknown"
+		}
 	}
 
 	if len(stanzas) != pageCount {
@@ -342,15 +379,6 @@ func generateManuscript(ctx context.Context, m *manifest.Manifest, opts BrewOpti
 		}
 	}
 	m.Progress.ManuscriptGenerated = true
-
-	// Record token usage
-	var modelName string
-	switch client := llmClient.(type) {
-	case *PowerwordClientAdapter:
-		modelName = client.modelName
-	default:
-		modelName = "unknown"
-	}
 
 	var pricing map[string]telemetry.ModelPricing
 	if config.Cfg != nil {
@@ -389,6 +417,42 @@ func generateIllustrations(ctx context.Context, m *manifest.Manifest, opts BrewO
 	}
 
 	if len(pendingPages) == 0 {
+		return nil
+	}
+
+	if opts.DryRun {
+		if m.BookProperties.CharacterProfile != "" && m.BookProperties.CharacterReferenceURL == "" {
+			charSeedDest := filepath.Join(opts.OutputDir, "images", "character_seed.png")
+			if err := writeDummyPNG(charSeedDest); err != nil {
+				return fmt.Errorf("failed to write simulated character seed PNG: %w", err)
+			}
+			m.BookProperties.CharacterReferenceURL = "http://storage.googleapis.com/simulated-bucket/character_seed.png"
+			if err := m.Save(); err != nil {
+				return fmt.Errorf("failed to save manifest after setting character reference URL: %w", err)
+			}
+		}
+
+		for _, page := range pendingPages {
+			if err := m.UpdatePageStatus(page.PageIndex, manifest.StatusGeneratingImages, ""); err != nil {
+				return fmt.Errorf("failed to update page %d status to generating: %w", page.PageIndex, err)
+			}
+			imgName := fmt.Sprintf("page_%d.png", page.PageIndex)
+			destPath := filepath.Join(opts.OutputDir, "images", imgName)
+			if err := writeDummyPNG(destPath); err != nil {
+				return fmt.Errorf("failed to write simulated page PNG: %w", err)
+			}
+
+			var pricing map[string]telemetry.ModelPricing
+			if config.Cfg != nil {
+				pricing = config.Cfg.Pricing
+			}
+			m.RecordImageGeneration(pricing)
+
+			relPath := filepath.Join("images", imgName)
+			if err := m.UpdatePageStatus(page.PageIndex, manifest.StatusCompleted, relPath); err != nil {
+				return fmt.Errorf("failed to update page %d status to completed: %w", page.PageIndex, err)
+			}
+		}
 		return nil
 	}
 
@@ -439,7 +503,7 @@ func generateIllustrations(ctx context.Context, m *manifest.Manifest, opts BrewO
 		}
 	} else {
 		// Bootstrap Character Seed Portrait (starts and stops its own client with charBackend)
-		if err := BootstrapCharacterReference(ctx, m, opts.OutputDir, opts.MCPTransport, opts.CloudMCPTransport, charBackend); err != nil {
+		if err := BootstrapCharacterReference(ctx, m, opts.OutputDir, opts.MCPTransport, opts.CloudMCPTransport, charBackend, opts.DryRun); err != nil {
 			return err
 		}
 
@@ -1068,9 +1132,18 @@ func getBestImageSize(trimSize string) string {
 }
 
 // BootstrapCharacterReference generates character seed portrait using the specified character backend.
-func BootstrapCharacterReference(ctx context.Context, m *manifest.Manifest, outputDir string, mcpTransport mcpsdk.Transport, cloudMCPTransport mcpsdk.Transport, backend string) error {
+func BootstrapCharacterReference(ctx context.Context, m *manifest.Manifest, outputDir string, mcpTransport mcpsdk.Transport, cloudMCPTransport mcpsdk.Transport, backend string, dryRun bool) error {
 	if m.BookProperties.CharacterReferenceURL != "" || m.BookProperties.CharacterProfile == "" {
 		return nil
+	}
+
+	if dryRun {
+		charSeedDest := filepath.Join(outputDir, "images", "character_seed.png")
+		if err := writeDummyPNG(charSeedDest); err != nil {
+			return fmt.Errorf("failed to write simulated character seed PNG: %w", err)
+		}
+		m.BookProperties.CharacterReferenceURL = "http://storage.googleapis.com/simulated-bucket/character_seed.png"
+		return m.Save()
 	}
 
 	if backend != "" {
@@ -1301,4 +1374,21 @@ func handleSelectPages(m *manifest.Manifest, opts BrewOptions) ([]int, error) {
 		_, _ = fmt.Fprintln(out, "No pages selected. Exiting.")
 	}
 	return selectedPages, nil
+}
+
+// writeDummyPNG creates a minimal valid PNG at destPath.
+func writeDummyPNG(destPath string) error {
+	dir := filepath.Dir(destPath)
+	if err := os.MkdirAll(dir, 0750); err != nil {
+		return fmt.Errorf("failed to create directory structure for dummy PNG: %w", err)
+	}
+	img := image.NewRGBA(image.Rect(0, 0, 1, 1))
+	img.Set(0, 0, color.RGBA{R: 200, G: 200, B: 200, A: 255})
+	//nolint:gosec // destPath is validated temporary/workspace destination
+	f, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = f.Close() }()
+	return png.Encode(f, img)
 }
