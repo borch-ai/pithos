@@ -3,6 +3,7 @@
 **Status:** Completed
 **Go Version:** 1.26.4
 **Date Completed:** 2026-07-07
+**Unit Test Coverage:** 91.0%
 
 This task implements a `--dry-run` simulation mode to allow testing structural compilation, layout calculations, and preview generation without executing live API or MCP tool calls.
 
