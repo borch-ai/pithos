@@ -567,6 +567,9 @@ func generateIllustrations(ctx context.Context, m *manifest.Manifest, opts BrewO
 	var errsMu sync.Mutex
 	var workerErrors []error
 
+	brewCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 Loop:
 	for _, page := range pendingPages {
 		// Check budget limit dynamically
@@ -583,14 +586,15 @@ Loop:
 			errsMu.Lock()
 			workerErrors = append(workerErrors, fmt.Errorf("budget exceeded during execution: actual cost $%.4f exceeds budget limit $%.4f", actualCost, budget))
 			errsMu.Unlock()
+			cancel()
 			break Loop
 		}
 
 		select {
 		case sem <- struct{}{}:
-		case <-ctx.Done():
+		case <-brewCtx.Done():
 			errsMu.Lock()
-			workerErrors = append(workerErrors, ctx.Err())
+			workerErrors = append(workerErrors, brewCtx.Err())
 			errsMu.Unlock()
 			break Loop
 		}
@@ -616,6 +620,7 @@ Loop:
 				errsMu.Unlock()
 				// Revert to pending
 				_ = m.UpdatePageStatus(p.PageIndex, manifest.StatusPending, "")
+				cancel()
 				return
 			}
 
@@ -645,7 +650,7 @@ Loop:
 				charWeight = &w
 			}
 			imageSize := getBestImageSize(m.BookProperties.TrimSize)
-			imgPath, err := generateSingleImage(ctx, mcpClient, p.PageIndex, prompt, styleID, opts.OutputDir, imageSize, m.BookProperties.CharacterReferenceURL, charWeight)
+			imgPath, err := generateSingleImage(brewCtx, mcpClient, p.PageIndex, prompt, styleID, opts.OutputDir, imageSize, m.BookProperties.CharacterReferenceURL, charWeight)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error generating image for page %d: %v\n", p.PageIndex, err)
 				// Revert to pending

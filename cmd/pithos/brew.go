@@ -83,7 +83,8 @@ func init() {
 	brewCmd.Flags().BoolVar(&brewReview, "review", false, "Export manuscript for local markdown review and pause execution")
 	brewCmd.Flags().StringVar(&brewPagesStr, "pages", "", "Comma-separated list of page numbers to regenerate (e.g. 2,4)")
 	brewCmd.Flags().BoolVar(&brewSelect, "select", false, "Interactively select pages to regenerate")
-	brewCmd.Flags().BoolVar(&brewSilent, "silent", false, "Silence automatic opening of web preview in the browser")
-	brewCmd.Flags().Float64Var(&brewBudget, "budget", 0.0, "Budget limit in USD for this run")
+	brewCmd.Flags().BoolVar(&brewSilent, "silent", false, "Silence automatic opening of web preview in the browser and disable interactive prompts (causing budget warnings to automatically abort)")
+	brewCmd.Flags().Float64Var(&brewBudget, "budget", 0.0, "Budget limit in USD for this run (setting to 0.0 or omitting falls back to configured budget limits)")
+
 	rootCmd.AddCommand(brewCmd)
 }

@@ -296,13 +296,13 @@ func expandTilde(path string) string {
 	return path
 }
 
-// CfgMu protects concurrent read/write accesses to global config variables.
-var CfgMu sync.RWMutex
+// cfgMu protects concurrent read/write accesses to global config variables.
+var cfgMu sync.RWMutex
 
 // GetMaxCostUSD reads MaxCostUSD thread-safely.
 func (c *Config) GetMaxCostUSD() float64 {
-	CfgMu.RLock()
-	defer CfgMu.RUnlock()
+	cfgMu.RLock()
+	defer cfgMu.RUnlock()
 	if c == nil {
 		return 0
 	}
@@ -311,8 +311,8 @@ func (c *Config) GetMaxCostUSD() float64 {
 
 // SetMaxCostUSD writes MaxCostUSD thread-safely.
 func (c *Config) SetMaxCostUSD(val float64) {
-	CfgMu.Lock()
-	defer CfgMu.Unlock()
+	cfgMu.Lock()
+	defer cfgMu.Unlock()
 	if c != nil {
 		c.Budget.MaxCostUSD = val
 	}
