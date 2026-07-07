@@ -1380,12 +1380,12 @@ func handleSelectPages(m *manifest.Manifest, opts BrewOptions) ([]int, error) {
 func writeDummyPNG(destPath string) error {
 	dir := filepath.Dir(destPath)
 	if err := os.MkdirAll(dir, 0750); err != nil {
-		return err
+		return fmt.Errorf("failed to create directory structure for dummy PNG: %w", err)
 	}
 	img := image.NewRGBA(image.Rect(0, 0, 1, 1))
 	img.Set(0, 0, color.RGBA{R: 200, G: 200, B: 200, A: 255})
 	//nolint:gosec // destPath is validated temporary/workspace destination
-	f, err := os.Create(destPath)
+	f, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 	if err != nil {
 		return err
 	}

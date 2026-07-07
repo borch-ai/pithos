@@ -83,7 +83,7 @@ func TestDryRun_E2EPipeline(t *testing.T) {
 
 	// Verify page images are valid PNGs
 	for i := 1; i <= 3; i++ {
-		pageImgPath := filepath.Join(tempDir, "images", "page_"+uintToString(i)+".png")
+		pageImgPath := filepath.Join(tempDir, "images", "page_"+intToString(i)+".png")
 		verifyValidPNG(t, pageImgPath)
 	}
 
@@ -172,7 +172,7 @@ func TestGenerateCharacterSeed_DryRun(t *testing.T) {
 	}
 }
 
-func uintToString(val int) string {
+func intToString(val int) string {
 	switch val {
 	case 1:
 		return "1"
