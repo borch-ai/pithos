@@ -14,5 +14,5 @@ jobs:
     secrets: inherit
     with:
       sibling-repo: borch-ai/powerword
-      sibling-path: powerword
-      repo-path: pithos
+      sibling-path: ../powerword
+      repo-path: .
