@@ -28,8 +28,8 @@ func setupStatusTestWorkspace(t *testing.T) (string, string) {
 		{PageIndex: 1, Status: manifest.StatusGeneratingImages},
 		{PageIndex: 2, Status: manifest.StatusCompleted, ImagePath: "page2.png"},
 		{PageIndex: 3, Status: manifest.StatusAwaitingApproval},
-		{PageIndex: 4, Status: "failed"},                 // unknown/stuck
-		{PageIndex: 5, Status: manifest.StatusCompleted}, // text-only completed page
+		{PageIndex: 4, Status: manifest.PageStatus("failed")}, // unknown/stuck — counts as Unknown
+		{PageIndex: 5, Status: manifest.StatusCompleted},      // StatusCompleted without ImagePath — counts as Pending
 	}
 
 	if err := m.Save(); err != nil {
