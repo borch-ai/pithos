@@ -47,11 +47,15 @@ func GetWorkspaceStatus(workspaceRoot, bookName string) (*WorkspaceStatus, error
 	for _, page := range m.Progress.Pages {
 		switch page.Status {
 		case manifest.StatusCompleted:
-			// StatusCompleted is the authoritative terminal state set by the pipeline.
-			// Pages undergoing illustration generation are held in StatusGeneratingImages,
-			// not StatusCompleted, so a page with StatusCompleted and no ImagePath is a
-			// legitimate text-only page — not an illustration still pending.
-			ws.Completed++
+			// Align with brew pipeline semantics: a page is only fully complete when
+			// StatusCompleted AND ImagePath is set. countPendingImages (brew.go:1493)
+			// treats StatusCompleted with an empty ImagePath as still needing
+			// illustration work, so we mirror that definition here for consistency.
+			if page.ImagePath != "" {
+				ws.Completed++
+			} else {
+				ws.Pending++
+			}
 		case manifest.StatusPending:
 			ws.Pending++
 		case manifest.StatusGeneratingImages:

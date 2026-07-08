@@ -66,8 +66,8 @@ func TestGetWorkspaceStatus(t *testing.T) {
 		t.Errorf("Expected TotalCostUSD 12.34, got %v", ws.TotalCostUSD)
 	}
 
-	if ws.Pending != 1 {
-		t.Errorf("Expected Pending 1, got %d", ws.Pending)
+	if ws.Pending != 2 {
+		t.Errorf("Expected Pending 2, got %d", ws.Pending)
 	}
 	if ws.Unknown != 1 {
 		t.Errorf("Expected Unknown 1, got %d", ws.Unknown)
@@ -75,8 +75,8 @@ func TestGetWorkspaceStatus(t *testing.T) {
 	if ws.Generating != 1 {
 		t.Errorf("Expected Generating 1, got %d", ws.Generating)
 	}
-	if ws.Completed != 2 {
-		t.Errorf("Expected Completed 2, got %d", ws.Completed)
+	if ws.Completed != 1 {
+		t.Errorf("Expected Completed 1, got %d", ws.Completed)
 	}
 	if ws.Awaiting != 1 {
 		t.Errorf("Expected Awaiting 1, got %d", ws.Awaiting)
