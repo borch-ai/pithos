@@ -26,7 +26,10 @@ all: lint vuln check-coverage build
 # directive without altering the tracked go.mod file. The $CI guard ensures this
 # never runs locally.
 patch-gomod:
-	@if [ -n "$$CI" ] && [ -d "./powerword" ]; then \
+	@if [ -n "$$CI" ]; then \
+		if [ ! -d "./powerword" ]; then \
+			echo "ERROR: running in CI but ./powerword sibling checkout is missing; cannot satisfy go.mod replace directive" >&2; exit 1; \
+		fi; \
 		echo "CI detected: creating symlink ../powerword -> ./powerword"; \
 		if [ -e "../powerword" ] && [ ! -L "../powerword" ]; then \
 			echo "ERROR: ../powerword exists and is not a symlink; refusing to overwrite" >&2; exit 1; \
