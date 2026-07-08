@@ -18,9 +18,9 @@ MAIN_PATH=./cmd/pithos
 all: lint vuln check-coverage build
 
 patch-gomod:
-	@if [ -d "./powerword" ]; then \
-		echo "CI detected: patching go.mod to use local powerword sibling"; \
-		go mod edit -replace github.com/borch-ai/powerword=./powerword; \
+	@if [ -d "./powerword" ] && [ ! -e "../powerword" ]; then \
+		echo "CI detected: creating symlink ../powerword -> ./powerword"; \
+		ln -s "$$(pwd)/powerword" ../powerword; \
 	fi
 
 build: patch-gomod
