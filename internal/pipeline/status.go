@@ -48,7 +48,7 @@ func GetWorkspaceStatus(workspaceRoot, bookName string) (*WorkspaceStatus, error
 		switch page.Status {
 		case manifest.StatusCompleted:
 			// Align with brew pipeline semantics: a page is only fully complete when
-			// StatusCompleted AND ImagePath is set. countPendingImages (brew.go:1493)
+			// StatusCompleted AND ImagePath is set. countPendingImages in brew.go
 			// treats StatusCompleted with an empty ImagePath as still needing
 			// illustration work, so we mirror that definition here for consistency.
 			if page.ImagePath != "" {
