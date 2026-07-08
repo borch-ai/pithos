@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -60,7 +61,7 @@ func TestGetWorkspaceStatus(t *testing.T) {
 	if ws.TotalPages != 5 {
 		t.Errorf("Expected TotalPages 5, got %d", ws.TotalPages)
 	}
-	if ws.TotalCostUSD != 12.34 {
+	if math.Abs(ws.TotalCostUSD-12.34) > 1e-9 {
 		t.Errorf("Expected TotalCostUSD 12.34, got %v", ws.TotalCostUSD)
 	}
 
@@ -85,5 +86,32 @@ func TestGetWorkspaceStatus_ManifestLoadError(t *testing.T) {
 	_, err := GetWorkspaceStatus(tmpRoot, bookName)
 	if err == nil {
 		t.Errorf("Expected error when manifest does not exist, got nil")
+	}
+}
+
+func TestGetWorkspaceStatus_InvalidBookName(t *testing.T) {
+	_, err := GetWorkspaceStatus("/tmp", "invalid/book/name")
+	if err == nil {
+		t.Errorf("Expected error for bookName containing '/', got nil")
+	}
+
+	_, err = GetWorkspaceStatus("/tmp", "invalid\\book\\name")
+	if err == nil {
+		t.Errorf("Expected error for bookName containing '\\', got nil")
+	}
+
+	_, err = GetWorkspaceStatus("/tmp", "")
+	if err == nil {
+		t.Errorf("Expected error for empty bookName, got nil")
+	}
+
+	_, err = GetWorkspaceStatus("/tmp", ".")
+	if err == nil {
+		t.Errorf("Expected error for bookName '.', got nil")
+	}
+
+	_, err = GetWorkspaceStatus("/tmp", "..")
+	if err == nil {
+		t.Errorf("Expected error for bookName '..', got nil")
 	}
 }

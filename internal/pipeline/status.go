@@ -3,6 +3,7 @@ package pipeline
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/borch-ai/pithos/internal/manifest"
 )
@@ -23,6 +24,10 @@ type WorkspaceStatus struct {
 
 // GetWorkspaceStatus loads the manifest and compiles structural diagnostics.
 func GetWorkspaceStatus(workspaceRoot, bookName string) (*WorkspaceStatus, error) {
+	if bookName == "" || bookName == "." || bookName == ".." || strings.Contains(bookName, "/") || strings.Contains(bookName, "\\") {
+		return nil, fmt.Errorf("invalid book name: cannot be empty, '.', '..', or contain path separators")
+	}
+
 	manifestPath := filepath.Join(workspaceRoot, bookName, "manifest.json")
 	m, err := manifest.LoadManifest(manifestPath)
 	if err != nil {

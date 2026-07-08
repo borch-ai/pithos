@@ -129,3 +129,30 @@ func TestCleanWorkspace_Orphans(t *testing.T) {
 		}
 	}
 }
+
+func TestCleanWorkspace_InvalidBookName(t *testing.T) {
+	err := CleanWorkspace("/tmp", "invalid/book/name", false, false, false)
+	if err == nil {
+		t.Errorf("Expected error for bookName containing '/', got nil")
+	}
+
+	err = CleanWorkspace("/tmp", "invalid\\book\\name", false, false, false)
+	if err == nil {
+		t.Errorf("Expected error for bookName containing '\\', got nil")
+	}
+
+	err = CleanWorkspace("/tmp", "", false, false, false)
+	if err == nil {
+		t.Errorf("Expected error for empty bookName, got nil")
+	}
+
+	err = CleanWorkspace("/tmp", ".", false, false, false)
+	if err == nil {
+		t.Errorf("Expected error for bookName '.', got nil")
+	}
+
+	err = CleanWorkspace("/tmp", "..", false, false, false)
+	if err == nil {
+		t.Errorf("Expected error for bookName '..', got nil")
+	}
+}

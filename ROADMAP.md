@@ -265,7 +265,7 @@ Focus: Enhancing the developer and author experience with rich TUI (Terminal Use
 ## Phase 7: Ecosystem Expansion
 Focus: Exploring new integrations like Google Docs, RAG workflows, EPUB exports, and broader publishing infrastructure.
 
-*   [x] **Task 7.6: Unified LLM Integration** (Formerly Task 5.6)
+*   [x] **Task 7.0: Unified LLM Integration** (Formerly Task 5.6)
     *   Refactor Pithos's LLM client layer to consume the unified powerword LLM client package, eliminating the local raw HTTP REST implementations.
 
 *   [ ] **Task 7.1: Trend-Based Brainstorming**
@@ -349,4 +349,3 @@ Focus: Elevating the Pithos terminal experience from functional to polished, usi
 *   [ ] **Task 9.1: SSH-Based Remote Pipeline Status via Wish**
     *   Integrate `github.com/charmbracelet/wish` to expose an optional, lightweight SSH server within the Pithos process.
     *   Allow remote querying of live pipeline status (current page, cost, errors) from a secondary terminal session or monitoring script, as an alternative to the Lamplighter WebRTC approach (Task 5.1).
-    *   [Implementation Plan](plans/phase_9/task_9_1_wish_ssh_status_server.md)

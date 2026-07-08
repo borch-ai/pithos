@@ -4,12 +4,17 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/borch-ai/pithos/internal/manifest"
 )
 
 // CleanWorkspace resets failed page statuses and optionally deletes orphaned images.
 func CleanWorkspace(workspaceRoot, bookName string, orphans, resetFailed, all bool) error {
+	if bookName == "" || bookName == "." || bookName == ".." || strings.Contains(bookName, "/") || strings.Contains(bookName, "\\") {
+		return fmt.Errorf("invalid book name: cannot be empty, '.', '..', or contain path separators")
+	}
+
 	manifestPath := filepath.Join(workspaceRoot, bookName, "manifest.json")
 	m, err := manifest.LoadManifest(manifestPath)
 	if err != nil {
@@ -44,7 +49,8 @@ func cleanManifestStatuses(m *manifest.Manifest, resetFailed, all bool) bool {
 		}
 	} else if resetFailed {
 		for i := range m.Progress.Pages {
-			if m.Progress.Pages[i].Status == manifest.StatusGeneratingImages {
+			st := m.Progress.Pages[i].Status
+			if st != manifest.StatusPending && st != manifest.StatusCompleted && st != manifest.StatusAwaitingApproval {
 				m.Progress.Pages[i].Status = manifest.StatusPending
 				needsSave = true
 			}
@@ -73,7 +79,10 @@ func cleanOrphanedImages(m *manifest.Manifest, workspaceRoot, bookName string) e
 	imagesDir := filepath.Join(workspaceRoot, bookName, "images")
 	entries, err := os.ReadDir(imagesDir)
 	if err != nil {
-		return nil
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to read images directory: %w", err)
 	}
 
 	for _, entry := range entries {
