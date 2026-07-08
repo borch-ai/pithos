@@ -26,7 +26,7 @@ func setupStatusTestWorkspace(t *testing.T) (string, string) {
 	m.Progress.Pages = []manifest.PageState{
 		{PageIndex: 0, Status: manifest.StatusPending},
 		{PageIndex: 1, Status: manifest.StatusGeneratingImages},
-		{PageIndex: 2, Status: manifest.StatusCompleted},
+		{PageIndex: 2, Status: manifest.StatusCompleted, ImagePath: "page2.png"},
 		{PageIndex: 3, Status: manifest.StatusAwaitingApproval},
 		{PageIndex: 4, Status: "failed"}, // unknown/stuck
 	}
