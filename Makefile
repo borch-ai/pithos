@@ -17,6 +17,13 @@ MAIN_PATH=./cmd/pithos
 
 all: lint vuln check-coverage build
 
+# patch-gomod creates a ../powerword symlink in CI environments only.
+# Background: go.mod contains `replace github.com/borch-ai/powerword => ../powerword`
+# so the Go toolchain expects the sibling directory at that path. We cannot use
+# `go mod edit -replace=./powerword` because that modifies go.mod and causes the
+# CI workflow's `git diff --exit-code go.mod go.sum` hygiene check to fail.
+# The symlink is the only approach that satisfies the replace directive without
+# altering the tracked go.mod file. The $CI guard ensures this never runs locally.
 patch-gomod:
 	@if [ -n "$$CI" ] && [ -d "./powerword" ]; then \
 		echo "CI detected: creating symlink ../powerword -> ./powerword"; \
