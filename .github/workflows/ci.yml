@@ -15,4 +15,4 @@ jobs:
     with:
       sibling-repo: borch-ai/powerword
       sibling-path: powerword
-      repo-path: pithos
+      repo-path: .
