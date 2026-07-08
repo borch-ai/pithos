@@ -32,7 +32,7 @@ patch-gomod:
 			echo "ERROR: ../powerword exists and is not a symlink; refusing to overwrite" >&2; exit 1; \
 		fi; \
 		rm -f ../powerword; \
-		ln -sf "$$(pwd)/powerword" ../powerword; \
+		ln -sf "$(CURDIR)/powerword" ../powerword; \
 	fi
 
 build: patch-gomod
