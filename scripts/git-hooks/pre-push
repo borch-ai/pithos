@@ -47,10 +47,7 @@ if ! command -v powerword >/dev/null 2>&1; then
 fi
 
 # Run the review command
-powerword review --local
-
-# Check exit code
-if [ $? -ne 0 ]; then
+if ! powerword review --local; then
   echo ""
   echo "Error: Critic rejected the push or local validation failed."
   echo "Review the feedback in .powerword-critic.md and fix the issues."
