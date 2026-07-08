@@ -18,9 +18,10 @@ MAIN_PATH=./cmd/pithos
 all: lint vuln check-coverage build
 
 patch-gomod:
-	@if [ -d "./powerword" ] && [ ! -e "../powerword" ]; then \
+	@if [ -n "$$CI" ] && [ -d "./powerword" ]; then \
 		echo "CI detected: creating symlink ../powerword -> ./powerword"; \
-		ln -s "$$(pwd)/powerword" ../powerword; \
+		rm -f ../powerword; \
+		ln -sf "$$(pwd)/powerword" ../powerword; \
 	fi
 
 build: patch-gomod

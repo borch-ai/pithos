@@ -47,11 +47,7 @@ func GetWorkspaceStatus(workspaceRoot, bookName string) (*WorkspaceStatus, error
 	for _, page := range m.Progress.Pages {
 		switch page.Status {
 		case manifest.StatusCompleted:
-			if page.ImagePath != "" {
-				ws.Completed++
-			} else {
-				ws.Pending++
-			}
+			ws.Completed++
 		case manifest.StatusPending:
 			ws.Pending++
 		case manifest.StatusGeneratingImages:

@@ -28,7 +28,8 @@ func setupStatusTestWorkspace(t *testing.T) (string, string) {
 		{PageIndex: 1, Status: manifest.StatusGeneratingImages},
 		{PageIndex: 2, Status: manifest.StatusCompleted, ImagePath: "page2.png"},
 		{PageIndex: 3, Status: manifest.StatusAwaitingApproval},
-		{PageIndex: 4, Status: "failed"}, // unknown/stuck
+		{PageIndex: 4, Status: "failed"},                 // unknown/stuck
+		{PageIndex: 5, Status: manifest.StatusCompleted}, // text-only completed page
 	}
 
 	if err := m.Save(); err != nil {
@@ -58,8 +59,8 @@ func TestGetWorkspaceStatus(t *testing.T) {
 	if ws.TargetPageCount != 10 {
 		t.Errorf("Expected TargetPageCount 10, got %d", ws.TargetPageCount)
 	}
-	if ws.TotalPages != 5 {
-		t.Errorf("Expected TotalPages 5, got %d", ws.TotalPages)
+	if ws.TotalPages != 6 {
+		t.Errorf("Expected TotalPages 6, got %d", ws.TotalPages)
 	}
 	if math.Abs(ws.TotalCostUSD-12.34) > 1e-9 {
 		t.Errorf("Expected TotalCostUSD 12.34, got %v", ws.TotalCostUSD)
@@ -74,8 +75,8 @@ func TestGetWorkspaceStatus(t *testing.T) {
 	if ws.Generating != 1 {
 		t.Errorf("Expected Generating 1, got %d", ws.Generating)
 	}
-	if ws.Completed != 1 {
-		t.Errorf("Expected Completed 1, got %d", ws.Completed)
+	if ws.Completed != 2 {
+		t.Errorf("Expected Completed 2, got %d", ws.Completed)
 	}
 	if ws.Awaiting != 1 {
 		t.Errorf("Expected Awaiting 1, got %d", ws.Awaiting)
