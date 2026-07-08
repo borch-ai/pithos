@@ -22,6 +22,7 @@ func setupCleanTestWorkspace(t *testing.T) (string, string) {
 		{PageIndex: 1, Status: manifest.StatusGeneratingImages},
 		{PageIndex: 2, Status: manifest.StatusCompleted, ImagePath: "page2.png"},
 		{PageIndex: 3, Status: manifest.StatusAwaitingApproval},
+		{PageIndex: 4, Status: manifest.PageStatus("failed")},
 	}
 	m.Progress.CoverImagePath = "cover.png"
 	m.AssetRegistry["some_asset"] = "asset.png"
@@ -46,14 +47,17 @@ func TestCleanWorkspace_ResetFailed(t *testing.T) {
 		t.Fatalf("Failed to load manifest: %v", err)
 	}
 
-	if m.Progress.Pages[1].Status != manifest.StatusPending {
-		t.Errorf("Expected page 1 status to be pending, got %v", m.Progress.Pages[1].Status)
+	if m.Progress.Pages[1].Status != manifest.StatusGeneratingImages {
+		t.Errorf("Expected page 1 status to remain generating_images, got %v", m.Progress.Pages[1].Status)
 	}
 	if m.Progress.Pages[2].Status != manifest.StatusCompleted {
 		t.Errorf("Expected page 2 status to be completed, got %v", m.Progress.Pages[2].Status)
 	}
 	if m.Progress.Pages[3].Status != manifest.StatusAwaitingApproval {
 		t.Errorf("Expected page 3 status to remain awaiting_approval, got %v", m.Progress.Pages[3].Status)
+	}
+	if m.Progress.Pages[4].Status != manifest.StatusPending {
+		t.Errorf("Expected page 4 status to be pending, got %v", m.Progress.Pages[4].Status)
 	}
 }
 

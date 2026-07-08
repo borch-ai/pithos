@@ -45,7 +45,8 @@ var statusCmd = &cobra.Command{
 		sb.WriteString(ui.KeyStyle.Render("Completed: ") + ui.ValStyle.Render(fmt.Sprintf("%d", ws.Completed)) + "\n")
 		sb.WriteString(ui.KeyStyle.Render("Pending: ") + ui.ValStyle.Render(fmt.Sprintf("%d", ws.Pending)) + "\n")
 		sb.WriteString(ui.KeyStyle.Render("Generating: ") + ui.ValStyle.Render(fmt.Sprintf("%d", ws.Generating)) + "\n")
-		sb.WriteString(ui.KeyStyle.Render("Awaiting: ") + ui.ValStyle.Render(fmt.Sprintf("%d", ws.Awaiting)) + "\n\n")
+		sb.WriteString(ui.KeyStyle.Render("Awaiting: ") + ui.ValStyle.Render(fmt.Sprintf("%d", ws.Awaiting)) + "\n")
+		sb.WriteString(ui.KeyStyle.Render("Unknown: ") + ui.ValStyle.Render(fmt.Sprintf("%d", ws.Unknown)) + "\n\n")
 
 		sb.WriteString(ui.HighlightStyle.Render("TELEMETRY") + "\n")
 		sb.WriteString(ui.KeyStyle.Render("Total Cost: ") + ui.ValStyle.Render(fmt.Sprintf("$%.2f", ws.TotalCostUSD)) + "\n")

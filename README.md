@@ -23,7 +23,8 @@ The name refers to the large ceramic storage jar utilized by Diogenes of Sinopeâ
 1. **`pithos initiate`**: Initializes the target book workspace directory, copies template manifests, and sets up project configuration metadata.  
 2. **`pithos brew`**: Performs incremental, checkpointed generation of the manuscript and page illustrations.  
 3. **`pithos assemble`**: Validates print layout constraints (such as the KDP hardcover 75-page limit), compiles print-ready PDFs and digital EPUB files, and performs KDP preflight inspection.
-4. **`pithos status` & `pithos clean`**: Inspects workspace health, checks generation states and telemetry costs, and repairs corrupted or orphaned assets.
+4. **`pithos status`**: Inspects workspace health, checks generation states, and reports telemetry costs.
+5. **`pithos clean`**: Repairs corrupted or orphaned assets and resets failed pages.
 
 ---
 

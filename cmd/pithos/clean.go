@@ -30,6 +30,9 @@ var cleanCmd = &cobra.Command{
 		if !cleanOrphans && !cleanResetFailed && !cleanAll {
 			return fmt.Errorf("must specify at least one clean action (--orphans, --reset-failed, --all)")
 		}
+		if cleanAll && cleanResetFailed {
+			return fmt.Errorf("--all and --reset-failed are mutually exclusive")
+		}
 
 		bookName := args[0]
 		err := pipeline.CleanWorkspace(config.Cfg.WorkspacesRoot, bookName, cleanOrphans, cleanResetFailed, cleanAll)

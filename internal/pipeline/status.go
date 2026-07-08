@@ -19,6 +19,7 @@ type WorkspaceStatus struct {
 	Pending         int
 	Generating      int
 	Awaiting        int
+	Unknown         int
 	TotalCostUSD    float64
 }
 
@@ -55,7 +56,7 @@ func GetWorkspaceStatus(workspaceRoot, bookName string) (*WorkspaceStatus, error
 			ws.Awaiting++
 		default:
 			// If there are other stuck or undefined statuses
-			ws.Pending++
+			ws.Unknown++
 		}
 	}
 

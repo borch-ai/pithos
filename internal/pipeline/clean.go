@@ -50,7 +50,7 @@ func cleanManifestStatuses(m *manifest.Manifest, resetFailed, all bool) bool {
 	} else if resetFailed {
 		for i := range m.Progress.Pages {
 			st := m.Progress.Pages[i].Status
-			if st != manifest.StatusPending && st != manifest.StatusCompleted && st != manifest.StatusAwaitingApproval {
+			if st != manifest.StatusPending && st != manifest.StatusCompleted && st != manifest.StatusAwaitingApproval && st != manifest.StatusGeneratingImages {
 				m.Progress.Pages[i].Status = manifest.StatusPending
 				needsSave = true
 			}
