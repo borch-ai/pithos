@@ -39,7 +39,7 @@ build: patch-gomod
 	@mkdir -p $(BIN_DIR)
 	$(GOBUILD) -o $(BIN_DIR)/$(BINARY_NAME) $(MAIN_PATH)
 
-install:
+install: patch-gomod
 	@echo "Installing $(BINARY_NAME)..."
 	$(GOCMD) install $(MAIN_PATH)
 
@@ -47,11 +47,11 @@ test: patch-gomod
 	@echo "Running tests..."
 	$(GOTEST) -v -race -coverprofile=coverage.out -coverpkg=./internal/... ./...
 
-test-integration:
+test-integration: patch-gomod
 	@echo "Running integration tests..."
 	$(GOTEST) -v -run="Test.*Pricing" ./internal/pipeline/...
 
-check-coverage: test patch-gomod
+check-coverage: test
 	@if command -v powerword >/dev/null 2>&1; then \
 		powerword check-coverage $(MIN_COVERAGE) coverage.out; \
 	else \
