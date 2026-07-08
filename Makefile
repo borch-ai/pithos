@@ -20,6 +20,9 @@ all: lint vuln check-coverage build
 patch-gomod:
 	@if [ -n "$$CI" ] && [ -d "./powerword" ]; then \
 		echo "CI detected: creating symlink ../powerword -> ./powerword"; \
+		if [ -e "../powerword" ] && [ ! -L "../powerword" ]; then \
+			echo "ERROR: ../powerword exists and is not a symlink; refusing to overwrite" >&2; exit 1; \
+		fi; \
 		rm -f ../powerword; \
 		ln -sf "$$(pwd)/powerword" ../powerword; \
 	fi

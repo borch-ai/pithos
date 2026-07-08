@@ -59,22 +59,36 @@ func cleanManifestStatuses(m *manifest.Manifest, resetFailed, all bool) bool {
 	return needsSave
 }
 
-func cleanOrphanedImages(m *manifest.Manifest, workspaceRoot, bookName string) error {
-	referenced := make(map[string]bool)
+// isImageFile returns true for known raster image extensions used by pithos.
+func isImageFile(name string) bool {
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".png", ".jpg", ".jpeg", ".webp":
+		return true
+	}
+	return false
+}
 
+// referencedImageNames builds the set of image basenames referenced in the manifest.
+func referencedImageNames(m *manifest.Manifest) map[string]bool {
+	refs := make(map[string]bool)
 	if m.Progress.CoverImagePath != "" {
-		referenced[filepath.Base(m.Progress.CoverImagePath)] = true
+		refs[filepath.Base(m.Progress.CoverImagePath)] = true
 	}
 	for _, path := range m.AssetRegistry {
 		if path != "" {
-			referenced[filepath.Base(path)] = true
+			refs[filepath.Base(path)] = true
 		}
 	}
 	for _, page := range m.Progress.Pages {
 		if page.ImagePath != "" {
-			referenced[filepath.Base(page.ImagePath)] = true
+			refs[filepath.Base(page.ImagePath)] = true
 		}
 	}
+	return refs
+}
+
+func cleanOrphanedImages(m *manifest.Manifest, workspaceRoot, bookName string) error {
+	referenced := referencedImageNames(m)
 
 	imagesDir := filepath.Join(workspaceRoot, bookName, "images")
 	entries, err := os.ReadDir(imagesDir)
@@ -86,14 +100,28 @@ func cleanOrphanedImages(m *manifest.Manifest, workspaceRoot, bookName string) e
 	}
 
 	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
+		if err := maybeDeleteOrphan(imagesDir, entry, referenced); err != nil {
+			return err
 		}
-		if !referenced[entry.Name()] {
-			if err := os.Remove(filepath.Join(imagesDir, entry.Name())); err != nil {
-				return fmt.Errorf("failed to delete orphaned image %s: %w", entry.Name(), err)
-			}
-		}
+	}
+	return nil
+}
+
+// maybeDeleteOrphan removes a single directory entry if it is an unreferenced image file.
+func maybeDeleteOrphan(imagesDir string, entry os.DirEntry, referenced map[string]bool) error {
+	if entry.IsDir() {
+		return nil
+	}
+	name := entry.Name()
+	// Skip dotfiles (e.g. .gitkeep) and non-image files.
+	if strings.HasPrefix(name, ".") || !isImageFile(name) {
+		return nil
+	}
+	if referenced[name] {
+		return nil
+	}
+	if err := os.Remove(filepath.Join(imagesDir, name)); err != nil {
+		return fmt.Errorf("failed to delete orphaned image %s: %w", name, err)
 	}
 	return nil
 }

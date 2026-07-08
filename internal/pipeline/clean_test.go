@@ -89,11 +89,14 @@ func TestCleanWorkspace_Orphans(t *testing.T) {
 	}
 
 	filesToCreate := []string{
-		"page2.png",   // Referenced by page 2
-		"cover.png",   // Referenced by cover
-		"asset.png",   // Referenced by asset registry
-		"orphan1.png", // Not referenced
-		"orphan2.jpg", // Not referenced
+		"page2.png",    // Referenced by page 2
+		"cover.png",    // Referenced by cover
+		"asset.png",    // Referenced by asset registry
+		"orphan1.png",  // Not referenced — should be deleted
+		"orphan2.jpg",  // Not referenced — should be deleted
+		".gitkeep",     // Dotfile — must be preserved
+		"notes.txt",    // Non-image file — must be preserved
+		"orphan3.webp", // Unreferenced webp — should be deleted
 	}
 
 	for _, f := range filesToCreate {
@@ -118,8 +121,8 @@ func TestCleanWorkspace_Orphans(t *testing.T) {
 		foundFiles[entry.Name()] = true
 	}
 
-	expectedFiles := []string{"page2.png", "cover.png", "asset.png"}
-	unexpectedFiles := []string{"orphan1.png", "orphan2.jpg"}
+	expectedFiles := []string{"page2.png", "cover.png", "asset.png", ".gitkeep", "notes.txt"}
+	unexpectedFiles := []string{"orphan1.png", "orphan2.jpg", "orphan3.webp"}
 
 	for _, f := range expectedFiles {
 		if !foundFiles[f] {
