@@ -80,7 +80,7 @@ vuln: patch-gomod
 fmt:
 	$(GOFMT) -w -s .
 
-tidy:
+tidy: patch-gomod
 	$(GOCMD) mod tidy
 
 install-hooks:
