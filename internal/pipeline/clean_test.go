@@ -53,11 +53,17 @@ func TestCleanWorkspace_ResetFailed(t *testing.T) {
 	if m.Progress.Pages[2].Status != manifest.StatusCompleted {
 		t.Errorf("Expected page 2 status to be completed, got %v", m.Progress.Pages[2].Status)
 	}
+	if m.Progress.Pages[2].ImagePath != "page2.png" {
+		t.Errorf("Expected page 2 ImagePath to be preserved, got %q", m.Progress.Pages[2].ImagePath)
+	}
 	if m.Progress.Pages[3].Status != manifest.StatusAwaitingApproval {
 		t.Errorf("Expected page 3 status to remain awaiting_approval, got %v", m.Progress.Pages[3].Status)
 	}
 	if m.Progress.Pages[4].Status != manifest.StatusPending {
 		t.Errorf("Expected page 4 status to be pending, got %v", m.Progress.Pages[4].Status)
+	}
+	if m.Progress.Pages[4].ImagePath != "" {
+		t.Errorf("Expected page 4 ImagePath to be cleared on reset, got %q", m.Progress.Pages[4].ImagePath)
 	}
 }
 
@@ -77,6 +83,9 @@ func TestCleanWorkspace_All(t *testing.T) {
 	for _, page := range m.Progress.Pages {
 		if page.Status != manifest.StatusPending {
 			t.Errorf("Expected page %d status to be pending, got %v", page.PageIndex, page.Status)
+		}
+		if page.ImagePath != "" {
+			t.Errorf("Expected page %d ImagePath to be cleared on --all reset, got %q", page.PageIndex, page.ImagePath)
 		}
 	}
 }
