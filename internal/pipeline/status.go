@@ -47,6 +47,10 @@ func GetWorkspaceStatus(workspaceRoot, bookName string) (*WorkspaceStatus, error
 	for _, page := range m.Progress.Pages {
 		switch page.Status {
 		case manifest.StatusCompleted:
+			// StatusCompleted is the authoritative terminal state set by the pipeline.
+			// Pages undergoing illustration generation are held in StatusGeneratingImages,
+			// not StatusCompleted, so a page with StatusCompleted and no ImagePath is a
+			// legitimate text-only page — not an illustration still pending.
 			ws.Completed++
 		case manifest.StatusPending:
 			ws.Pending++

@@ -1,4 +1,4 @@
-.PHONY: all build install test test-integration clean lint fmt tidy check-coverage vuln install-hooks
+.PHONY: all build patch-gomod install test test-integration clean lint fmt tidy check-coverage vuln install-hooks
 
 # Go parameters
 GOCMD=go
