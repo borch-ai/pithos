@@ -1,4 +1,4 @@
-# plan: Task 5.15: Multi-Model Illustration Variations & Selection
+# plan: Task 6.2: Multi-Model Illustration Variations & Selection
 
 **Status:** Open
 **Go Version:** 1.26.4

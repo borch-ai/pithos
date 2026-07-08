@@ -1,4 +1,4 @@
-# plan: Task 5.18: Automated Cover Art & Title Layout Generator
+# plan: Task 6.5: Automated Cover Art & Title Layout Generator
 
 **Status:** Open
 **Go Version:** 1.26.4

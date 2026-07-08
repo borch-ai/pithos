@@ -1,4 +1,4 @@
-# plan: Task 6.8: Chapter Takeaways & Review Exercises Generator
+# plan: Task 8.8: Chapter Takeaways & Review Exercises Generator
 
 **Status:** Open
 **Go Version:** 1.26.4

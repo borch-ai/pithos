@@ -1,4 +1,4 @@
-# plan: Task 5.5: Speculative: Publish Pithos as Homebrew Package with Dependencies
+# plan: Task 7.6: Speculative: Publish Pithos as Homebrew Package with Dependencies
 
 **Status:** Speculative
 

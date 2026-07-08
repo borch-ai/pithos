@@ -1,4 +1,4 @@
-# plan: Task 6.6: Technical Diagram & Schematic Generation
+# plan: Task 8.6: Technical Diagram & Schematic Generation
 
 **Status:** Open
 **Go Version:** 1.26.4

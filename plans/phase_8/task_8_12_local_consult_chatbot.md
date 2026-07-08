@@ -1,4 +1,4 @@
-# plan: Task 6.12: Local "Consult" RAG Chatbot Subcommand
+# plan: Task 8.12: Local "Consult" RAG Chatbot Subcommand
 
 **Status:** Open
 **Go Version:** 1.26.4

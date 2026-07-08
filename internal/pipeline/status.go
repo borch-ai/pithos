@@ -1,0 +1,58 @@
+package pipeline
+
+import (
+	"fmt"
+	"path/filepath"
+
+	"github.com/borch-ai/pithos/internal/manifest"
+)
+
+// WorkspaceStatus provides aggregated diagnostics for a book workspace.
+type WorkspaceStatus struct {
+	BookName        string
+	Theme           string
+	Format          string
+	TargetPageCount int
+	TotalPages      int
+	Completed       int
+	Pending         int
+	Generating      int
+	Awaiting        int
+	TotalCostUSD    float64
+}
+
+// GetWorkspaceStatus loads the manifest and compiles structural diagnostics.
+func GetWorkspaceStatus(workspaceRoot, bookName string) (*WorkspaceStatus, error) {
+	manifestPath := filepath.Join(workspaceRoot, bookName, "manifest.json")
+	m, err := manifest.LoadManifest(manifestPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load manifest for %s: %w", bookName, err)
+	}
+
+	ws := &WorkspaceStatus{
+		BookName:        bookName,
+		Theme:           m.BookProperties.Theme,
+		Format:          m.BookProperties.Format,
+		TargetPageCount: m.BookProperties.TargetPageCount,
+		TotalPages:      len(m.Progress.Pages),
+		TotalCostUSD:    m.Telemetry.TotalCostUSD,
+	}
+
+	for _, page := range m.Progress.Pages {
+		switch page.Status {
+		case manifest.StatusCompleted:
+			ws.Completed++
+		case manifest.StatusPending:
+			ws.Pending++
+		case manifest.StatusGeneratingImages:
+			ws.Generating++
+		case manifest.StatusAwaitingApproval:
+			ws.Awaiting++
+		default:
+			// If there are other stuck or undefined statuses
+			ws.Pending++
+		}
+	}
+
+	return ws, nil
+}
