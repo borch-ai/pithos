@@ -53,6 +53,36 @@ func WatchWorkspace(ctx context.Context, opts WatchOptions) error {
 		debounceTimer *time.Timer
 	)
 
+	// Set up a reload channel and worker goroutine to serialize handleReload executions
+	reloadChan := make(chan struct{}, 1)
+	var workerWg sync.WaitGroup
+	workerCtx, cancelWorker := context.WithCancel(ctx)
+	defer func() {
+		mu.Lock()
+		if debounceTimer != nil {
+			debounceTimer.Stop()
+		}
+		mu.Unlock()
+
+		cancelWorker()
+		workerWg.Wait()
+	}()
+
+	workerWg.Add(1)
+	go func() {
+		defer workerWg.Done()
+		for {
+			select {
+			case <-workerCtx.Done():
+				return
+			case <-reloadChan:
+				if err := handleReload(workerCtx, absBookDir, opts.ConfigFile, opts.DryRun); err != nil {
+					logger.Error("Hot-reload failed", "error", err)
+				}
+			}
+		}
+	}()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -76,8 +106,10 @@ func WatchWorkspace(ctx context.Context, opts WatchOptions) error {
 					debounceTimer.Stop()
 				}
 				debounceTimer = time.AfterFunc(150*time.Millisecond, func() {
-					if err := handleReload(ctx, absBookDir, opts.ConfigFile, opts.DryRun); err != nil {
-						logger.Error("Hot-reload failed", "error", err)
+					select {
+					case reloadChan <- struct{}{}:
+					default:
+						// Already queued, no need to block or queue another
 					}
 				})
 				mu.Unlock()
@@ -97,7 +129,14 @@ func handleReload(ctx context.Context, bookDir string, configFile string, dryRun
 	logger.Info("Change detected. Starting hot-reload...")
 
 	// 1. Reload configuration
-	if _, err := config.LoadConfig(configFile); err != nil {
+	reloadFile := configFile
+	if reloadFile == "" {
+		bookLocalConfig := filepath.Join(bookDir, ".pithos.toml")
+		if _, err := os.Stat(bookLocalConfig); err == nil {
+			reloadFile = bookLocalConfig
+		}
+	}
+	if _, err := config.LoadConfig(reloadFile); err != nil {
 		logger.Warn("Failed to reload configuration, using previous configuration", "error", err)
 	}
 
@@ -118,6 +157,8 @@ func handleReload(ctx context.Context, bookDir string, configFile string, dryRun
 		if changed {
 			logger.Info("Imported manuscript edits from manuscript.md")
 		}
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("failed to check manuscript.md status: %w", err)
 	}
 
 	// 4. Regenerate web preview database

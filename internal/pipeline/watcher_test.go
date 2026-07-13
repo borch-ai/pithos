@@ -13,6 +13,7 @@ import (
 	"github.com/borch-ai/pithos/internal/manifest"
 )
 
+//nolint:funlen // TestHandleReload_Basic verifies multiple hot-reload paths in sequence
 func TestHandleReload_Basic(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "pithos-watcher-test-*")
 	if err != nil {
@@ -105,7 +106,11 @@ new prompt 1
 	}
 
 	// 3. Test Typst PDF compilation via handleReload by setting TypstPath to a valid executable (e.g. os.Args[0])
+	oldTypstPath := config.Cfg.MCP.TypstPath
 	config.Cfg.MCP.TypstPath = os.Args[0] // guarantees LookPath passes
+	t.Cleanup(func() {
+		config.Cfg.MCP.TypstPath = oldTypstPath
+	})
 	if err := handleReload(ctx, tmpDir, cfgFile, true); err != nil {
 		t.Fatalf("handleReload failed during typst test: %v", err)
 	}
@@ -253,7 +258,7 @@ func TestWatchWorkspace_TriggersReload(t *testing.T) {
 	}()
 
 	// Wait for watcher to register folder
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(150 * time.Millisecond)
 
 	// Write dummy.txt (non-watched file to hit non-watched skip branch)
 	dummyPath := filepath.Join(tmpDir, "dummy.txt")
@@ -278,8 +283,18 @@ Reloaded prompt
 		t.Fatalf("failed to write config again: %v", writeErr)
 	}
 
-	// Wait for debounce and trigger
-	time.Sleep(300 * time.Millisecond)
+	// Poll manifest file until reload completes or timeout is hit
+	var mUpdated *manifest.Manifest
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		var loadManifestErr error
+		mUpdated, loadManifestErr = manifest.LoadManifest(manifestPath)
+		if loadManifestErr == nil && mUpdated.BookProperties.Style == "reload-style" {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
 	cancel()
 
 	// Wait for watcher exit
@@ -293,12 +308,8 @@ Reloaded prompt
 	}
 
 	// Verify reload occurred (manifest updated style)
-	mUpdated, loadManifestErr := manifest.LoadManifest(manifestPath)
-	if loadManifestErr != nil {
-		t.Fatalf("failed to load updated manifest: %v", loadManifestErr)
-	}
-	if mUpdated.BookProperties.Style != "reload-style" {
-		t.Errorf("expected style 'reload-style', got %q (reload did not trigger/propagate)", mUpdated.BookProperties.Style)
+	if mUpdated == nil || mUpdated.BookProperties.Style != "reload-style" {
+		t.Errorf("expected style 'reload-style', got %v (reload did not trigger/propagate)", mUpdated)
 	}
 }
 
@@ -408,7 +419,11 @@ func TestHandleReload_TypstCompileError(t *testing.T) {
 		t.Fatalf("failed to save manifest: %v", saveErr)
 	}
 
+	oldTypstPath := config.Cfg.MCP.TypstPath
 	config.Cfg.MCP.TypstPath = os.Args[0] // guarantees LookPath passes
+	t.Cleanup(func() {
+		config.Cfg.MCP.TypstPath = oldTypstPath
+	})
 
 	ctx := context.Background()
 	// Run with dryRun = false so it attempts starting the binary as MCP server and fails
@@ -422,15 +437,22 @@ func TestHandleReload_TypstCompileError(t *testing.T) {
 }
 
 // Redirect stdout/stderr helper to capture output during printSuccessAlert test
-func captureStdout(f func()) string {
+func captureStdout(t *testing.T, f func()) string {
 	old := os.Stdout
-	r, w, _ := os.Pipe()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("failed to create pipe: %v", err)
+	}
 	os.Stdout = w
+
+	defer func() {
+		os.Stdout = old
+		_ = r.Close()
+	}()
 
 	f()
 
 	_ = w.Close()
-	os.Stdout = old
 
 	var buf strings.Builder
 	_, _ = io.Copy(&buf, r)
@@ -438,7 +460,7 @@ func captureStdout(f func()) string {
 }
 
 func TestPrintSuccessAlert(t *testing.T) {
-	output := captureStdout(func() {
+	output := captureStdout(t, func() {
 		printSuccessAlert("TestBookName")
 	})
 	if !strings.Contains(output, "HOT-RELOAD SUCCESSFUL") {

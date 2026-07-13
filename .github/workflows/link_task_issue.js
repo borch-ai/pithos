@@ -1,5 +1,17 @@
 const fs = require('fs');
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
+
+function runGit(args) {
+  return execFileSync('git', args, { encoding: 'utf8' }).trim();
+}
+
+function runGitInherit(args) {
+  execFileSync('git', args, { stdio: 'inherit' });
+}
+
+function runGh(args) {
+  return execFileSync('gh', args, { encoding: 'utf8' }).trim();
+}
 
 try {
   const prNumber = process.env.PR_NUMBER;
@@ -11,46 +23,65 @@ try {
     process.exit(1);
   }
 
+  // Validate PR number and SHA to protect against injection
+  if (!/^\d+$/.test(prNumber)) {
+    console.error(`Invalid PR_NUMBER: ${prNumber}`);
+    process.exit(1);
+  }
+  if (!/^[a-fA-F0-9]{40}$/.test(prHeadSha)) {
+    console.error(`Invalid PR_HEAD_SHA: ${prHeadSha}`);
+    process.exit(1);
+  }
+  // Validate baseRef is a clean branch name (alphanumeric, slash, hyphen, underscore)
+  if (!/^[a-zA-Z0-9_\-\/]+$/.test(baseRef)) {
+    console.error(`Invalid BASE_REF: ${baseRef}`);
+    process.exit(1);
+  }
+
   console.log(`Analyzing changes in PR #${prNumber} (HEAD: ${prHeadSha}) compared to base ref '${baseRef}'...`);
 
   // 1. Fetch the base branch and PR head SHA from the remote repository to ensure we can diff against them
   try {
     console.log(`Fetching origin/${baseRef}...`);
-    execSync(`git fetch origin ${baseRef} --depth=1`, { stdio: 'inherit' });
+    runGitInherit(['fetch', 'origin', baseRef, '--depth=1']);
   } catch (err) {
     console.log(`[WARNING] Failed to fetch origin/${baseRef} with depth=1, attempting full fetch...`);
-    execSync(`git fetch origin ${baseRef}`, { stdio: 'inherit' });
+    runGitInherit(['fetch', 'origin', baseRef]);
   }
 
   try {
     console.log(`Fetching PR head SHA ${prHeadSha}...`);
-    execSync(`git fetch origin ${prHeadSha} --depth=1`, { stdio: 'inherit' });
+    runGitInherit(['fetch', 'origin', prHeadSha, '--depth=1']);
   } catch (err) {
     console.log(`[WARNING] Failed to fetch PR head ${prHeadSha} with depth=1, attempting full fetch...`);
-    execSync(`git fetch origin ${prHeadSha}`, { stdio: 'inherit' });
+    runGitInherit(['fetch', 'origin', prHeadSha]);
   }
 
   // 2. Find modified files in this PR
-  const diffOutput = execSync(`git diff --name-only origin/${baseRef}...${prHeadSha}`, { encoding: 'utf8' });
+  const diffOutput = runGit(['diff', '--name-only', `origin/${baseRef}...${prHeadSha}`]);
   const modifiedFiles = diffOutput.split('\n').map(f => f.trim()).filter(Boolean);
   console.log("Modified files detected:\n", modifiedFiles.map(f => ` - ${f}`).join('\n'));
 
   // 3. Scan modified files for plans and extract active Issue IDs
   const issueIds = new Set();
-  const planRegex = /^plans\/.*\.md$/;
+  const planRegex = /^plans\/[a-zA-Z0-9_\-]+\/[a-zA-Z0-9_\-]+\.md$/;
   const issueRegex = /Issue\s+#(\d+)/gi;
 
   for (const file of modifiedFiles) {
     if (planRegex.test(file)) {
       try {
         console.log(`Reading content of ${file} at SHA ${prHeadSha} using git show...`);
-        const content = execSync(`git show ${prHeadSha}:${file}`, { encoding: 'utf8' });
+        const content = runGit(['show', `${prHeadSha}:${file}`]);
         for (const match of content.matchAll(issueRegex)) {
           issueIds.add(match[1]);
           console.log(`Found Issue ID #${match[1]} inside plan file: ${file}`);
         }
       } catch (err) {
         console.error(`[WARNING] Failed to read file ${file} at SHA ${prHeadSha}:`, err.message);
+      }
+    } else {
+      if (file.startsWith('plans/')) {
+        console.log(`[WARNING] Skipping file ${file} - does not match strict plan naming convention.`);
       }
     }
   }
@@ -62,7 +93,7 @@ try {
 
   // 4. Retrieve the current PR body text using GitHub CLI
   console.log("Retrieving current PR description...");
-  const prBody = execSync(`gh pr view ${prNumber} --json body --jq .body`, { encoding: 'utf8' }).trim();
+  const prBody = runGh(['pr', 'view', prNumber, '--json', 'body', '--jq', '.body']).trim();
   console.log("Current PR description:\n----------------------\n" + prBody + "\n----------------------");
 
   // 5. Determine which Issue IDs are not already referenced in the PR description
@@ -82,7 +113,7 @@ try {
 
   console.log("Missing issue references to link:", missingRefs.map(id => `#${id}`).join(', '));
 
-  // 6. Build the new PR body and save it to a temporary file for update
+  // 6. Build the new PR body
   let newBody = prBody;
   if (newBody.length > 0 && !newBody.endsWith('\n')) {
     newBody += '\n';
@@ -97,14 +128,10 @@ try {
   }
 
   console.log("Updating PR description body...");
-  const tempFile = 'temp_pr_body.txt';
-  fs.writeFileSync(tempFile, newBody, 'utf8');
-
-  execSync(`gh pr edit ${prNumber} --body-file ${tempFile}`, { stdio: 'inherit' });
-  fs.unlinkSync(tempFile);
+  runGh(['pr', 'edit', prNumber, '--body', newBody]);
 
   console.log("[SUCCESS] Successfully updated the PR description with closing references.");
 } catch (error) {
-  console.error("Error executing link_task_issue script:", error);
+  console.error("Error executing link_task_issue script:", error.message || error);
   process.exit(1);
 }

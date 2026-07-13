@@ -17,4 +17,4 @@
 - [ ] Implementation plan (`plans/`) updated with final choices and coverage figure
 
 ## Related Issues
-<!-- Note: If you modified a plan file under the plans/ directory, CI will automatically append the closing references below. Otherwise, link them manually using "Closes #XX" -->
+<!-- Note: If you modified a plan file under the plans/ directory (matching plans/phase_X/task_X.md) containing the pattern "**Status:** Completed (Issue #XX)", CI will automatically append the closing references below. Otherwise, link them manually using "Closes #XX" -->

@@ -1,6 +1,6 @@
 # plan: Task 5.51: Adopt Aeolian's GitHub Workflow Hygiene in Pithos
 
-**Status:** Completed
+**Status:** Completed (Issue #62)
 **Date Completed:** 2026-07-13
 **Unit Test Coverage:** 91.0%
 **Go Version:** 1.26.5
