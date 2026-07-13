@@ -12,7 +12,7 @@ import (
 // CleanWorkspace resets failed page statuses and optionally deletes orphaned images.
 func CleanWorkspace(workspaceRoot, bookName string, orphans, resetFailed, all bool) error {
 	if bookName == "" || bookName == "." || bookName == ".." || strings.ContainsAny(bookName, "/\\:") || filepath.VolumeName(bookName) != "" {
-		return fmt.Errorf("invalid book name: cannot be empty, '.', '..', contain path separators, or contain a volume name")
+		return fmt.Errorf("invalid book name: cannot be empty, '.', '..', contain path separators (/ or \\), contain a volume name, or contain a colon (:)")
 	}
 
 	manifestPath := filepath.Join(workspaceRoot, bookName, "manifest.json")
@@ -23,15 +23,15 @@ func CleanWorkspace(workspaceRoot, bookName string, orphans, resetFailed, all bo
 
 	needsSave := cleanManifestStatuses(m, resetFailed, all)
 
-	if orphans {
-		if err := cleanOrphanedImages(m, workspaceRoot, bookName); err != nil {
-			return err
-		}
-	}
-
 	if needsSave {
 		if err := m.Save(); err != nil {
 			return fmt.Errorf("failed to save manifest after cleaning: %w", err)
+		}
+	}
+
+	if orphans {
+		if err := cleanOrphanedImages(m, workspaceRoot, bookName); err != nil {
+			return err
 		}
 	}
 

@@ -26,7 +26,7 @@ type WorkspaceStatus struct {
 // GetWorkspaceStatus loads the manifest and compiles structural diagnostics.
 func GetWorkspaceStatus(workspaceRoot, bookName string) (*WorkspaceStatus, error) {
 	if bookName == "" || bookName == "." || bookName == ".." || strings.ContainsAny(bookName, "/\\:") || filepath.VolumeName(bookName) != "" {
-		return nil, fmt.Errorf("invalid book name: cannot be empty, '.', '..', contain path separators, or contain a volume name")
+		return nil, fmt.Errorf("invalid book name: cannot be empty, '.', '..', contain path separators (/ or \\), contain a volume name, or contain a colon (:)")
 	}
 
 	manifestPath := filepath.Join(workspaceRoot, bookName, "manifest.json")
