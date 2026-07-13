@@ -27,15 +27,18 @@ all: lint vuln check-coverage build
 # never runs locally.
 patch-gomod:
 	@if [ -n "$$CI" ]; then \
-		if [ ! -d "./powerword" ]; then \
-			echo "ERROR: running in CI but ./powerword sibling checkout is missing; cannot satisfy go.mod replace directive" >&2; exit 1; \
+		if [ -d "../powerword" ]; then \
+			echo "CI detected: ../powerword already exists, no patch needed"; \
+		elif [ -d "./powerword" ]; then \
+			echo "CI detected: creating symlink ../powerword -> ./powerword"; \
+			if [ -e "../powerword" ] && [ ! -L "../powerword" ]; then \
+				echo "ERROR: ../powerword exists and is not a symlink; refusing to overwrite" >&2; exit 1; \
+			fi; \
+			rm -f ../powerword; \
+			ln -sf "$(CURDIR)/powerword" ../powerword; \
+		else \
+			echo "ERROR: running in CI but neither ../powerword nor ./powerword exists; cannot satisfy go.mod replace directive" >&2; exit 1; \
 		fi; \
-		echo "CI detected: creating symlink ../powerword -> ./powerword"; \
-		if [ -e "../powerword" ] && [ ! -L "../powerword" ]; then \
-			echo "ERROR: ../powerword exists and is not a symlink; refusing to overwrite" >&2; exit 1; \
-		fi; \
-		rm -f ../powerword; \
-		ln -sf "$(CURDIR)/powerword" ../powerword; \
 	fi
 
 build: patch-gomod
