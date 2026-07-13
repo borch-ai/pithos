@@ -1,7 +1,9 @@
 # plan: Task 5.39: Hot-Reloading Workspace File Watcher
 
-**Status:** Proposed
-**Go Version:** 1.26.4
+**Status:** Completed
+**Date Completed:** 2026-07-13
+**Unit Test Coverage:** 91.0%
+**Go Version:** 1.26.5
 
 This task implements a `pithos preview --watch` command that listens for edits to local manuscript draft files or configurations, automatically compiles the changes via the Typst pipeline, and updates the browser visualizer in real-time.
 

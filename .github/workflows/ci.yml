@@ -10,9 +10,10 @@ permissions:
 
 jobs:
   run:
-    uses: borch-ai/.github/.github/workflows/go-ci-with-sibling.yml@main
+    uses: borch-ai/.github/.github/workflows/go-ci-with-sibling.yml@6fd0a9a05fa00d21159402147a3445af04a191c5 # v1.0.0
     secrets: inherit
     with:
       sibling-repo: borch-ai/powerword
       sibling-path: powerword
       repo-path: .
+      coverage-threshold: 91

@@ -9,9 +9,22 @@ permissions:
   contents: read
 
 jobs:
-  link:
-    uses: borch-ai/.github/.github/workflows/link-task-issue.yml@main
-    with:
-      pr-number: ${{ github.event.pull_request.number }}
-      base-ref: ${{ github.event.pull_request.base.ref }}
-    secrets: inherit
+  link-issue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # We need history to compare changes against origin/base_ref
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+
+      - name: Run Issue Linking Script
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node .github/workflows/link_task_issue.js
