@@ -11,7 +11,7 @@ import (
 
 // CleanWorkspace resets failed page statuses and optionally deletes orphaned images.
 func CleanWorkspace(workspaceRoot, bookName string, orphans, resetFailed, all bool) error {
-	if bookName == "" || bookName == "." || bookName == ".." || strings.ContainsAny(bookName, "/\\") || filepath.VolumeName(bookName) != "" {
+	if bookName == "" || bookName == "." || bookName == ".." || strings.ContainsAny(bookName, "/\\:") || filepath.VolumeName(bookName) != "" {
 		return fmt.Errorf("invalid book name: cannot be empty, '.', '..', contain path separators, or contain a volume name")
 	}
 
@@ -91,8 +91,8 @@ func imageBasenameInDir(refs map[string]bool, path string) {
 }
 
 // referencedImageNames builds the set of image basenames in the images/ directory
-// that are referenced by the manifest. Only relative paths under images/ are
-// considered; absolute paths or paths in other directories are excluded.
+// that are referenced by the manifest. Only relative paths under images/ (or bare
+// basenames) are considered; absolute paths or paths in other directories are excluded.
 func referencedImageNames(m *manifest.Manifest) map[string]bool {
 	refs := make(map[string]bool)
 	imageBasenameInDir(refs, m.Progress.CoverImagePath)

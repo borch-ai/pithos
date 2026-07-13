@@ -25,7 +25,7 @@ type WorkspaceStatus struct {
 
 // GetWorkspaceStatus loads the manifest and compiles structural diagnostics.
 func GetWorkspaceStatus(workspaceRoot, bookName string) (*WorkspaceStatus, error) {
-	if bookName == "" || bookName == "." || bookName == ".." || strings.ContainsAny(bookName, "/\\") || filepath.VolumeName(bookName) != "" {
+	if bookName == "" || bookName == "." || bookName == ".." || strings.ContainsAny(bookName, "/\\:") || filepath.VolumeName(bookName) != "" {
 		return nil, fmt.Errorf("invalid book name: cannot be empty, '.', '..', contain path separators, or contain a volume name")
 	}
 
