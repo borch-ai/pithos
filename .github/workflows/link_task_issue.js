@@ -4,24 +4,34 @@ const { execSync } = require('child_process');
 try {
   const prNumber = process.env.PR_NUMBER;
   const baseRef = process.env.BASE_REF;
+  const prHeadSha = process.env.PR_HEAD_SHA;
 
-  if (!prNumber || !baseRef) {
-    console.error("Missing environment variables: PR_NUMBER or BASE_REF.");
+  if (!prNumber || !baseRef || !prHeadSha) {
+    console.error("Missing environment variables: PR_NUMBER, BASE_REF, or PR_HEAD_SHA.");
     process.exit(1);
   }
 
-  console.log(`Analyzing changes in PR #${prNumber} compared to base ref '${baseRef}'...`);
+  console.log(`Analyzing changes in PR #${prNumber} (HEAD: ${prHeadSha}) compared to base ref '${baseRef}'...`);
 
-  // 1. Fetch the base branch from the remote repository to ensure we can diff against it
+  // 1. Fetch the base branch and PR head SHA from the remote repository to ensure we can diff against them
   try {
+    console.log(`Fetching origin/${baseRef}...`);
     execSync(`git fetch origin ${baseRef} --depth=1`, { stdio: 'inherit' });
   } catch (err) {
     console.log(`[WARNING] Failed to fetch origin/${baseRef} with depth=1, attempting full fetch...`);
     execSync(`git fetch origin ${baseRef}`, { stdio: 'inherit' });
   }
 
+  try {
+    console.log(`Fetching PR head SHA ${prHeadSha}...`);
+    execSync(`git fetch origin ${prHeadSha} --depth=1`, { stdio: 'inherit' });
+  } catch (err) {
+    console.log(`[WARNING] Failed to fetch PR head ${prHeadSha} with depth=1, attempting full fetch...`);
+    execSync(`git fetch origin ${prHeadSha}`, { stdio: 'inherit' });
+  }
+
   // 2. Find modified files in this PR
-  const diffOutput = execSync(`git diff --name-only origin/${baseRef}...HEAD`, { encoding: 'utf8' });
+  const diffOutput = execSync(`git diff --name-only origin/${baseRef}...${prHeadSha}`, { encoding: 'utf8' });
   const modifiedFiles = diffOutput.split('\n').map(f => f.trim()).filter(Boolean);
   console.log("Modified files detected:\n", modifiedFiles.map(f => ` - ${f}`).join('\n'));
 
@@ -31,11 +41,16 @@ try {
   const issueRegex = /Issue\s+#(\d+)/gi;
 
   for (const file of modifiedFiles) {
-    if (planRegex.test(file) && fs.existsSync(file)) {
-      const content = fs.readFileSync(file, 'utf8');
-      for (const match of content.matchAll(issueRegex)) {
-        issueIds.add(match[1]);
-        console.log(`Found Issue ID #${match[1]} inside plan file: ${file}`);
+    if (planRegex.test(file)) {
+      try {
+        console.log(`Reading content of ${file} at SHA ${prHeadSha} using git show...`);
+        const content = execSync(`git show ${prHeadSha}:${file}`, { encoding: 'utf8' });
+        for (const match of content.matchAll(issueRegex)) {
+          issueIds.add(match[1]);
+          console.log(`Found Issue ID #${match[1]} inside plan file: ${file}`);
+        }
+      } catch (err) {
+        console.error(`[WARNING] Failed to read file ${file} at SHA ${prHeadSha}:`, err.message);
       }
     }
   }

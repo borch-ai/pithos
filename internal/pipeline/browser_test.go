@@ -52,6 +52,22 @@ func TestTriggerBrowserOpen_Error(t *testing.T) {
 	triggerBrowserOpen(context.Background(), "https://example.com")
 }
 
+func TestTriggerBrowserOpen_Exported(t *testing.T) {
+	origFunc := openBrowserFunc
+	defer func() { openBrowserFunc = origFunc }()
+
+	var calledURL string
+	openBrowserFunc = func(ctx context.Context, urlStr string) error {
+		calledURL = urlStr
+		return nil
+	}
+
+	TriggerBrowserOpen(context.Background(), "some/local/file.html")
+	if !strings.HasPrefix(calledURL, "file://") {
+		t.Errorf("expected URL to start with file://, got %q", calledURL)
+	}
+}
+
 func TestDefaultOpenBrowser_AllPlatforms(t *testing.T) {
 	origExec := execCommandContext
 	origGOOS := goos

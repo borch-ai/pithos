@@ -72,6 +72,11 @@ func triggerBrowserOpen(ctx context.Context, urlStr string) {
 	}
 }
 
+// TriggerBrowserOpen formats a file path as a file:// URL and opens the browser.
+func TriggerBrowserOpen(ctx context.Context, path string) {
+	triggerBrowserOpen(ctx, formatFileURL(path))
+}
+
 // formatFileURL converts a local filepath into a valid file:// absolute URL.
 func formatFileURL(path string) string {
 	if absPath, err := filepath.Abs(path); err == nil {
