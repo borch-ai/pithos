@@ -23,6 +23,8 @@ func setupCleanTestWorkspace(t *testing.T) (string, string) {
 		{PageIndex: 2, Status: manifest.StatusCompleted, ImagePath: "images/page2.png"},
 		{PageIndex: 3, Status: manifest.StatusAwaitingApproval},
 		{PageIndex: 4, Status: manifest.PageStatus("failed")},
+		{PageIndex: 5, Status: manifest.StatusPending, ImagePath: "images/stale_pending.png"},
+		{PageIndex: 6, Status: manifest.StatusCompleted, ImagePath: ""},
 	}
 	m.Progress.CoverImagePath = "images/cover.png"
 	m.AssetRegistry["some_asset"] = "images/asset.png"
@@ -64,6 +66,18 @@ func TestCleanWorkspace_ResetFailed(t *testing.T) {
 	}
 	if m.Progress.Pages[4].ImagePath != "" {
 		t.Errorf("Expected page 4 ImagePath to be cleared on reset, got %q", m.Progress.Pages[4].ImagePath)
+	}
+	if m.Progress.Pages[5].Status != manifest.StatusPending {
+		t.Errorf("Expected page 5 status to remain pending under reset-failed, got %v", m.Progress.Pages[5].Status)
+	}
+	if m.Progress.Pages[5].ImagePath != "images/stale_pending.png" {
+		t.Errorf("Expected page 5 ImagePath to remain intact under reset-failed, got %q", m.Progress.Pages[5].ImagePath)
+	}
+	if m.Progress.Pages[6].Status != manifest.StatusPending {
+		t.Errorf("Expected page 6 status to be reset to pending under reset-failed, got %v", m.Progress.Pages[6].Status)
+	}
+	if m.Progress.Pages[6].ImagePath != "" {
+		t.Errorf("Expected page 6 ImagePath to remain empty, got %q", m.Progress.Pages[6].ImagePath)
 	}
 }
 
