@@ -1,9 +1,11 @@
 # plan: Task 5.38: Workspace Status Diagnostics & State Repair Utility
 
-**Status:** Proposed
-**Go Version:** 1.26.4
+**Status:** Completed
+**Go Version:** 1.26.5
+**Date Completed:** 2026-07-13
 
 This task adds subcommands (`pithos status` and `pithos clean`) to easily inspect workspace health and repair corrupted or failed page generation states.
+- **Unit Test Coverage:** 91.10% total coverage (meets the 91% threshold constraint)
 
 ## User Review Required
 
@@ -40,11 +42,25 @@ This task adds subcommands (`pithos status` and `pithos clean`) to easily inspec
 
 ---
 
+## Final Implementation Details
+
+### Input Validation
+- bookName validation rejects Windows volume-qualified paths (e.g. `C:`) using `filepath.VolumeName` and checks path separators using `strings.ContainsAny(bookName, "/\\")`.
+
+### Workspace Status
+- Completed pages without an image path are classified as `Unknown` to surface manifest corruption.
+
+### Clean & Orphan Pruning
+- Bare basenames are supported in orphan checks to maintain compatibility with older manifests.
+
+---
+
 ## Verification Plan
 
 ### Automated Tests
 - Test that `pithos clean` resets the manifest statuses correctly without deleting referenced images.
 - Verify orphan file deletion removes only unreferenced files.
+- Run `go test ./...` and `make check-coverage` to confirm unit tests pass and code coverage is at least **91.10%**.
 
 ### Manual Verification
 - Simulate a failed image generation (status: `"generating"` or failed in manifest).
