@@ -1,4 +1,4 @@
-# plan: Task 5.4: Speculative: Homebrew Formula for Dependency Management
+# plan: Task 7.5: Speculative: Homebrew Formula for Dependency Management
 
 **Status:** Speculative
 

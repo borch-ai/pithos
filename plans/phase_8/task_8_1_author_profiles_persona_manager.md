@@ -1,4 +1,4 @@
-# plan: Task 6.1: Virtual Author Profiles & Persona Manager
+# plan: Task 8.1: Virtual Author Profiles & Persona Manager
 
 **Status:** Open
 **Go Version:** 1.26.4

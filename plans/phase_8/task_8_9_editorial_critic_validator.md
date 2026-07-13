@@ -1,4 +1,4 @@
-# plan: Task 6.9: Editorial Style Critic & Code Snippet Validator
+# plan: Task 8.9: Editorial Style Critic & Code Snippet Validator
 
 **Status:** Open
 **Go Version:** 1.26.4

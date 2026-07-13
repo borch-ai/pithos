@@ -1,4 +1,4 @@
-# plan: Task 6.10: Interactive Style Revision & Diff Reviewer
+# plan: Task 8.10: Interactive Style Revision & Diff Reviewer
 
 **Status:** Open
 **Go Version:** 1.26.4

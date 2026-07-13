@@ -1,4 +1,4 @@
-# plan: Task 5.7: Trend-Based Brainstorming
+# plan: Task 7.1: Trend-Based Brainstorming
 
 **Status:** Open (Issue #[TBD])
 

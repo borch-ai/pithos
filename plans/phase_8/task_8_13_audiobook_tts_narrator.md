@@ -1,4 +1,4 @@
-# plan: Task 6.13: Automated Audiobook Synthesis & TTS Narrator
+# plan: Task 8.13: Automated Audiobook Synthesis & TTS Narrator
 
 **Status:** Open
 **Go Version:** 1.26.4

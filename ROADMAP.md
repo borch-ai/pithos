@@ -104,10 +104,10 @@ Focus: Turning raw text and image assets into valid, print-ready files.
 
 ---
 
-## Phase 5: Telemetry & Kiln Integration
-Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest integration.
+## Phase 5: Pipeline Hardening & Ecosystem Integration
+Focus: Remote monitoring, Kiln state manifest integration, testing, and ecosystem tooling.
 
-### Core Pipeline & Ecosystem Integration
+### Core Pipeline & Kiln Integration
 *   [ ] **Task 5.1: Lamplighter Integration**
     *   Integrate Firebase/WebRTC signaling to connect the Pithos process to the Lamplighter Android app.
     *   Implement interactive approval checkpoints (e.g., pausing the pipeline to wait for a human to approve the cover art on their phone) backed by state manifest updates.
@@ -175,18 +175,27 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
     *   Implement a `--dry-run` CLI flag to bypass live API and MCP invocations.
     *   Mock LLM/image/video generator pipeline stages to verify structural commands, pathing, Typst compilation layouts, and preview generation logic.
     *   [Implementation Plan](plans/phase_5/task_5_37_dry_run_simulation.md)
-*   [ ] **Task 5.38: Workspace Status Diagnostics & State Repair Utility**
+*   [x] **Task 5.38: Workspace Status Diagnostics & State Repair Utility**
     *   Implement a `pithos status <book>` subcommand to print a formatted summary of book manifest checkpoints and completion states.
     *   Implement a `pithos clean <book>` subcommand to clean up orphaned assets or reset selected page errors in `manifest.json`.
     *   [Implementation Plan](plans/phase_5/task_5_38_workspace_repair_status.md)
-*   [ ] **Task 5.39: Hot-Reloading Workspace File Watcher**
-    *   Implement a `pithos preview --watch` command using `fsnotify` to monitor local manuscript or config updates.
-    *   Automatically trigger Typst recompilation and web preview regenerations on file saves.
-    *   [Implementation Plan](plans/phase_5/task_5_39_preview_live_watcher.md)
+
+### Tooling, Testing & DevOps
 *   [ ] **Task 5.40: E2E CLI Subprocess Integration Test Suite**
     *   Implement end-to-end integration tests that build the `pithos` binary on-the-fly and execute subprocess CLI commands.
     *   Assert correct exit codes, stdout/stderr formatting, flag parsing, and interactive stdin prompt responses.
     *   [Implementation Plan](plans/phase_5/task_5_40_e2e_cli_subprocess_tests.md)
+*   [ ] **Task 5.43: Developer Auto-Setup Command (pithos setup)**
+    *   Automate discovery, compilation, and symlinking of local Powerword MCP binaries to simplify workspace onboarding. Fallback to downloading precompiled binaries from GitHub Releases if sibling repository is missing.
+    *   [Implementation Plan](plans/phase_5/task_5_43_developer_setup.md)
+*   [ ] **Task 5.50: Automated CI/CD & GoReleaser Pipeline**
+    *   Set up GitHub Actions to run the test suite and enforce coverage on pull requests.
+    *   Configure GoReleaser to automatically cross-compile the Pithos binary for macOS, Linux, and Windows and publish GitHub Releases on tag.
+    *   [Implementation Plan](plans/phase_5/task_5_50_automated_ci_cd.md)
+*   [ ] **Task 5.39: Hot-Reloading Workspace File Watcher**
+    *   Implement a `pithos preview --watch` command using `fsnotify` to monitor local manuscript or config updates.
+    *   Automatically trigger Typst recompilation and web preview regenerations on file saves.
+    *   [Implementation Plan](plans/phase_5/task_5_39_preview_live_watcher.md)
 *   [ ] **Task 5.42: Lighthouse Telemetry Integration**
     *   Confirm that Pithos sends pipeline execution metrics to Lighthouse via the `pkg/telemetry` HTTP adapter (Powerword Task 4.16). Verify that `brew` and `assemble` stage completions produce correct `SystemTelemetry` records (`project="pithos"`, `command=<stage>`, duration, cost, tokens). Add integration test assertions. Blocked on Powerword Task 4.16.
     *   [Implementation Plan](plans/phase_5/task_5_42_lighthouse_telemetry.md)
@@ -194,9 +203,6 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
     *   Implement a dedicated `pithos character` subcommand to generate/regenerate the main character reference seed portrait based on the manifest profile.
     *   Integrate visual seed validation and cloud storage upload prior to executing brew page illustration jobs.
     *   [Implementation Plan](plans/phase_5/task_5_41_character_seed_review.md)
-*   [ ] **Task 5.43: Developer Auto-Setup Command (pithos setup)**
-    *   Automate discovery, compilation, and symlinking of local Powerword MCP binaries to simplify workspace onboarding. Fallback to downloading precompiled binaries from GitHub Releases if sibling repository is missing.
-    *   [Implementation Plan](plans/phase_5/task_5_43_developer_setup.md)
 *   [ ] **Task 5.44: Manifest Versioning & Migration Guardrails**
     *   Introduce schema version tracking in `manifest.json` and automatic structure migrations on load to prevent breaking Kiln or Lamplighter.
     *   [Implementation Plan](plans/phase_5/task_5_44_manifest_migrations.md)
@@ -218,143 +224,128 @@ Focus: Remote monitoring, human-in-the-loop approvals, and Kiln state manifest i
     *   Extend `pithos doctor` to check for essential external binaries (ffmpeg, typst) and verify Service Account credential / cloud storage permissions.
     *   [Implementation Plan](plans/phase_5/task_5_49_doctor_dependency_diagnostics.md)
 
+---
 
+## Phase 6: Interactive Terminal UX
+Focus: Enhancing the developer and author experience with rich TUI (Terminal User Interface) reviews, inline graphics, and multi-model fallbacks.
 
-### Interactive UI & Quality Enhancements
-*   [x] **Task 5.10: Visual Prompt Expansion for Character Consistency**
+*   [x] **Task 6.10: Visual Prompt Expansion for Character Consistency** (Formerly Task 5.10)
     *   Modify stanzas generation to produce parodic poems alongside character-consistent illustration prompts. Integrate prompts in the manifest and the markdown review loop.
-    *   [Implementation Plan](plans/phase_5/task_5_10_visual_prompt_expansion.md)
-*   [x] **Task 5.11: LLM-Driven Style & Character Seeds**
+*   [x] **Task 6.11: LLM-Driven Style & Character Seeds** (Formerly Task 5.11)
     *   Implement automated visual style and character profile generation as a dedicated preceding step of `brew`.
     *   Feed the generated style/character seed into the manuscript generator as prompt context to ensure stanzas and illustration prompts align.
     *   Configure a global character style reference flag (`--style`) to allow manual override.
-    *   [Implementation Plan](plans/phase_5/task_5_11_global_style_character_seeds.md)
-*   [x] **Task 5.12: Robust JSON Output Parsing**
+*   [x] **Task 6.12: Robust JSON Output Parsing** (Formerly Task 5.12)
     *   Implement an LLM response sanitization helper to strip markdown code blocks (e.g. ` ```json ... ``` `) and protect Pithos against parsing errors.
-    *   [Implementation Plan](plans/phase_5/task_5_12_robust_json_parsing.md)
-*   [ ] **Task 5.13: Multi-Provider LLM Fallback & Retries**
-    *   Implement dynamic retries with exponential backoff and automatic provider switching (e.g., fall back to OpenAI if Gemini fails) to avoid rate limit halts in headless runs. Apply fallback logic to both initiate-stage brainstorming and brew-stage manuscript generation.
-    *   [Implementation Plan](plans/phase_5/task_5_13_multi_provider_fallback.md)
-*   [ ] **Task 5.14: Bubbletea TUI-Based Interactive Review Loop**
+*   [x] **Task 6.19: Interactive Web-Based Book Preview (HTML/CSS)** (Formerly Task 5.19)
+    *   Generate a static web-based preview folder containing an interactive flipbook player to visually review books locally in any browser.
+
+*   [ ] **Task 6.1: Bubbletea TUI-Based Interactive Review Loop**
     *   Replace the raw file-editing loop with an interactive terminal review dashboard, enabling users to edit stanzas, customize prompts, and trigger select regeneration.
-    *   [ ] **Task 5.14.1: TUI & Web Preview Sync**: Automatically regenerate `data.js` and refresh the web previewer workspace upon TUI-based stanzas or illustration updates to allow live-reloading.
-    *   [ ] **Task 5.14.2: Manuscript Markdown Rendering via Glamour**: Integrate `charmbracelet/glamour` to render styled markdown headings, stanzas, and formatting within the Bubbletea TUI review viewport.
-    *   [ ] **Task 5.14.3: Spring Animations via Harmonica**: Integrate physics-based spring animations for smooth transitions of panels and focuses in the TUI review dashboard.
-    *   [Implementation Plan](plans/phase_5/task_5_14_bubbletea_tui_review.md)
-*   [ ] **Task 5.15: Multi-Model Illustration Variations & Selection**
+    *   [Implementation Plan](plans/phase_6/task_6_1_bubbletea_tui_review.md)
+*   [ ] **Task 6.2: Multi-Model Illustration Variations & Selection**
     *   Generate illustration variations in parallel using multiple configured image models.
     *   Support manual variation selection via markdown reviews and hotkeys in the interactive TUI dashboard.
-    *   [Implementation Plan](plans/phase_5/task_5_15_multi_model_image_variations.md)
-*   [ ] **Task 5.16: Inline Terminal Graphics Previews in TUI**
+    *   [Implementation Plan](plans/phase_6/task_6_2_multi_model_image_variations.md)
+*   [ ] **Task 6.3: Inline Terminal Graphics Previews in TUI**
     *   Integrate terminal image rendering protocols (Kitty, Sixel) within the Bubbletea review TUI to display visual illustration previews directly in the console.
-    *   [Implementation Plan](plans/phase_5/task_5_16_inline_terminal_previews.md)
-*   [ ] **Task 5.17: LLM-Driven Stanza Refinement & Feedback Loop**
+    *   [Implementation Plan](plans/phase_6/task_6_3_inline_terminal_previews.md)
+*   [ ] **Task 6.4: LLM-Driven Stanza Refinement & Feedback Loop**
     *   Implement selective stanza regeneration based on user text feedback prompts during review, allowing the LLM to rewrite individual stanzas interactively.
-    *   [Implementation Plan](plans/phase_5/task_5_17_llm_stanza_refinement.md)
-*   [ ] **Task 5.18: Automated Cover Art & Title Layout Generator**
+    *   [Implementation Plan](plans/phase_6/task_6_4_llm_stanza_refinement.md)
+*   [ ] **Task 6.5: Automated Cover Art & Title Layout Generator**
     *   Automate cover generation by prompting the LLM for cover art matching the style guide, brewing the assets, and compiling KDP-conforming cover wraps.
-    *   [ ] **Task 5.18.1: Cover Wrap Visualizer**: Integrate the cover wrap layout (front, back, spine, safety zones) directly into the web previewer to verify cover wrap margins visually.
-    *   [Implementation Plan](plans/phase_5/task_5_18_automated_cover_generator.md)
-*   [x] **Task 5.19: Interactive Web-Based Book Preview (HTML/CSS)**
-    *   Generate a static web-based preview folder containing an interactive flipbook player to visually review books locally in any browser.
-    *   [x] **Task 5.19.1: Dynamic Image Scaling & Aspect Ratios**: Added `--trim-size` support to match generated illustrations and layout dimensions dynamically.
-    *   [x] **Task 5.19.2: Gutter margins, alternating creases, and print guidelines overlay**.
-    *   [x] **Task 5.19.3: Dynamic Geometry Parameter Binding**: Drive print safety boundaries in the HTML previewer directly from `pw-mcp-kdp-math` outputs in `manifest.json` instead of using client-side estimations.
-    *   [Implementation Plan](plans/phase_5/task_5_19_web_book_preview.md)
-
-### Speculative & Dependency Management
-*   [ ] **Task 5.3: Speculative: MCP Telemetry Migration**
-    *   Migrate token telemetry and billing calculations from the imported module to a decoupled, external `pw-mcp-telemetry` MCP server.
-    *   [Implementation Plan](plans/phase_5/task_5_3_mcp_telemetry_migration.md)
-*   [ ] **Task 5.4: Speculative: Homebrew Formula for Dependency Management**
-    *   Migrate dependency installation instructions to rely on Homebrew (`brew`) for installing required MCP plugin servers.
-    *   [Implementation Plan](plans/phase_5/task_5_4_speculative_brew_dependencies.md)
-*   [ ] **Task 5.5: Speculative: Publish Pithos as Homebrew Package with Dependencies**
-    *   Publish pre-compiled Pithos binaries via Homebrew and list Powerword MCP plugins as package dependencies.
-    *   [Implementation Plan](plans/phase_5/task_5_5_speculative_publish_pithos_brew.md)
-*   [x] **Task 5.6: Unified LLM Integration**
-    *   Refactor Pithos's LLM client layer to consume the unified powerword LLM client package, eliminating the local raw HTTP REST implementations.
-    *   [Implementation Plan](plans/phase_5/task_5_6_unified_llm_integration.md)
-*   [ ] **Task 5.7: Trend-Based Brainstorming**
-    *   Implement the `brainstorm` command and connect to the external `pw-mcp-trends` MCP plugin to generate parodic themes, titles, and illustration styles.
-    *   [Implementation Plan](plans/phase_5/task_5_7_trend_based_brainstorming.md)
-*   [ ] **Task 5.8: EPUB / Digital Publication Export**
-    *   Integrate with a standalone `pw-mcp-epub` MCP plugin to export the parodic manuscript and generated illustration assets into a valid EPUB file.
-    *   [Implementation Plan](plans/phase_5/task_5_8_epub_digital_export.md)
-    *   [ ] **Task 5.8.1: Configuration and EPUB Plugin CLI Registration**
-        *   Add configuration settings in `config.go` for locating `pw-mcp-epub` binary and bind Viper keys.
-    *   [ ] **Task 5.8.2: Assembly Pipeline Integration**
-        *   Connect `pithos assemble` pipeline to launch the `pw-mcp-epub` client and call `compile_epub`.
-    *   [ ] **Task 5.8.3: E2E Subprocess Integration Test Suite**
-        *   Implement an integration test that builds `pw-mcp-epub` from powerword sibling directory and performs complete pipeline compile checks.
-    *   [ ] **Task 5.8.4: EPUB Standards Structural Validation & Epubcheck**
-        *   Implement validation in the test suite to unpack the resulting `.epub` and verify strict compliance (uncompressed mimetype, container.xml, content.opf manifest, and toc.xhtml) as well as integrating automated `epubcheck` validation.
-    *   [ ] **Task 5.8.5: Standalone EPUB Export Command**
-        *   Implement a standalone `pithos epub` CLI subcommand that parses the book workspace manifest and triggers EPUB generation directly, without requiring a full assembly pipeline run.
-*   [ ] **Task 5.9: Google Doc MCP Integration**
-    *   Integrate with the `pw-mcp-gdoc` MCP plugin to export manuscripts to Google Docs for editing and import them back on resume.
-    *   [Implementation Plan](plans/phase_5/task_5_9_gdoc_mcp_integration.md)
+    *   [Implementation Plan](plans/phase_6/task_6_5_automated_cover_generator.md)
+*   [ ] **Task 6.6: Multi-Provider LLM Fallback & Retries**
+    *   Implement dynamic retries with exponential backoff and automatic provider switching (e.g., fall back to OpenAI if Gemini fails) to avoid rate limit halts in headless runs. Apply fallback logic to both initiate-stage brainstorming and brew-stage manuscript generation.
+    *   [Implementation Plan](plans/phase_6/task_6_6_multi_provider_fallback.md)
 
 ---
 
-## Phase 6: Speculative — Long-Form & Serious Publishing
+## Phase 7: Ecosystem Expansion
+Focus: Exploring new integrations like Google Docs, RAG workflows, EPUB exports, and broader publishing infrastructure.
+
+*   [x] **Task 7.0: Unified LLM Integration** (Formerly Task 5.6)
+    *   Refactor Pithos's LLM client layer to consume the unified powerword LLM client package, eliminating the local raw HTTP REST implementations.
+
+*   [ ] **Task 7.1: Trend-Based Brainstorming**
+    *   Implement the `brainstorm` command and connect to the external `pw-mcp-trends` MCP plugin to generate parodic themes, titles, and illustration styles.
+    *   [Implementation Plan](plans/phase_7/task_7_1_trend_based_brainstorming.md)
+*   [ ] **Task 7.2: EPUB / Digital Publication Export**
+    *   Integrate with a standalone `pw-mcp-epub` MCP plugin to export the parodic manuscript and generated illustration assets into a valid EPUB file.
+    *   [Implementation Plan](plans/phase_7/task_7_2_epub_digital_export.md)
+*   [ ] **Task 7.3: Google Doc MCP Integration**
+    *   Integrate with the `pw-mcp-gdoc` MCP plugin to export manuscripts to Google Docs for editing and import them back on resume.
+    *   [Implementation Plan](plans/phase_7/task_7_3_gdoc_mcp_integration.md)
+*   [ ] **Task 7.4: Speculative: MCP Telemetry Migration**
+    *   Migrate token telemetry and billing calculations from the imported module to a decoupled, external `pw-mcp-telemetry` MCP server.
+    *   [Implementation Plan](plans/phase_7/task_7_4_mcp_telemetry_migration.md)
+*   [ ] **Task 7.5: Speculative: Homebrew Formula for Dependency Management**
+    *   Migrate dependency installation instructions to rely on Homebrew (`brew`) for installing required MCP plugin servers.
+    *   [Implementation Plan](plans/phase_7/task_7_5_speculative_brew_dependencies.md)
+*   [ ] **Task 7.6: Speculative: Publish Pithos as Homebrew Package with Dependencies**
+    *   Publish pre-compiled Pithos binaries via Homebrew and list Powerword MCP plugins as package dependencies.
+    *   [Implementation Plan](plans/phase_7/task_7_6_speculative_publish_pithos_brew.md)
+
+---
+
+## Phase 8: Speculative — Long-Form & Serious Publishing
 
 > [!WARNING]
-> **This phase is defrosted as Tasks 4.2 and 5.20 are now complete.** The scope below represents a potential future direction — evolving Pithos from a children's book factory into a general-purpose publishing pipeline. This is a distinct product pivot, not a natural extension of the current mission. Do not begin any Phase 6 task without an explicit product decision to expand scope.
+> **This phase is defrosted as Tasks 4.2 and 5.20 are now complete.** The scope below represents a potential future direction — evolving Pithos from a children's book factory into a general-purpose publishing pipeline. This is a distinct product pivot, not a natural extension of the current mission. Do not begin any Phase 8 task without an explicit product decision to expand scope.
 
 Focus: Evolving Pithos into a modular, outline-driven book generation tool for technical writing, self-help, and novels.
 
-*   [ ] **Task 6.1: Virtual Author Profiles & Persona Manager**
+*   [ ] **Task 8.1: Virtual Author Profiles & Persona Manager**
     *   Introduce modular author profile definitions (`authors/*.toml`), allowing custom pen names, personas, writing rules, and TTS voice pairings to be swapped dynamically.
-    *   [Implementation Plan](plans/phase_6/task_6_1_author_profiles_persona_manager.md)
-*   [ ] **Task 6.2: Hierarchical Outline-Driven Book Scaffolder**
+    *   [Implementation Plan](plans/phase_8/task_8_1_author_profiles_persona_manager.md)
+*   [ ] **Task 8.2: Hierarchical Outline-Driven Book Scaffolder**
     *   Implement multi-tier book generation (`series` -> `volume` -> `chapters` -> `sections`), allowing structured planning and outline generation prior to writing text.
-    *   [Implementation Plan](plans/phase_6/task_6_2_hierarchical_scaffolder.md)
-*   [ ] **Task 6.3: Modular Multi-File Workspace**
+    *   [Implementation Plan](plans/phase_8/task_8_2_hierarchical_scaffolder.md)
+*   [ ] **Task 8.3: Modular Multi-File Workspace**
     *   Support compiling books from structured sub-folders (e.g., `chapters/*.md`, `references.bib`) rather than a single `manuscript.md` file.
-    *   [Implementation Plan](plans/phase_6/task_6_3_modular_workspace.md)
-*   [ ] **Task 6.4: Typst Professional Book Compilation & Templates**
+    *   [Implementation Plan](plans/phase_8/task_8_3_modular_workspace.md)
+*   [ ] **Task 8.4: Typst Professional Book Compilation & Templates**
     *   Integrate professional Typst layout templates for non-fiction (margins, headers, footers, table of contents) and novels (front-matter, chapter drop caps).
-    *   [Implementation Plan](plans/phase_6/task_6_4_typst_professional_compilation.md)
-*   [ ] **Task 6.5: EPUB Ebook Compilation & Formatting**
+    *   [Implementation Plan](plans/phase_8/task_8_4_typst_professional_compilation.md)
+*   [ ] **Task 8.5: EPUB Ebook Compilation & Formatting**
     *   Package the modular chapters, metadata, style guides, and cover image into standard, clean, validation-passing EPUB files for digital distribution.
-    *   [Implementation Plan](plans/phase_6/task_6_5_epub_ebook_compilation.md)
-*   [ ] **Task 6.6: Technical Diagram & Schematic Generation**
+    *   [Implementation Plan](plans/phase_8/task_8_5_epub_ebook_compilation.md)
+*   [ ] **Task 8.6: Technical Diagram & Schematic Generation**
     *   Connect to MCP servers (`pw-mcp-diagram`) to generate vector diagrams (Mermaid, SVG, Graphviz) from text prompts and embed them in technical chapters.
-    *   [Implementation Plan](plans/phase_6/task_6_6_technical_diagram_generation.md)
-*   [ ] **Task 6.7: Automated Lorebook & Technical Glossary Manager**
+    *   [Implementation Plan](plans/phase_8/task_8_6_technical_diagram_generation.md)
+*   [ ] **Task 8.7: Automated Lorebook & Technical Glossary Manager**
     *   Maintain a global terminology/lore glossary in the manifest, feeding it as context to the LLM to prevent inconsistent terms in sci-fi/fantasy (lore-drift) or technical guides.
-    *   [Implementation Plan](plans/phase_6/task_6_7_lorebook_glossary_manager.md)
-*   [ ] **Task 6.8: Chapter Takeaways & Review Exercises Generator**
+    *   [Implementation Plan](plans/phase_8/task_8_7_lorebook_glossary_manager.md)
+*   [ ] **Task 8.8: Chapter Takeaways & Review Exercises Generator**
     *   Parse chapter drafts and prompt the LLM to generate learning summaries, review quizzes, and exercises to append to each chapter.
-    *   [Implementation Plan](plans/phase_6/task_6_8_chapter_takeaways_review_generator.md)
-*   [ ] **Task 6.9: Editorial Style Critic & Code Snippet Validator**
+    *   [Implementation Plan](plans/phase_8/task_8_8_chapter_takeaways_review_generator.md)
+*   [ ] **Task 8.9: Editorial Style Critic & Code Snippet Validator**
     *   Build an automated editorial critic that reviews drafts for reading level, voice, passive/active verb checks, and compile-verifies technical code snippets.
-    *   [Implementation Plan](plans/phase_6/task_6_9_editorial_critic_validator.md)
-*   [ ] **Task 6.10: Interactive Style Revision & Diff Reviewer**
+    *   [Implementation Plan](plans/phase_8/task_8_9_editorial_critic_validator.md)
+*   [ ] **Task 8.10: Interactive Style Revision & Diff Reviewer**
     *   Implement an interactive terminal diff tool allowing authors to review, accept, or reject editorial style critic recommendations side-by-side.
-    *   [Implementation Plan](plans/phase_6/task_6_10_interactive_diff_reviewer.md)
-*   [ ] **Task 6.11: Bibliography, Citations & References Manager**
+    *   [Implementation Plan](plans/phase_8/task_8_10_interactive_diff_reviewer.md)
+*   [ ] **Task 8.11: Bibliography, Citations & References Manager**
     *   Support ingesting BibTeX (`references.bib`) citations, passing citation targets to the LLM during drafting, and compiling formatted bibliographies.
-    *   [Implementation Plan](plans/phase_6/task_6_11_citations_reference_manager.md)
-*   [ ] **Task 6.12: Local "Consult" RAG Chatbot Subcommand**
+    *   [Implementation Plan](plans/phase_8/task_8_11_citations_reference_manager.md)
+*   [ ] **Task 8.12: Local "Consult" RAG Chatbot Subcommand**
     *   Implement a local RAG consultant CLI command (e.g. `pithos consult`) querying completed book content to provide customized playbooks using your exact terminology.
-    *   [Implementation Plan](plans/phase_6/task_6_12_local_consult_chatbot.md)
-*   [ ] **Task 6.13: Automated Audiobook Synthesis & TTS Narrator**
+    *   [Implementation Plan](plans/phase_8/task_8_12_local_consult_chatbot.md)
+*   [ ] **Task 8.13: Automated Audiobook Synthesis & TTS Narrator**
     *   Connect to text-to-speech MCP plugins to synthesize high-quality voice audio for completed book chapters and package them into audiobook files.
-    *   [Implementation Plan](plans/phase_6/task_6_13_audiobook_tts_narrator.md)
+    *   [Implementation Plan](plans/phase_8/task_8_13_audiobook_tts_narrator.md)
 
 
 ---
 
-## Phase 7: Speculative — Charm Ecosystem Enhancements
+## Phase 9: Speculative — Charm Ecosystem Enhancements
 
 > [!NOTE]
-> **This phase is speculative and deferred.** These tasks represent nice-to-have TUI/CLI polish that leverages the broader `github.com/charmbracelet` ecosystem. Do not begin any Phase 7 task until the core Phase 5 interactive review loop (Task 5.14) is complete and stable.
+> **This phase is speculative and deferred.** These tasks represent nice-to-have TUI/CLI polish that leverages the broader `github.com/charmbracelet` ecosystem. Do not begin any Phase 9 task until the core Phase 6 interactive review loop (Task 6.1) is complete and stable.
 
 Focus: Elevating the Pithos terminal experience from functional to polished, using the full Charm toolkit.
 
-*   [ ] **Task 7.1: SSH-Based Remote Pipeline Status via Wish**
+*   [ ] **Task 9.1: SSH-Based Remote Pipeline Status via Wish**
     *   Integrate `github.com/charmbracelet/wish` to expose an optional, lightweight SSH server within the Pithos process.
     *   Allow remote querying of live pipeline status (current page, cost, errors) from a secondary terminal session or monitoring script, as an alternative to the Lamplighter WebRTC approach (Task 5.1).
-    *   [Implementation Plan](plans/phase_7/task_7_3_wish_ssh_status_server.md)

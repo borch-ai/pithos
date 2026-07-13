@@ -1,4 +1,4 @@
-# plan: Task 6.3: Modular Multi-File Workspace
+# plan: Task 8.3: Modular Multi-File Workspace
 
 **Status:** Open
 **Go Version:** 1.26.4

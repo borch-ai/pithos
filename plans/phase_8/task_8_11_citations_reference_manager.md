@@ -1,4 +1,4 @@
-# plan: Task 6.11: Bibliography, Citations & References Manager
+# plan: Task 8.11: Bibliography, Citations & References Manager
 
 **Status:** Open
 **Go Version:** 1.26.4

@@ -1,4 +1,4 @@
-# plan: Task 5.16: Inline Terminal Graphics Previews in TUI
+# plan: Task 6.3: Inline Terminal Graphics Previews in TUI
 
 **Status:** Open
 **Go Version:** 1.26.4

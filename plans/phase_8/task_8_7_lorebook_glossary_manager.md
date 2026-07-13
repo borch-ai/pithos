@@ -1,4 +1,4 @@
-# plan: Task 6.7: Automated Lorebook & Technical Glossary Manager
+# plan: Task 8.7: Automated Lorebook & Technical Glossary Manager
 
 **Status:** Open
 **Go Version:** 1.26.4

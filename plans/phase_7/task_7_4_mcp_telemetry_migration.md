@@ -1,4 +1,4 @@
-# plan: Task 5.3: MCP Telemetry Migration
+# plan: Task 7.4: MCP Telemetry Migration
 
 **Status:** Open (Issue #[TBD])
 

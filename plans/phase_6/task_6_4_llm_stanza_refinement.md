@@ -1,4 +1,4 @@
-# plan: Task 5.17: LLM-Driven Stanza Refinement & Feedback Loop
+# plan: Task 6.4: LLM-Driven Stanza Refinement & Feedback Loop
 
 **Status:** Open
 **Go Version:** 1.26.4

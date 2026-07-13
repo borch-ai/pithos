@@ -1,4 +1,4 @@
-# plan: Task 5.13: Multi-Provider LLM Fallback & Retries
+# plan: Task 6.6: Multi-Provider LLM Fallback & Retries
 
 **Status:** Open
 **Go Version:** 1.26.4

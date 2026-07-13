@@ -1,4 +1,4 @@
-# plan: Task 5.14: Bubbletea TUI-Based Interactive Review Loop
+# plan: Task 6.1: Bubbletea TUI-Based Interactive Review Loop
 
 **Status:** Open
 **Go Version:** 1.26.4

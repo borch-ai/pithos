@@ -1,4 +1,4 @@
-# plan: Task 6.2: Hierarchical Outline-Driven Book Scaffolder
+# plan: Task 8.2: Hierarchical Outline-Driven Book Scaffolder
 
 **Status:** Open
 **Go Version:** 1.26.4

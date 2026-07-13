@@ -1,4 +1,4 @@
-# plan: Task 5.8: EPUB / Digital Publication Export
+# plan: Task 7.2: EPUB / Digital Publication Export
 
 **Status:** Open
 **Go Version:** 1.26.4

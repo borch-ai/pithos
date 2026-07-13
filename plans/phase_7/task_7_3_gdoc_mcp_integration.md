@@ -1,4 +1,4 @@
-# plan: Task 5.9: Google Doc MCP Integration
+# plan: Task 7.3: Google Doc MCP Integration
 
 **Status:** Open
 

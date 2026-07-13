@@ -1,4 +1,4 @@
-# plan: Task 6.5: EPUB Ebook Compilation & Formatting
+# plan: Task 8.5: EPUB Ebook Compilation & Formatting
 
 **Status:** Open
 **Go Version:** 1.26.4
