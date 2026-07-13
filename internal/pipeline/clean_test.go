@@ -20,12 +20,12 @@ func setupCleanTestWorkspace(t *testing.T) (string, string) {
 	m.Progress.Pages = []manifest.PageState{
 		{PageIndex: 0, Status: manifest.StatusPending},
 		{PageIndex: 1, Status: manifest.StatusGeneratingImages},
-		{PageIndex: 2, Status: manifest.StatusCompleted, ImagePath: "page2.png"},
+		{PageIndex: 2, Status: manifest.StatusCompleted, ImagePath: "images/page2.png"},
 		{PageIndex: 3, Status: manifest.StatusAwaitingApproval},
 		{PageIndex: 4, Status: manifest.PageStatus("failed")},
 	}
-	m.Progress.CoverImagePath = "cover.png"
-	m.AssetRegistry["some_asset"] = "asset.png"
+	m.Progress.CoverImagePath = "images/cover.png"
+	m.AssetRegistry["some_asset"] = "images/asset.png"
 
 	if err := m.Save(); err != nil {
 		t.Fatalf("failed to save manifest: %v", err)
@@ -53,7 +53,7 @@ func TestCleanWorkspace_ResetFailed(t *testing.T) {
 	if m.Progress.Pages[2].Status != manifest.StatusCompleted {
 		t.Errorf("Expected page 2 status to be completed, got %v", m.Progress.Pages[2].Status)
 	}
-	if m.Progress.Pages[2].ImagePath != "page2.png" {
+	if m.Progress.Pages[2].ImagePath != "images/page2.png" {
 		t.Errorf("Expected page 2 ImagePath to be preserved, got %q", m.Progress.Pages[2].ImagePath)
 	}
 	if m.Progress.Pages[3].Status != manifest.StatusAwaitingApproval {
@@ -170,5 +170,53 @@ func TestCleanWorkspace_InvalidBookName(t *testing.T) {
 	err = CleanWorkspace("/tmp", "..", false, false, false)
 	if err == nil {
 		t.Errorf("Expected error for bookName '..', got nil")
+	}
+
+	err = CleanWorkspace("/tmp", "C:", false, false, false)
+	if err == nil {
+		t.Errorf("Expected error for bookName 'C:', got nil")
+	}
+}
+
+func TestReferencedImageNames(t *testing.T) {
+	m := &manifest.Manifest{
+		Progress: manifest.Progress{
+			CoverImagePath: "images/cover.png",
+			Pages: []manifest.PageState{
+				{ImagePath: "images/page1.png"},    // valid: in images/
+				{ImagePath: "page_bare.png"},       // valid: bare basename
+				{ImagePath: "/abs/path/other.png"}, // excluded: absolute path
+				{ImagePath: "other/dir/extra.png"}, // excluded: wrong directory
+				{ImagePath: ""},                    // excluded: empty
+			},
+		},
+		AssetRegistry: map[string]string{
+			"a": "images/asset.png",  // valid
+			"b": "/absolute/bad.png", // excluded
+		},
+	}
+
+	refs := referencedImageNames(m)
+
+	if !refs["cover.png"] {
+		t.Error("Expected cover.png to be in refs")
+	}
+	if !refs["page1.png"] {
+		t.Error("Expected page1.png to be in refs")
+	}
+	if !refs["page_bare.png"] {
+		t.Error("Expected page_bare.png to be in refs")
+	}
+	if !refs["asset.png"] {
+		t.Error("Expected asset.png to be in refs")
+	}
+	if refs["other.png"] {
+		t.Error("Expected other.png (absolute path) to be excluded from refs")
+	}
+	if refs["extra.png"] {
+		t.Error("Expected extra.png (wrong directory) to be excluded from refs")
+	}
+	if refs["bad.png"] {
+		t.Error("Expected bad.png (absolute asset path) to be excluded from refs")
 	}
 }

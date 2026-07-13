@@ -1,5 +1,9 @@
 # Pithos
 
+<p align="center">
+  <img src="assets/logo.png" width="400" alt="Pithos Logo">
+</p>
+
 `pithos` is a Golang-powered automation pipeline designed for the rapid, low-lift production of niche-market "dark" children's book parodies. Inspired by the philosophy of Diogenes, the tool strips away the complexity of the publishing process to automate the tedious logistics of digital publishing.
 
 The name refers to the large ceramic storage jar utilized by Diogenes of Sinope—a minimalist "business-in-a-jar" for the digital age.
@@ -72,13 +76,13 @@ pithos assemble --input ./books/goodnight-everyone --format paperback --bleed=tr
 ```
 
 ### 4. Inspect Workspace Status
-View a detailed diagnostic summary of a book's completion states, remaining pages, and telemetry costs:
+View a detailed diagnostic summary of a book's completion states, remaining pages, and telemetry costs (resolves the book directory via `workspaces_root` in config, defaulting to `~/.local/share/pithos/workspaces`):
 ```bash
 pithos status goodnight-everyone
 ```
 
 ### 5. Repair and Clean Workspace
-Reset stuck page generation states or prune orphaned image assets that are no longer referenced by the project manifest:
+Reset stuck page generation states or prune orphaned image assets that are no longer referenced by the project manifest (resolves the book directory via `workspaces_root` in config):
 ```bash
 pithos clean goodnight-everyone --orphans --reset-failed
 ```

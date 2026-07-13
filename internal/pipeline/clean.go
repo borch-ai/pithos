@@ -11,8 +11,8 @@ import (
 
 // CleanWorkspace resets failed page statuses and optionally deletes orphaned images.
 func CleanWorkspace(workspaceRoot, bookName string, orphans, resetFailed, all bool) error {
-	if bookName == "" || bookName == "." || bookName == ".." || strings.Contains(bookName, "/") || strings.Contains(bookName, "\\") {
-		return fmt.Errorf("invalid book name: cannot be empty, '.', '..', or contain path separators")
+	if bookName == "" || bookName == "." || bookName == ".." || strings.ContainsAny(bookName, "/\\") || filepath.VolumeName(bookName) != "" {
+		return fmt.Errorf("invalid book name: cannot be empty, '.', '..', contain path separators, or contain a volume name")
 	}
 
 	manifestPath := filepath.Join(workspaceRoot, bookName, "manifest.json")
@@ -70,21 +70,31 @@ func isImageFile(name string) bool {
 	return false
 }
 
-// referencedImageNames builds the set of image basenames referenced in the manifest.
+// imageBasenameInDir adds path's basename to refs when path is relative
+// and its directory component is "images" or "." (representing a bare basename).
+// Absolute paths or paths in other directories are excluded to avoid incorrectly
+// shielding unrelated files from orphan cleanup.
+func imageBasenameInDir(refs map[string]bool, path string) {
+	if path == "" || filepath.IsAbs(path) {
+		return
+	}
+	dir := filepath.Dir(path)
+	if dir == "images" || dir == "." {
+		refs[filepath.Base(path)] = true
+	}
+}
+
+// referencedImageNames builds the set of image basenames in the images/ directory
+// that are referenced by the manifest. Only relative paths under images/ are
+// considered; absolute paths or paths in other directories are excluded.
 func referencedImageNames(m *manifest.Manifest) map[string]bool {
 	refs := make(map[string]bool)
-	if m.Progress.CoverImagePath != "" {
-		refs[filepath.Base(m.Progress.CoverImagePath)] = true
-	}
+	imageBasenameInDir(refs, m.Progress.CoverImagePath)
 	for _, path := range m.AssetRegistry {
-		if path != "" {
-			refs[filepath.Base(path)] = true
-		}
+		imageBasenameInDir(refs, path)
 	}
 	for _, page := range m.Progress.Pages {
-		if page.ImagePath != "" {
-			refs[filepath.Base(page.ImagePath)] = true
-		}
+		imageBasenameInDir(refs, page.ImagePath)
 	}
 	return refs
 }

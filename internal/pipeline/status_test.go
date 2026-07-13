@@ -66,11 +66,11 @@ func TestGetWorkspaceStatus(t *testing.T) {
 		t.Errorf("Expected TotalCostUSD 12.34, got %v", ws.TotalCostUSD)
 	}
 
-	if ws.Pending != 2 {
-		t.Errorf("Expected Pending 2, got %d", ws.Pending)
+	if ws.Pending != 1 {
+		t.Errorf("Expected Pending 1, got %d", ws.Pending)
 	}
-	if ws.Unknown != 1 {
-		t.Errorf("Expected Unknown 1, got %d", ws.Unknown)
+	if ws.Unknown != 2 {
+		t.Errorf("Expected Unknown 2, got %d", ws.Unknown)
 	}
 	if ws.Generating != 1 {
 		t.Errorf("Expected Generating 1, got %d", ws.Generating)
@@ -117,5 +117,10 @@ func TestGetWorkspaceStatus_InvalidBookName(t *testing.T) {
 	_, err = GetWorkspaceStatus("/tmp", "..")
 	if err == nil {
 		t.Errorf("Expected error for bookName '..', got nil")
+	}
+
+	_, err = GetWorkspaceStatus("/tmp", "C:")
+	if err == nil {
+		t.Errorf("Expected error for bookName 'C:', got nil")
 	}
 }
