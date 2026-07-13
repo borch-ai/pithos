@@ -45,13 +45,14 @@ This task adds subcommands (`pithos status` and `pithos clean`) to easily inspec
 ## Final Implementation Details
 
 ### Input Validation
-- bookName validation rejects Windows volume-qualified paths (e.g. `C:`) using `filepath.VolumeName` and checks path separators using `strings.ContainsAny(bookName, "/\\")`.
+- bookName validation rejects Windows volume-qualified paths (e.g. `C:`) using `filepath.VolumeName` and checks path separators/colons using `strings.ContainsAny(bookName, "/\\:")` for consistent cross-platform validation.
 
 ### Workspace Status
 - Completed pages without an image path are classified as `Unknown` to surface manifest corruption.
 
 ### Clean & Orphan Pruning
 - Bare basenames are supported in orphan checks to maintain compatibility with older manifests.
+- Manifest updates (e.g. page status resets) are saved back to `manifest.json` before attempting orphaned image file deletions to avoid partially-applied/corrupted workspace state.
 
 ---
 
