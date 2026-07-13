@@ -76,6 +76,11 @@ func WatchWorkspace(ctx context.Context, opts WatchOptions) error {
 			case <-workerCtx.Done():
 				return
 			case <-reloadChan:
+				select {
+				case <-workerCtx.Done():
+					return
+				default:
+				}
 				if err := handleReload(workerCtx, absBookDir, opts.ConfigFile, opts.DryRun); err != nil {
 					logger.Error("Hot-reload failed", "error", err)
 				}
@@ -129,12 +134,11 @@ func handleReload(ctx context.Context, bookDir string, configFile string, dryRun
 	logger.Info("Change detected. Starting hot-reload...")
 
 	// 1. Reload configuration
-	reloadFile := configFile
-	if reloadFile == "" {
-		bookLocalConfig := filepath.Join(bookDir, ".pithos.toml")
-		if _, err := os.Stat(bookLocalConfig); err == nil {
-			reloadFile = bookLocalConfig
-		}
+	// If a book-local configuration exists, reload from it; otherwise, fall back to the custom configuration file.
+	bookLocalConfig := filepath.Join(bookDir, ".pithos.toml")
+	reloadFile := bookLocalConfig
+	if _, err := os.Stat(bookLocalConfig); err != nil {
+		reloadFile = configFile
 	}
 	if _, err := config.LoadConfig(reloadFile); err != nil {
 		logger.Warn("Failed to reload configuration, using previous configuration", "error", err)

@@ -1,6 +1,7 @@
-const fs = require('fs');
 const { execFileSync } = require('child_process');
 
+// execFileSync is used with argument arrays (no shell spawn) to prevent shell command injection.
+// All arguments (PR number, base ref, head SHA, file paths) are strictly validated/regex-checked before execution.
 function runGit(args) {
   return execFileSync('git', args, { encoding: 'utf8' }).trim();
 }
@@ -33,7 +34,8 @@ try {
     process.exit(1);
   }
   // Validate baseRef is a clean branch name (alphanumeric, slash, hyphen, underscore)
-  if (!/^[a-zA-Z0-9_\-\/]+$/.test(baseRef)) {
+  // Rejects branch names starting with '-' to prevent option injection in git fetch.
+  if (!/^[a-zA-Z0-9_\/][a-zA-Z0-9_\-\/]*$/.test(baseRef)) {
     console.error(`Invalid BASE_REF: ${baseRef}`);
     process.exit(1);
   }

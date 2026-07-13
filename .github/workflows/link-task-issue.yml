@@ -15,6 +15,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # pin@v7.0.0
         with:
+          ref: ${{ github.event.pull_request.base.sha }}
           fetch-depth: 0 # We need history to compare changes against origin/base_ref
 
       - name: Set up Node.js
