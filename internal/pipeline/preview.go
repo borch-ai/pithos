@@ -787,14 +787,16 @@ body {
 `
 
 const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
-  if (typeof bookData === 'undefined') {
-    console.error('bookData is not defined. Make sure data.js is loaded.');
+  if (typeof window.bookData === 'undefined') {
+    console.error('window.bookData is not defined. Make sure data.js is loaded.');
     const pageContainer = document.getElementById('page-container');
     if (pageContainer) {
-      pageContainer.innerHTML = '<div class="page"><div class="pending-layout"><div class="stanza-text-print">Error: bookData is not defined. data.js may have failed to load.</div></div></div>';
+      pageContainer.innerHTML = '<div class="page"><div class="pending-layout"><div class="stanza-text-print">Error: window.bookData is not defined. data.js may have failed to load.</div></div></div>';
     }
     return;
   }
+
+  const bookData = window.bookData;
 
   // 1. Initial configuration mapping
   const metaTheme = document.getElementById('meta-theme');
@@ -820,7 +822,7 @@ const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
   let showGuides = false;
 
   try {
-    activeIndex = parseInt(sessionStorage.getItem('pithos_activeIndex')) || 0;
+    activeIndex = parseInt(sessionStorage.getItem('pithos_activeIndex'), 10) || 0;
     showPrompts = sessionStorage.getItem('pithos_showPrompts') === 'true';
     showGuides = sessionStorage.getItem('pithos_showGuides') === 'true';
   } catch (e) {}
@@ -1175,21 +1177,30 @@ const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Polling for hot-reload
-  let currentDataStr = JSON.stringify(bookData);
+  let currentDataStr = JSON.stringify(window.bookData);
+  let pollPending = false;
   function pollForUpdates() {
+    if (pollPending) {
+      return;
+    }
+    pollPending = true;
     const script = document.createElement('script');
     script.className = 'pithos-poll-script';
     script.src = 'data.js?t=' + Date.now();
     script.onload = () => {
       script.remove();
+      pollPending = false;
       const newDataStr = JSON.stringify(window.bookData);
       if (newDataStr !== currentDataStr) {
         console.log('Book data updated. Reloading...');
         window.location.reload();
+      } else {
+        currentDataStr = newDataStr;
       }
     };
     script.onerror = () => {
       script.remove();
+      pollPending = false;
     };
     document.head.appendChild(script);
   }
