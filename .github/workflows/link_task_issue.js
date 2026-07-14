@@ -86,7 +86,6 @@ try {
   // 4. Retrieve the current PR body text using GitHub CLI
   console.log("Retrieving current PR description...");
   const prBody = runGh(['pr', 'view', prNumber, '--json', 'body', '--jq', '.body']).trim();
-  console.log("Current PR description:\n----------------------\n" + prBody + "\n----------------------");
 
   // 5. Determine which Issue IDs are not already referenced in the PR description
   const missingRefs = [];

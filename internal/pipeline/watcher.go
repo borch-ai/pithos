@@ -100,7 +100,7 @@ func WatchWorkspace(ctx context.Context, opts WatchOptions) error {
 
 		case event, ok := <-watcher.Events:
 			if !ok {
-				return nil
+				return fmt.Errorf("watcher events channel closed unexpectedly")
 			}
 
 			baseName := filepath.Base(event.Name)
@@ -126,9 +126,9 @@ func WatchWorkspace(ctx context.Context, opts WatchOptions) error {
 
 		case err, ok := <-watcher.Errors:
 			if !ok {
-				return nil
+				return fmt.Errorf("watcher errors channel closed unexpectedly")
 			}
-			logger.Error("Watcher filesystem error", "error", err)
+			return fmt.Errorf("watcher filesystem error: %w", err)
 		}
 	}
 }
