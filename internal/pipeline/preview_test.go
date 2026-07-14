@@ -74,16 +74,25 @@ func TestGenerateWebPreview(t *testing.T) {
 	}
 	dataJSStr := string(dataJSBytes)
 
-	prefix := "window.bookData = "
-	if !strings.HasPrefix(dataJSStr, prefix) {
-		t.Fatalf("expected data.js to start with %q", prefix)
-	}
-	if !strings.HasSuffix(dataJSStr, ";\n") && !strings.HasSuffix(dataJSStr, ";") {
-		t.Fatalf("expected data.js to end with a semicolon and newline")
+	lines := strings.Split(dataJSStr, ";\n")
+	if len(lines) < 3 {
+		t.Fatalf("expected at least 3 parts in data.js split by semicolon-newline, got %d", len(lines))
 	}
 
-	jsonStr := strings.TrimSuffix(strings.TrimPrefix(dataJSStr, prefix), ";\n")
-	jsonStr = strings.TrimSuffix(jsonStr, ";")
+	versionLine := lines[0]
+	dataLine := lines[1]
+
+	versionPrefix := "window.bookDataVersion = "
+	if !strings.HasPrefix(versionLine, versionPrefix) {
+		t.Fatalf("expected first line to start with %q, got %q", versionPrefix, versionLine)
+	}
+
+	dataPrefix := "window.bookData = "
+	if !strings.HasPrefix(dataLine, dataPrefix) {
+		t.Fatalf("expected second line to start with %q, got %q", dataPrefix, dataLine)
+	}
+
+	jsonStr := strings.TrimPrefix(dataLine, dataPrefix)
 
 	var parsedData previewData
 	if err := json.Unmarshal([]byte(jsonStr), &parsedData); err != nil {

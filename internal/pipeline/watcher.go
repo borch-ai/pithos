@@ -156,6 +156,9 @@ func handleReload(ctx context.Context, bookDir string, configFile string, dryRun
 	}
 
 	// 3. Import manuscript edits if manuscript.md exists
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	manuscriptPath := filepath.Join(bookDir, "manuscript.md")
 	if _, err := os.Stat(manuscriptPath); err == nil {
 		changed, importErr := importManuscriptFromMarkdown(bookDir, m, nil)
@@ -170,11 +173,17 @@ func handleReload(ctx context.Context, bookDir string, configFile string, dryRun
 	}
 
 	// 4. Regenerate web preview database
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err := GenerateWebPreview(bookDir, m); err != nil {
 		return fmt.Errorf("failed to generate web preview: %w", err)
 	}
 
 	// 5. Re-compile Typst PDF layout if available
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	mcpClient := mcp.NewPluginClient(mcp.PluginTypst)
 	binaryPath := mcpClient.ResolveBinaryPath()
 	if _, err := exec.LookPath(binaryPath); err == nil {

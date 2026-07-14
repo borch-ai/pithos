@@ -16,11 +16,10 @@ function runGh(args) {
 
 try {
   const prNumber = process.env.PR_NUMBER;
-  const baseRef = process.env.BASE_REF;
   const prHeadSha = process.env.PR_HEAD_SHA;
 
-  if (!prNumber || !baseRef || !prHeadSha) {
-    console.error("Missing environment variables: PR_NUMBER, BASE_REF, or PR_HEAD_SHA.");
+  if (!prNumber || !prHeadSha) {
+    console.error("Missing environment variables: PR_NUMBER or PR_HEAD_SHA.");
     process.exit(1);
   }
 
@@ -33,14 +32,8 @@ try {
     console.error(`Invalid PR_HEAD_SHA: ${prHeadSha}`);
     process.exit(1);
   }
-  // Validate baseRef is a clean branch name (alphanumeric, slash, hyphen, underscore)
-  // Rejects branch names starting with '-' to prevent option injection in git fetch.
-  if (!/^[a-zA-Z0-9_\/][a-zA-Z0-9_\-\/]*$/.test(baseRef)) {
-    console.error(`Invalid BASE_REF: ${baseRef}`);
-    process.exit(1);
-  }
 
-  console.log(`Analyzing changes in PR #${prNumber} (HEAD: ${prHeadSha}) compared to base ref '${baseRef}'...`);
+  console.log(`Analyzing changes in PR #${prNumber} (HEAD: ${prHeadSha})...`);
 
   // 1. Fetch the PR head SHA from the remote repository to ensure we can diff against it
   try {

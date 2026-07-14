@@ -26,7 +26,6 @@ jobs:
       - name: Run Issue Linking Script
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node .github/workflows/link_task_issue.js

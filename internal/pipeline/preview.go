@@ -1,6 +1,8 @@
 package pipeline
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -95,7 +97,10 @@ func generateDataJS(m *manifest.Manifest) (string, error) {
 		return "", err
 	}
 
-	return fmt.Sprintf("window.bookData = %s;\n", string(jsonData)), nil
+	hash := sha256.Sum256(jsonData)
+	version := hex.EncodeToString(hash[:])
+
+	return fmt.Sprintf("window.bookDataVersion = %q;\nwindow.bookData = %s;\n", version, string(jsonData)), nil
 }
 
 const htmlTemplate = `<!DOCTYPE html>
@@ -1177,7 +1182,7 @@ const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Polling for hot-reload
-  let currentDataStr = JSON.stringify(window.bookData);
+  let currentDataVersion = window.bookDataVersion || '';
   let pollPending = false;
   function pollForUpdates() {
     if (pollPending) {
@@ -1190,12 +1195,10 @@ const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
     script.onload = () => {
       script.remove();
       pollPending = false;
-      const newDataStr = JSON.stringify(window.bookData);
-      if (newDataStr !== currentDataStr) {
+      const newDataVersion = window.bookDataVersion || '';
+      if (newDataVersion !== currentDataVersion) {
         console.log('Book data updated. Reloading...');
         window.location.reload();
-      } else {
-        currentDataStr = newDataStr;
       }
     };
     script.onerror = () => {
