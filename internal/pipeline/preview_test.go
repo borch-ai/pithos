@@ -185,7 +185,9 @@ func TestGenerateWebPreview_Errors(t *testing.T) {
 		t.Fatalf("failed to create temp directory: %v", err)
 	}
 	defer func() { _ = os.RemoveAll(tmpHtml) }()
-	_ = os.MkdirAll(filepath.Join(tmpHtml, "web_preview", "preview.html"), 0750)
+	if mkdirErr := os.MkdirAll(filepath.Join(tmpHtml, "web_preview", "preview.html"), 0750); mkdirErr != nil {
+		t.Fatalf("failed to create file blocking html path: %v", mkdirErr)
+	}
 	if err = GenerateWebPreview(tmpHtml, m); err == nil {
 		t.Error("expected error when writing html fails, got nil")
 	}
@@ -196,7 +198,9 @@ func TestGenerateWebPreview_Errors(t *testing.T) {
 		t.Fatalf("failed to create temp directory: %v", err)
 	}
 	defer func() { _ = os.RemoveAll(tmpCss) }()
-	_ = os.MkdirAll(filepath.Join(tmpCss, "web_preview", "preview.css"), 0750)
+	if mkdirErr := os.MkdirAll(filepath.Join(tmpCss, "web_preview", "preview.css"), 0750); mkdirErr != nil {
+		t.Fatalf("failed to create file blocking css path: %v", mkdirErr)
+	}
 	if err = GenerateWebPreview(tmpCss, m); err == nil {
 		t.Error("expected error when writing css fails, got nil")
 	}
@@ -207,7 +211,9 @@ func TestGenerateWebPreview_Errors(t *testing.T) {
 		t.Fatalf("failed to create temp directory: %v", err)
 	}
 	defer func() { _ = os.RemoveAll(tmpJs) }()
-	_ = os.MkdirAll(filepath.Join(tmpJs, "web_preview", "preview.js"), 0750)
+	if mkdirErr := os.MkdirAll(filepath.Join(tmpJs, "web_preview", "preview.js"), 0750); mkdirErr != nil {
+		t.Fatalf("failed to create file blocking js path: %v", mkdirErr)
+	}
 	if err = GenerateWebPreview(tmpJs, m); err == nil {
 		t.Error("expected error when writing js fails, got nil")
 	}
@@ -218,7 +224,9 @@ func TestGenerateWebPreview_Errors(t *testing.T) {
 		t.Fatalf("failed to create temp directory: %v", err)
 	}
 	defer func() { _ = os.RemoveAll(tmpData) }()
-	_ = os.MkdirAll(filepath.Join(tmpData, "web_preview", "data.js"), 0750)
+	if mkdirErr := os.MkdirAll(filepath.Join(tmpData, "web_preview", "data.js"), 0750); mkdirErr != nil {
+		t.Fatalf("failed to create file blocking data.js path: %v", mkdirErr)
+	}
 	if err = GenerateWebPreview(tmpData, m); err == nil {
 		t.Error("expected error when writing data.js fails, got nil")
 	}
@@ -229,7 +237,9 @@ func TestGenerateWebPreview_Errors(t *testing.T) {
 		t.Fatalf("failed to create temp directory: %v", err)
 	}
 	defer func() { _ = os.RemoveAll(tmpVersion) }()
-	_ = os.MkdirAll(filepath.Join(tmpVersion, "web_preview", "version.js"), 0750)
+	if mkdirErr := os.MkdirAll(filepath.Join(tmpVersion, "web_preview", "version.js"), 0750); mkdirErr != nil {
+		t.Fatalf("failed to create file blocking version.js path: %v", mkdirErr)
+	}
 	if err = GenerateWebPreview(tmpVersion, m); err == nil {
 		t.Error("expected error when writing version.js fails, got nil")
 	}
