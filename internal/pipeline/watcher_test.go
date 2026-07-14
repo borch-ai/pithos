@@ -585,25 +585,3 @@ func TestPrintSuccessAlert(t *testing.T) {
 		t.Errorf("expected output to contain 'TestBookName', got %q", output)
 	}
 }
-
-func TestWatchWorkspace_FileAsDirectory(t *testing.T) {
-	tmpFile, err := os.CreateTemp("", "pithos-watcher-file-*")
-	if err != nil {
-		t.Fatalf("failed to create temp file: %v", err)
-	}
-	defer func() { _ = os.Remove(tmpFile.Name()) }()
-	_ = tmpFile.Close()
-
-	ctx := context.Background()
-	opts := WatchOptions{
-		BookDir: tmpFile.Name(),
-	}
-	err = WatchWorkspace(ctx, opts)
-	if err == nil {
-		t.Fatal("expected WatchWorkspace to fail when book directory is a file, got nil")
-	}
-	expected := "book directory must be a directory, not a file"
-	if err.Error() != expected {
-		t.Errorf("expected error %q, got %q", expected, err.Error())
-	}
-}

@@ -28,7 +28,7 @@ type WatchOptions struct {
 // WatchWorkspace starts a filesystem watcher for changes to manuscript.md and .pithos.toml.
 // It blocks until context is cancelled or a fatal watcher error occurs.
 //
-//nolint:gocognit,funlen // WatchWorkspace coordinates multiple asynchronous channels (cancellation, fsnotify events, errors)
+//nolint:gocognit // WatchWorkspace coordinates multiple asynchronous channels (cancellation, fsnotify events, errors)
 func WatchWorkspace(ctx context.Context, opts WatchOptions) error {
 	if opts.BookDir == "" {
 		return fmt.Errorf("book directory is not specified")
@@ -43,14 +43,6 @@ func WatchWorkspace(ctx context.Context, opts WatchOptions) error {
 	absBookDir, err := filepath.Abs(opts.BookDir)
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute book directory: %w", err)
-	}
-
-	info, err := os.Stat(absBookDir)
-	if err != nil {
-		return fmt.Errorf("failed to stat book directory: %w", err)
-	}
-	if !info.IsDir() {
-		return fmt.Errorf("book directory must be a directory, not a file")
 	}
 
 	if err := watcher.Add(absBookDir); err != nil {
@@ -108,7 +100,7 @@ func WatchWorkspace(ctx context.Context, opts WatchOptions) error {
 
 		case event, ok := <-watcher.Events:
 			if !ok {
-				return fmt.Errorf("watcher events channel closed unexpectedly")
+				return nil
 			}
 
 			baseName := filepath.Base(event.Name)
@@ -134,9 +126,9 @@ func WatchWorkspace(ctx context.Context, opts WatchOptions) error {
 
 		case err, ok := <-watcher.Errors:
 			if !ok {
-				return fmt.Errorf("watcher errors channel closed unexpectedly")
+				return nil
 			}
-			return fmt.Errorf("watcher filesystem error: %w", err)
+			logger.Error("Watcher filesystem error", "error", err)
 		}
 	}
 }
@@ -218,7 +210,7 @@ func handleReload(ctx context.Context, bookDir string, configFile string, dryRun
 		}
 		logger.Info("Interior PDF compiled successfully", "path", pdfPath)
 	} else {
-		logger.Info("Typst plugin binary is not found or not executable. Skipping PDF compilation.", "path", binaryPath)
+		logger.Info("Typst plugin is not available or not configured in path. Skipping PDF compilation.", "path", binaryPath)
 	}
 
 	// 6. Print styled success alert

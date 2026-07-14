@@ -34,17 +34,13 @@ func GenerateWebPreview(outputDir string, m *manifest.Manifest) error {
 		return fmt.Errorf("failed to write preview.js: %w", err)
 	}
 
-	// 4. Generate data.js and version.js
-	dataJS, version, err := generateDataJS(m)
+	// 4. Generate data.js
+	dataJS, err := generateDataJS(m)
 	if err != nil {
 		return fmt.Errorf("failed to generate book data JS: %w", err)
 	}
 	if err := os.WriteFile(filepath.Join(previewDir, "data.js"), []byte(dataJS), 0600); err != nil {
 		return fmt.Errorf("failed to write data.js: %w", err)
-	}
-	versionJS := fmt.Sprintf("window.bookDataVersion = %q;\n", version)
-	if err := os.WriteFile(filepath.Join(previewDir, "version.js"), []byte(versionJS), 0600); err != nil {
-		return fmt.Errorf("failed to write version.js: %w", err)
 	}
 
 	return nil
@@ -62,13 +58,13 @@ type previewData struct {
 	Theme            string             `json:"theme"`
 	Style            string             `json:"style"`
 	CharacterProfile string             `json:"characterProfile"`
-	TrimSize         string             `json:"trimSize"`
-	Format           string             `json:"format"`
-	KDPLayout        manifest.KDPLayout `json:"kdpLayout"`
+	TrimSize         string             `json:"trimSize,omitempty"`
+	Format           string             `json:"format,omitempty"`
+	KDPLayout        manifest.KDPLayout `json:"kdpLayout,omitempty"`
 	Pages            []previewPage      `json:"pages"`
 }
 
-func generateDataJS(m *manifest.Manifest) (string, string, error) {
+func generateDataJS(m *manifest.Manifest) (string, error) {
 	manifestPages := m.Progress.Pages
 
 	pages := make([]previewPage, len(manifestPages))
@@ -98,13 +94,13 @@ func generateDataJS(m *manifest.Manifest) (string, string, error) {
 
 	jsonData, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 
 	hash := sha256.Sum256(jsonData)
 	version := hex.EncodeToString(hash[:])
 
-	return fmt.Sprintf("window.bookDataVersion = %q;\nwindow.bookData = %s;\n", version, string(jsonData)), version, nil
+	return fmt.Sprintf("window.bookDataVersion = %q;\nwindow.bookData = %s;\n", version, string(jsonData)), nil
 }
 
 const htmlTemplate = `<!DOCTYPE html>
@@ -1200,7 +1196,7 @@ const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
       pollPending = true;
       const script = document.createElement('script');
       script.className = 'pithos-poll-script';
-      script.src = 'version.js?t=' + Date.now();
+      script.src = 'data.js?t=' + Date.now();
       script.onload = () => {
         script.remove();
         pollPending = false;

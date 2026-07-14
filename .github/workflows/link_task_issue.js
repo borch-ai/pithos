@@ -1,7 +1,4 @@
 const { execFileSync } = require('child_process');
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
 
 // execFileSync is used with argument arrays (no shell spawn) to prevent shell command injection.
 // All arguments (PR number, base ref, head SHA, file paths) are strictly validated/regex-checked before execution.
@@ -45,8 +42,8 @@ try {
 
   // 1. Fetch the PR head SHA from the remote repository to ensure we can diff against it
   try {
-    console.log(`Fetching PR pull ref refs/pull/${prNumber}/head...`);
-    runGitInherit(['fetch', 'origin', `refs/pull/${prNumber}/head`]);
+    console.log(`Fetching PR head pull ref for PR #${prNumber}...`);
+    runGitInherit(['fetch', 'origin', `pull/${prNumber}/head`]);
   } catch (err) {
     console.error(`[ERROR] Failed to fetch PR head pull ref:`, err.message);
     process.exit(1);
@@ -89,6 +86,7 @@ try {
   // 4. Retrieve the current PR body text using GitHub CLI
   console.log("Retrieving current PR description...");
   const prBody = runGh(['pr', 'view', prNumber, '--json', 'body', '--jq', '.body']).trim();
+  console.log("Current PR description:\n----------------------\n" + prBody + "\n----------------------");
 
   // 5. Determine which Issue IDs are not already referenced in the PR description
   const missingRefs = [];
@@ -122,13 +120,7 @@ try {
   }
 
   console.log("Updating PR description body...");
-  const tempBodyPath = path.join(os.tmpdir(), `pr-${prNumber}-body.txt`);
-  fs.writeFileSync(tempBodyPath, newBody, 'utf8');
-  try {
-    runGh(['pr', 'edit', prNumber, '--body-file', tempBodyPath]);
-  } finally {
-    fs.unlinkSync(tempBodyPath);
-  }
+  runGh(['pr', 'edit', prNumber, '--body', newBody]);
 
   console.log("[SUCCESS] Successfully updated the PR description with closing references.");
 } catch (error) {

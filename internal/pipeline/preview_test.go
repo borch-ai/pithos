@@ -58,22 +58,12 @@ func TestGenerateWebPreview(t *testing.T) {
 
 	// Assert files exist
 	previewDir := filepath.Join(tmpDir, "web_preview")
-	files := []string{"preview.html", "preview.css", "preview.js", "data.js", "version.js"}
+	files := []string{"preview.html", "preview.css", "preview.js", "data.js"}
 	for _, file := range files {
 		filePath := filepath.Join(previewDir, file)
 		if _, statErr := os.Stat(filePath); os.IsNotExist(statErr) {
 			t.Errorf("expected file %s to be generated, but it does not exist", file)
 		}
-	}
-
-	// Assert version.js content is correct
-	//nolint:gosec // ReadFile path is constructed inside test temp directory
-	versionBytes, err := os.ReadFile(filepath.Join(previewDir, "version.js"))
-	if err != nil {
-		t.Fatalf("failed to read generated version.js: %v", err)
-	}
-	if !strings.HasPrefix(string(versionBytes), "window.bookDataVersion = ") {
-		t.Errorf("expected version.js to set window.bookDataVersion, got: %s", string(versionBytes))
 	}
 
 	// Read and validate data.js contents
@@ -178,19 +168,47 @@ func TestGenerateWebPreview_Errors(t *testing.T) {
 		t.Error("expected error when MkdirAll fails, got nil")
 	}
 
-	// 2. WriteFile errors for assets
-	files := []string{"preview.html", "preview.css", "preview.js", "data.js", "version.js"}
-	for _, file := range files {
-		t.Run("write_error_"+file, func(t *testing.T) {
-			tmpDir, err := os.MkdirTemp("", "pithos-preview-err-*")
-			if err != nil {
-				t.Fatalf("failed to create temp directory: %v", err)
-			}
-			defer func() { _ = os.RemoveAll(tmpDir) }()
-			_ = os.MkdirAll(filepath.Join(tmpDir, "web_preview", file), 0750)
-			if err = GenerateWebPreview(tmpDir, m); err == nil {
-				t.Errorf("expected error when writing %s fails, got nil", file)
-			}
-		})
+	// 2a. WriteFile error for html
+	tmpHtml, err := os.MkdirTemp("", "pithos-preview-html-*")
+	if err != nil {
+		t.Fatalf("failed to create temp directory: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpHtml) }()
+	_ = os.MkdirAll(filepath.Join(tmpHtml, "web_preview", "preview.html"), 0750)
+	if err = GenerateWebPreview(tmpHtml, m); err == nil {
+		t.Error("expected error when writing html fails, got nil")
+	}
+
+	// 2b. WriteFile error for css
+	tmpCss, err := os.MkdirTemp("", "pithos-preview-css-*")
+	if err != nil {
+		t.Fatalf("failed to create temp directory: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpCss) }()
+	_ = os.MkdirAll(filepath.Join(tmpCss, "web_preview", "preview.css"), 0750)
+	if err = GenerateWebPreview(tmpCss, m); err == nil {
+		t.Error("expected error when writing css fails, got nil")
+	}
+
+	// 2c. WriteFile error for js
+	tmpJs, err := os.MkdirTemp("", "pithos-preview-js-*")
+	if err != nil {
+		t.Fatalf("failed to create temp directory: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpJs) }()
+	_ = os.MkdirAll(filepath.Join(tmpJs, "web_preview", "preview.js"), 0750)
+	if err = GenerateWebPreview(tmpJs, m); err == nil {
+		t.Error("expected error when writing js fails, got nil")
+	}
+
+	// 2d. WriteFile error for data.js
+	tmpData, err := os.MkdirTemp("", "pithos-preview-data-*")
+	if err != nil {
+		t.Fatalf("failed to create temp directory: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpData) }()
+	_ = os.MkdirAll(filepath.Join(tmpData, "web_preview", "data.js"), 0750)
+	if err = GenerateWebPreview(tmpData, m); err == nil {
+		t.Error("expected error when writing data.js fails, got nil")
 	}
 }

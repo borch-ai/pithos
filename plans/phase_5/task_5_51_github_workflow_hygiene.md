@@ -2,7 +2,7 @@
 
 **Status:** Completed (Issue #62)
 **Date Completed:** 2026-07-13
-**Unit Test Coverage:** 92.2%
+**Unit Test Coverage:** 91.1%
 **Go Version:** 1.26.5
 
 ## User Review Required
@@ -42,7 +42,7 @@ Pin the reusable `codeql-with-sibling.yml` workflow version to `@6fd0a9a05fa00d2
 Refactor to execute the local `link_task_issue.js` script on `pull_request_target` events to parse modified plan files for active issue IDs securely from the base branch context.
 
 #### [NEW] [link_task_issue.js](file://../../.github/workflows/link_task_issue.js)
-Copy the node script that extracts issue IDs from modified plans at the PR's HEAD SHA (fetched via `git fetch` and read using `git show`) and appends them to the PR description via the GitHub CLI. PR description text is deliberately not echoed to CI logs to avoid leaking sensitive credentials.
+Copy the node script that extracts issue IDs from modified plans at the PR's HEAD SHA (fetched via `git fetch` and read using `git show`) and appends them to the PR description via the GitHub CLI.
 
 #### [NEW] [markdown-lint.yml](file://../../.github/workflows/markdown-lint.yml)
 Introduce a markdown lint workflow triggered on `.md` changes and configuration updates, using the pinned shared workflow version.

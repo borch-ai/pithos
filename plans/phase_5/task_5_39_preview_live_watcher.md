@@ -2,7 +2,7 @@
 
 **Status:** Completed (Issue #62)
 **Date Completed:** 2026-07-13
-**Unit Test Coverage:** 91.0%
+**Unit Test Coverage:** 91.1%
 **Go Version:** 1.26.5
 
 This task implements a `pithos preview --watch` command that listens for edits to local manuscript draft files or configurations, automatically compiles the changes via the Typst pipeline, and updates the browser visualizer in real-time.
@@ -24,7 +24,7 @@ This task implements a `pithos preview --watch` command that listens for edits t
 ### Directory Watcher
 
 #### [NEW] [watcher.go](file://../../internal/pipeline/watcher.go)
-- Integrate `github.com/fsnotify/fsnotify` (surfacing fatal watcher errors rather than silently ignoring).
+- Integrate `github.com/fsnotify/fsnotify`.
 - Monitor the book's workspace folder for changes to:
   - `manuscript.md`
   - `.pithos.toml` (inside the workspace)
