@@ -136,7 +136,7 @@ func WatchWorkspace(ctx context.Context, opts WatchOptions) error {
 			if !ok {
 				return fmt.Errorf("watcher errors channel closed unexpectedly")
 			}
-			logger.Error("Watcher filesystem error", "error", err)
+			return fmt.Errorf("watcher filesystem error: %w", err)
 		}
 	}
 }
