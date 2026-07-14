@@ -1182,32 +1182,38 @@ const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Polling for hot-reload
-  let currentDataVersion = window.bookDataVersion || '';
-  let pollPending = false;
-  function pollForUpdates() {
-    if (pollPending) {
-      return;
-    }
-    pollPending = true;
-    const script = document.createElement('script');
-    script.className = 'pithos-poll-script';
-    script.src = 'data.js?t=' + Date.now();
-    script.onload = () => {
-      script.remove();
-      pollPending = false;
-      const newDataVersion = window.bookDataVersion || '';
-      if (newDataVersion !== currentDataVersion) {
-        console.log('Book data updated. Reloading...');
-        window.location.reload();
+  const isWatchMode = new URLSearchParams(window.location.search).has('watch');
+  if (isWatchMode) {
+    let currentDataVersion = window.bookDataVersion || '';
+    let pollPending = false;
+    function pollForUpdates() {
+      if (document.visibilityState !== 'visible') {
+        return;
       }
-    };
-    script.onerror = () => {
-      script.remove();
-      pollPending = false;
-    };
-    document.head.appendChild(script);
+      if (pollPending) {
+        return;
+      }
+      pollPending = true;
+      const script = document.createElement('script');
+      script.className = 'pithos-poll-script';
+      script.src = 'data.js?t=' + Date.now();
+      script.onload = () => {
+        script.remove();
+        pollPending = false;
+        const newDataVersion = window.bookDataVersion || '';
+        if (newDataVersion !== currentDataVersion) {
+          console.log('Book data updated. Reloading...');
+          window.location.reload();
+        }
+      };
+      script.onerror = () => {
+        script.remove();
+        pollPending = false;
+      };
+      document.head.appendChild(script);
+    }
+    setInterval(pollForUpdates, 1500);
   }
-  setInterval(pollForUpdates, 1500);
 
   // Initial State Run
   updateDOMState();

@@ -39,6 +39,9 @@ var previewCmd = &cobra.Command{
 
 		// 2. Open browser preview
 		previewPath := filepath.Join(bookDir, "web_preview", "preview.html")
+		if previewWatch {
+			previewPath += "?watch=1"
+		}
 		pipeline.TriggerBrowserOpen(cmd.Context(), previewPath)
 
 		// 3. Start live workspace watcher if requested

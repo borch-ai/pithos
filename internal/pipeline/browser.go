@@ -79,6 +79,11 @@ func TriggerBrowserOpen(ctx context.Context, path string) {
 
 // formatFileURL converts a local filepath into a valid file:// absolute URL.
 func formatFileURL(path string) string {
+	var query string
+	if idx := strings.Index(path, "?"); idx != -1 {
+		query = path[idx+1:]
+		path = path[:idx]
+	}
 	if absPath, err := filepath.Abs(path); err == nil {
 		path = absPath
 	}
@@ -87,8 +92,9 @@ func formatFileURL(path string) string {
 		p = "/" + p
 	}
 	u := &url.URL{
-		Scheme: "file",
-		Path:   p,
+		Scheme:   "file",
+		Path:     p,
+		RawQuery: query,
 	}
 	return u.String()
 }
