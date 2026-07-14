@@ -48,6 +48,7 @@ jobs:
         run: |
           cd powerword
           go install ./cmd/powerword
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
       - name: Run Linter
         run: make lint

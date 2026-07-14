@@ -218,7 +218,7 @@ func handleReload(ctx context.Context, bookDir string, configFile string, dryRun
 		}
 		logger.Info("Interior PDF compiled successfully", "path", pdfPath)
 	} else {
-		logger.Info("Typst plugin is not available or not configured in path. Skipping PDF compilation.", "path", binaryPath)
+		logger.Info("Typst plugin binary is not found or not executable. Skipping PDF compilation.", "path", binaryPath)
 	}
 
 	// 6. Print styled success alert
