@@ -95,7 +95,7 @@ func generateDataJS(m *manifest.Manifest) (string, error) {
 		return "", err
 	}
 
-	return fmt.Sprintf("const bookData = %s;\n", string(jsonData)), nil
+	return fmt.Sprintf("window.bookData = %s;\n", string(jsonData)), nil
 }
 
 const htmlTemplate = `<!DOCTYPE html>
@@ -819,11 +819,21 @@ const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
   let showPrompts = false;
   let showGuides = false;
 
+  try {
+    activeIndex = parseInt(sessionStorage.getItem('pithos_activeIndex')) || 0;
+    showPrompts = sessionStorage.getItem('pithos_showPrompts') === 'true';
+    showGuides = sessionStorage.getItem('pithos_showGuides') === 'true';
+  } catch (e) {}
+
   const pages = bookData.pages || [];
 
   if (pages.length === 0) {
     pageContainer.innerHTML = '<div class="page"><div class="pending-layout"><div class="stanza-text-print">No pages generated yet.</div></div></div>';
     return;
+  }
+
+  if (activeIndex >= pages.length) {
+    activeIndex = 0;
   }
 
   // 3. Aspect Ratio and Sizing Calculation
@@ -1083,6 +1093,9 @@ const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
   function nextPage() {
     if (activeIndex < pages.length - 1) {
       activeIndex++;
+      try {
+        sessionStorage.setItem('pithos_activeIndex', activeIndex);
+      } catch (e) {}
       updateDOMState();
     }
   }
@@ -1090,13 +1103,20 @@ const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
   function prevPage() {
     if (activeIndex > 0) {
       activeIndex--;
+      try {
+        sessionStorage.setItem('pithos_activeIndex', activeIndex);
+      } catch (e) {}
       updateDOMState();
     }
   }
 
+  // Jump to specific page
   function jumpToPage(index) {
     if (index >= 0 && index < pages.length) {
       activeIndex = index;
+      try {
+        sessionStorage.setItem('pithos_activeIndex', activeIndex);
+      } catch (e) {}
       updateDOMState();
     }
   }
@@ -1109,6 +1129,9 @@ const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
   const togglePromptsBtn = document.getElementById('toggle-prompts');
   togglePromptsBtn.addEventListener('click', () => {
     showPrompts = !showPrompts;
+    try {
+      sessionStorage.setItem('pithos_showPrompts', showPrompts);
+    } catch (e) {}
     if (showPrompts) {
       togglePromptsBtn.classList.add('active');
     } else {
@@ -1121,6 +1144,9 @@ const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
   const toggleGuidesBtn = document.getElementById('toggle-guides');
   toggleGuidesBtn.addEventListener('click', () => {
     showGuides = !showGuides;
+    try {
+      sessionStorage.setItem('pithos_showGuides', showGuides);
+    } catch (e) {}
     if (showGuides) {
       toggleGuidesBtn.classList.add('active');
       pageContainer.classList.add('show-guides');
@@ -1138,6 +1164,36 @@ const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
       prevPage();
     }
   });
+
+  // Set initial UI classes/states for active prompts/guides buttons
+  if (showPrompts) {
+    togglePromptsBtn.classList.add('active');
+  }
+  if (showGuides) {
+    toggleGuidesBtn.classList.add('active');
+    pageContainer.classList.add('show-guides');
+  }
+
+  // Polling for hot-reload
+  let currentDataStr = JSON.stringify(bookData);
+  function pollForUpdates() {
+    const script = document.createElement('script');
+    script.className = 'pithos-poll-script';
+    script.src = 'data.js?t=' + Date.now();
+    script.onload = () => {
+      script.remove();
+      const newDataStr = JSON.stringify(window.bookData);
+      if (newDataStr !== currentDataStr) {
+        console.log('Book data updated. Reloading...');
+        window.location.reload();
+      }
+    };
+    script.onerror = () => {
+      script.remove();
+    };
+    document.head.appendChild(script);
+  }
+  setInterval(pollForUpdates, 1500);
 
   // Initial State Run
   updateDOMState();

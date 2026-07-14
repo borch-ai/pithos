@@ -74,7 +74,7 @@ func TestGenerateWebPreview(t *testing.T) {
 	}
 	dataJSStr := string(dataJSBytes)
 
-	prefix := "const bookData = "
+	prefix := "window.bookData = "
 	if !strings.HasPrefix(dataJSStr, prefix) {
 		t.Fatalf("expected data.js to start with %q", prefix)
 	}

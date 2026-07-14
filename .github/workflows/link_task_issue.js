@@ -93,8 +93,8 @@ try {
   // 5. Determine which Issue IDs are not already referenced in the PR description
   const missingRefs = [];
   for (const id of issueIds) {
-    // Check for standard GitHub closing keywords followed by the issue reference (e.g. Closes #12, Fixes #12, Resolves #12)
-    const closesPattern = new RegExp(`(?:closes|resolves|fixes)\\s+#${id}\\b`, 'i');
+    // Check for standard GitHub closing keywords followed by the issue reference (e.g. Closes #12, Fixes #12, Resolves #12, Resolve #12, etc)
+    const closesPattern = new RegExp(`(?:close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved)\\s+#${id}\\b`, 'i');
     if (!closesPattern.test(prBody)) {
       missingRefs.push(id);
     }
