@@ -65,7 +65,7 @@ jobs:
         run: make check-coverage
 
       - name: Run Semantic Release
-        uses: go-semantic-release/action@453e003c94ddb9c64e7ea4153794ef69e477259e # pin@v1.24.1
+        uses: go-semantic-release/action@2e9dc4247a6004f8377781bef4cb9dad273a741f # pin@v1.24.1
         id: semrel
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
