@@ -58,7 +58,7 @@ func TestGenerateWebPreview(t *testing.T) {
 
 	// Assert files exist
 	previewDir := filepath.Join(tmpDir, "web_preview")
-	files := []string{"preview.html", "preview.css", "preview.js", "data.js"}
+	files := []string{"preview.html", "preview.css", "preview.js", "data.js", "version.js"}
 	for _, file := range files {
 		filePath := filepath.Join(previewDir, file)
 		if _, statErr := os.Stat(filePath); os.IsNotExist(statErr) {
@@ -146,6 +146,7 @@ func TestGenerateWebPreview(t *testing.T) {
 	}
 }
 
+//nolint:funlen // TestGenerateWebPreview_Errors contains multiple sequential file write error assertions
 func TestGenerateWebPreview_Errors(t *testing.T) {
 	m := manifest.NewManifest("")
 	m.BookProperties.Theme = "Test Theme"
@@ -210,5 +211,16 @@ func TestGenerateWebPreview_Errors(t *testing.T) {
 	_ = os.MkdirAll(filepath.Join(tmpData, "web_preview", "data.js"), 0750)
 	if err = GenerateWebPreview(tmpData, m); err == nil {
 		t.Error("expected error when writing data.js fails, got nil")
+	}
+
+	// 2e. WriteFile error for version.js
+	tmpVersion, err := os.MkdirTemp("", "pithos-preview-version-*")
+	if err != nil {
+		t.Fatalf("failed to create temp directory: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpVersion) }()
+	_ = os.MkdirAll(filepath.Join(tmpVersion, "web_preview", "version.js"), 0750)
+	if err = GenerateWebPreview(tmpVersion, m); err == nil {
+		t.Error("expected error when writing version.js fails, got nil")
 	}
 }

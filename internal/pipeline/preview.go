@@ -34,13 +34,17 @@ func GenerateWebPreview(outputDir string, m *manifest.Manifest) error {
 		return fmt.Errorf("failed to write preview.js: %w", err)
 	}
 
-	// 4. Generate data.js
-	dataJS, err := generateDataJS(m)
+	// 4. Generate data.js and version.js
+	dataJS, version, err := generateDataJS(m)
 	if err != nil {
 		return fmt.Errorf("failed to generate book data JS: %w", err)
 	}
 	if err := os.WriteFile(filepath.Join(previewDir, "data.js"), []byte(dataJS), 0600); err != nil {
 		return fmt.Errorf("failed to write data.js: %w", err)
+	}
+	versionJS := fmt.Sprintf("window.bookDataVersion = %q;\n", version)
+	if err := os.WriteFile(filepath.Join(previewDir, "version.js"), []byte(versionJS), 0600); err != nil {
+		return fmt.Errorf("failed to write version.js: %w", err)
 	}
 
 	return nil
@@ -64,21 +68,23 @@ type previewData struct {
 	Pages            []previewPage      `json:"pages"`
 }
 
-func generateDataJS(m *manifest.Manifest) (string, error) {
+func generateDataJS(m *manifest.Manifest) (string, string, error) {
 	manifestPages := m.Progress.Pages
 
 	pages := make([]previewPage, len(manifestPages))
-	for i, p := range manifestPages {
-		imgPath := p.ImagePath
-		if imgPath != "" {
-			imgPath = "../" + imgPath
+	for i, page := range manifestPages {
+		var imgPath string
+		if page.ImagePath != "" {
+			// Resolve relative path to the web_preview directory
+			// Since pages are rendered from web_preview, we prefix it with '../'
+			imgPath = "../" + page.ImagePath
 		}
 		pages[i] = previewPage{
-			PageIndex:          p.PageIndex,
-			Text:               p.Text,
+			PageIndex:          page.PageIndex,
+			Text:               page.Text,
 			ImagePath:          imgPath,
-			IllustrationPrompt: p.IllustrationPrompt,
-			Layout:             p.Layout,
+			IllustrationPrompt: page.IllustrationPrompt,
+			Layout:             page.Layout,
 		}
 	}
 
@@ -94,13 +100,13 @@ func generateDataJS(m *manifest.Manifest) (string, error) {
 
 	jsonData, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	hash := sha256.Sum256(jsonData)
 	version := hex.EncodeToString(hash[:])
 
-	return fmt.Sprintf("window.bookDataVersion = %q;\nwindow.bookData = %s;\n", version, string(jsonData)), nil
+	return fmt.Sprintf("window.bookDataVersion = %q;\nwindow.bookData = %s;\n", version, string(jsonData)), version, nil
 }
 
 const htmlTemplate = `<!DOCTYPE html>
@@ -1196,7 +1202,7 @@ const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
       pollPending = true;
       const script = document.createElement('script');
       script.className = 'pithos-poll-script';
-      script.src = 'data.js?t=' + Date.now();
+      script.src = 'version.js?t=' + Date.now();
       script.onload = () => {
         script.remove();
         pollPending = false;
