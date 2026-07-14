@@ -15,6 +15,11 @@ function runGh(args) {
 }
 
 try {
+  // Map GITHUB_TOKEN to GH_TOKEN for gh CLI if not set
+  if (process.env.GITHUB_TOKEN && !process.env.GH_TOKEN) {
+    process.env.GH_TOKEN = process.env.GITHUB_TOKEN;
+  }
+
   const prNumber = process.env.PR_NUMBER;
   const prHeadSha = process.env.PR_HEAD_SHA;
 

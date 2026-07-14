@@ -442,6 +442,21 @@ func TestWatchWorkspace_InvalidDirectory(t *testing.T) {
 	}
 }
 
+func TestWatchWorkspace_EmptyDirectory(t *testing.T) {
+	ctx := context.Background()
+	opts := WatchOptions{
+		BookDir: "",
+	}
+	err := WatchWorkspace(ctx, opts)
+	if err == nil {
+		t.Fatal("expected WatchWorkspace to fail with empty book directory, got nil")
+	}
+	expected := "book directory is not specified"
+	if err.Error() != expected {
+		t.Errorf("expected error %q, got %q", expected, err.Error())
+	}
+}
+
 func TestHandleReload_ConfigLoadError(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "pithos-watcher-cfg-err-*")
 	if err != nil {

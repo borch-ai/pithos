@@ -30,6 +30,10 @@ type WatchOptions struct {
 //
 //nolint:gocognit // WatchWorkspace coordinates multiple asynchronous channels (cancellation, fsnotify events, errors)
 func WatchWorkspace(ctx context.Context, opts WatchOptions) error {
+	if opts.BookDir == "" {
+		return fmt.Errorf("book directory is not specified")
+	}
+
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return fmt.Errorf("failed to initialize fsnotify watcher: %w", err)
