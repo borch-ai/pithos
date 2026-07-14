@@ -47,11 +47,12 @@ try {
     console.log(`Fetching PR head pull ref for PR #${prNumber}...`);
     runGitInherit(['fetch', 'origin', `pull/${prNumber}/head`]);
   } catch (err) {
-    console.log(`[WARNING] Failed to fetch PR head pull ref:`, err.message);
+    console.error(`[ERROR] Failed to fetch PR head pull ref:`, err.message);
+    process.exit(1);
   }
 
   // 2. Find modified files in this PR
-  const diffOutput = runGit(['diff', '--name-only', `HEAD...${prHeadSha}`]);
+  const diffOutput = runGit(['diff', '--name-only', 'HEAD...FETCH_HEAD']);
   const modifiedFiles = diffOutput.split('\n').map(f => f.trim()).filter(Boolean);
   console.log("Modified files detected:\n", modifiedFiles.map(f => ` - ${f}`).join('\n'));
 
@@ -63,14 +64,14 @@ try {
   for (const file of modifiedFiles) {
     if (planRegex.test(file)) {
       try {
-        console.log(`Reading content of ${file} at SHA ${prHeadSha} using git show...`);
-        const content = runGit(['show', `${prHeadSha}:${file}`]);
+        console.log(`Reading content of ${file} at FETCH_HEAD using git show...`);
+        const content = runGit(['show', `FETCH_HEAD:${file}`]);
         for (const match of content.matchAll(issueRegex)) {
           issueIds.add(match[1]);
           console.log(`Found Issue ID #${match[1]} inside plan file: ${file}`);
         }
       } catch (err) {
-        console.error(`[WARNING] Failed to read file ${file} at SHA ${prHeadSha}:`, err.message);
+        console.error(`[WARNING] Failed to read file ${file} at FETCH_HEAD:`, err.message);
       }
     } else {
       if (file.startsWith('plans/')) {
