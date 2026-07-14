@@ -45,18 +45,16 @@ try {
   // 1. Fetch the base branch and PR head SHA from the remote repository to ensure we can diff against them
   try {
     console.log(`Fetching origin/${baseRef}...`);
-    runGitInherit(['fetch', 'origin', baseRef, '--depth=1']);
-  } catch (err) {
-    console.log(`[WARNING] Failed to fetch origin/${baseRef} with depth=1, attempting full fetch...`);
     runGitInherit(['fetch', 'origin', baseRef]);
+  } catch (err) {
+    console.log(`[WARNING] Failed to fetch origin/${baseRef}:`, err.message);
   }
 
   try {
     console.log(`Fetching PR head pull ref for PR #${prNumber}...`);
-    runGitInherit(['fetch', 'origin', `pull/${prNumber}/head`, '--depth=1']);
-  } catch (err) {
-    console.log(`[WARNING] Failed to fetch PR head pull ref with depth=1, attempting full fetch...`);
     runGitInherit(['fetch', 'origin', `pull/${prNumber}/head`]);
+  } catch (err) {
+    console.log(`[WARNING] Failed to fetch PR head pull ref:`, err.message);
   }
 
   // 2. Find modified files in this PR
