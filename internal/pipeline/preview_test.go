@@ -66,6 +66,16 @@ func TestGenerateWebPreview(t *testing.T) {
 		}
 	}
 
+	// Assert version.js content is correct
+	//nolint:gosec // ReadFile path is constructed inside test temp directory
+	versionBytes, err := os.ReadFile(filepath.Join(previewDir, "version.js"))
+	if err != nil {
+		t.Fatalf("failed to read generated version.js: %v", err)
+	}
+	if !strings.HasPrefix(string(versionBytes), "window.bookDataVersion = ") {
+		t.Errorf("expected version.js to set window.bookDataVersion, got: %s", string(versionBytes))
+	}
+
 	// Read and validate data.js contents
 	//nolint:gosec // ReadFile path is constructed inside test temp directory
 	dataJSBytes, err := os.ReadFile(filepath.Join(previewDir, "data.js"))
