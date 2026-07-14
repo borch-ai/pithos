@@ -64,7 +64,7 @@ type previewData struct {
 	CharacterProfile string             `json:"characterProfile"`
 	TrimSize         string             `json:"trimSize,omitempty"`
 	Format           string             `json:"format,omitempty"`
-	KDPLayout        manifest.KDPLayout `json:"kdpLayout,omitempty"`
+	KDPLayout        manifest.KDPLayout `json:"kdpLayout"`
 	Pages            []previewPage      `json:"pages"`
 }
 
