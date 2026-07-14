@@ -22,6 +22,17 @@ func TestHandleReload_Basic(t *testing.T) {
 	}
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
+	oldCfg := config.Cfg
+	if oldCfg == nil {
+		config.Cfg = &config.Config{}
+	} else {
+		cfgCopy := *oldCfg
+		config.Cfg = &cfgCopy
+	}
+	t.Cleanup(func() {
+		config.Cfg = oldCfg
+	})
+
 	// Scaffolding a mock configuration
 	cfgFile := filepath.Join(tmpDir, ".pithos.toml")
 	cfgContent := fmt.Sprintf("workspaces_root = %q\nconcurrency = 1\n[mcp]\ntypst_path = %q\n", tmpDir, os.Args[0])
@@ -130,6 +141,17 @@ func TestHandleReload_InvalidManuscript(t *testing.T) {
 	}
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
+	oldCfg := config.Cfg
+	if oldCfg == nil {
+		config.Cfg = &config.Config{}
+	} else {
+		cfgCopy := *oldCfg
+		config.Cfg = &cfgCopy
+	}
+	t.Cleanup(func() {
+		config.Cfg = oldCfg
+	})
+
 	// Scaffolding config
 	cfgFile := filepath.Join(tmpDir, ".pithos.toml")
 	if writeErr := os.WriteFile(cfgFile, []byte(""), 0600); writeErr != nil {
@@ -172,6 +194,17 @@ func TestWatchWorkspace_ContextCancelled(t *testing.T) {
 		t.Fatalf("failed to create temp directory: %v", err)
 	}
 	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	oldCfg := config.Cfg
+	if oldCfg == nil {
+		config.Cfg = &config.Config{}
+	} else {
+		cfgCopy := *oldCfg
+		config.Cfg = &cfgCopy
+	}
+	t.Cleanup(func() {
+		config.Cfg = oldCfg
+	})
 
 	// Setup config
 	cfgFile := filepath.Join(tmpDir, ".pithos.toml")
@@ -216,12 +249,24 @@ func TestWatchWorkspace_ContextCancelled(t *testing.T) {
 	}
 }
 
+//nolint:funlen // TestWatchWorkspace_TriggersReload simulates a live editing session
 func TestWatchWorkspace_TriggersReload(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "pithos-watcher-reload-*")
 	if err != nil {
 		t.Fatalf("failed to create temp directory: %v", err)
 	}
 	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	oldCfg := config.Cfg
+	if oldCfg == nil {
+		config.Cfg = &config.Config{}
+	} else {
+		cfgCopy := *oldCfg
+		config.Cfg = &cfgCopy
+	}
+	t.Cleanup(func() {
+		config.Cfg = oldCfg
+	})
 
 	// Scaffolding a mock configuration
 	cfgFile := filepath.Join(tmpDir, ".pithos.toml")
@@ -323,6 +368,17 @@ func TestHandleReload_ManifestLoadError(t *testing.T) {
 	}
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
+	oldCfg := config.Cfg
+	if oldCfg == nil {
+		config.Cfg = &config.Config{}
+	} else {
+		cfgCopy := *oldCfg
+		config.Cfg = &cfgCopy
+	}
+	t.Cleanup(func() {
+		config.Cfg = oldCfg
+	})
+
 	ctx := context.Background()
 	// No manifest exists in tmpDir
 	err = handleReload(ctx, tmpDir, "", true)
@@ -340,6 +396,17 @@ func TestHandleReload_GenerateWebPreviewError(t *testing.T) {
 		t.Fatalf("failed to create temp directory: %v", err)
 	}
 	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	oldCfg := config.Cfg
+	if oldCfg == nil {
+		config.Cfg = &config.Config{}
+	} else {
+		cfgCopy := *oldCfg
+		config.Cfg = &cfgCopy
+	}
+	t.Cleanup(func() {
+		config.Cfg = oldCfg
+	})
 
 	// Save a valid manifest
 	manifestPath := filepath.Join(tmpDir, "manifest.json")
@@ -382,6 +449,17 @@ func TestHandleReload_ConfigLoadError(t *testing.T) {
 	}
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
+	oldCfg := config.Cfg
+	if oldCfg == nil {
+		config.Cfg = &config.Config{}
+	} else {
+		cfgCopy := *oldCfg
+		config.Cfg = &cfgCopy
+	}
+	t.Cleanup(func() {
+		config.Cfg = oldCfg
+	})
+
 	// Save a valid manifest
 	manifestPath := filepath.Join(tmpDir, "manifest.json")
 	m := manifest.NewManifest(manifestPath)
@@ -412,6 +490,17 @@ func TestHandleReload_TypstCompileError(t *testing.T) {
 		t.Fatalf("failed to create temp directory: %v", err)
 	}
 	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	oldCfg := config.Cfg
+	if oldCfg == nil {
+		config.Cfg = &config.Config{}
+	} else {
+		cfgCopy := *oldCfg
+		config.Cfg = &cfgCopy
+	}
+	t.Cleanup(func() {
+		config.Cfg = oldCfg
+	})
 
 	manifestPath := filepath.Join(tmpDir, "manifest.json")
 	m := manifest.NewManifest(manifestPath)
