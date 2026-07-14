@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -23,7 +24,10 @@ func TestHandleReload_Basic(t *testing.T) {
 
 	// Scaffolding a mock configuration
 	cfgFile := filepath.Join(tmpDir, ".pithos.toml")
-	if writeErr := os.WriteFile(cfgFile, []byte("workspaces_root = \""+tmpDir+"\"\nconcurrency = 1\n"), 0600); writeErr != nil {
+	typstPath := strings.ReplaceAll(os.Args[0], "\\", "\\\\")
+	cfgContent := fmt.Sprintf("workspaces_root = %q\nconcurrency = 1\n[mcp]\ntypst_path = %q\n", tmpDir, typstPath)
+	//nolint:gosec // Test scaffolding using secure temp directory
+	if writeErr := os.WriteFile(cfgFile, []byte(cfgContent), 0600); writeErr != nil {
 		t.Fatalf("failed to write config: %v", writeErr)
 	}
 	if _, loadErr := config.LoadConfig(cfgFile); loadErr != nil {
@@ -205,8 +209,8 @@ func TestWatchWorkspace_ContextCancelled(t *testing.T) {
 
 	select {
 	case err := <-errChan:
-		if err != context.Canceled {
-			t.Errorf("expected context.Canceled error, got: %v", err)
+		if err != nil {
+			t.Errorf("expected nil error on clean cancellation shutdown, got: %v", err)
 		}
 	case <-time.After(1 * time.Second):
 		t.Fatal("timed out waiting for WatchWorkspace to exit")
@@ -258,7 +262,7 @@ func TestWatchWorkspace_TriggersReload(t *testing.T) {
 	}()
 
 	// Wait for watcher to register folder
-	time.Sleep(150 * time.Millisecond)
+	time.Sleep(250 * time.Millisecond)
 
 	// Write dummy.txt (non-watched file to hit non-watched skip branch)
 	dummyPath := filepath.Join(tmpDir, "dummy.txt")
@@ -300,8 +304,8 @@ Reloaded prompt
 	// Wait for watcher exit
 	select {
 	case watchErr := <-errChan:
-		if watchErr != context.Canceled && watchErr != nil {
-			t.Errorf("expected context.Canceled or nil, got: %v", watchErr)
+		if watchErr != nil {
+			t.Errorf("expected nil error on clean cancellation shutdown, got: %v", watchErr)
 		}
 	case <-time.After(1 * time.Second):
 		t.Fatal("timed out waiting for WatchWorkspace to exit")
@@ -425,6 +429,14 @@ func TestHandleReload_TypstCompileError(t *testing.T) {
 		config.Cfg.MCP.TypstPath = oldTypstPath
 	})
 
+	cfgFile := filepath.Join(tmpDir, ".pithos.toml")
+	typstPath := strings.ReplaceAll(os.Args[0], "\\", "\\\\")
+	cfgContent := fmt.Sprintf("[mcp]\ntypst_path = %q\n", typstPath)
+	//nolint:gosec // Test scaffolding using secure temp directory
+	if writeErr := os.WriteFile(cfgFile, []byte(cfgContent), 0600); writeErr != nil {
+		t.Fatalf("failed to write config: %v", writeErr)
+	}
+
 	ctx := context.Background()
 	// Run with dryRun = false so it attempts starting the binary as MCP server and fails
 	err = handleReload(ctx, tmpDir, "", false)
@@ -448,6 +460,7 @@ func captureStdout(t *testing.T, f func()) string {
 	defer func() {
 		os.Stdout = old
 		_ = r.Close()
+		_ = w.Close()
 	}()
 
 	f()

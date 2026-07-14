@@ -92,7 +92,7 @@ func WatchWorkspace(ctx context.Context, opts WatchOptions) error {
 		select {
 		case <-ctx.Done():
 			logger.Info("Stopping workspace watcher: context cancelled")
-			return ctx.Err()
+			return nil
 
 		case event, ok := <-watcher.Events:
 			if !ok {
@@ -138,7 +138,11 @@ func handleReload(ctx context.Context, bookDir string, configFile string, dryRun
 	bookLocalConfig := filepath.Join(bookDir, ".pithos.toml")
 	reloadFile := bookLocalConfig
 	if _, err := os.Stat(bookLocalConfig); err != nil {
-		reloadFile = configFile
+		if os.IsNotExist(err) {
+			reloadFile = configFile
+		} else {
+			return fmt.Errorf("failed to check local configuration status: %w", err)
+		}
 	}
 	if _, err := config.LoadConfig(reloadFile); err != nil {
 		logger.Warn("Failed to reload configuration, using previous configuration", "error", err)

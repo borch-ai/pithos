@@ -52,11 +52,11 @@ try {
   }
 
   try {
-    console.log(`Fetching PR head SHA ${prHeadSha}...`);
-    runGitInherit(['fetch', 'origin', prHeadSha, '--depth=1']);
+    console.log(`Fetching PR head pull ref for PR #${prNumber}...`);
+    runGitInherit(['fetch', 'origin', `pull/${prNumber}/head`, '--depth=1']);
   } catch (err) {
-    console.log(`[WARNING] Failed to fetch PR head ${prHeadSha} with depth=1, attempting full fetch...`);
-    runGitInherit(['fetch', 'origin', prHeadSha]);
+    console.log(`[WARNING] Failed to fetch PR head pull ref with depth=1, attempting full fetch...`);
+    runGitInherit(['fetch', 'origin', `pull/${prNumber}/head`]);
   }
 
   // 2. Find modified files in this PR
