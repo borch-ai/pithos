@@ -42,8 +42,8 @@ try {
 
   // 1. Fetch the PR head SHA from the remote repository to ensure we can diff against it
   try {
-    console.log(`Fetching PR head pull ref for PR #${prNumber}...`);
-    runGitInherit(['fetch', 'origin', `pull/${prNumber}/head`]);
+    console.log(`Fetching PR head SHA ${prHeadSha}...`);
+    runGitInherit(['fetch', 'origin', prHeadSha]);
   } catch (err) {
     console.error(`[ERROR] Failed to fetch PR head pull ref:`, err.message);
     process.exit(1);

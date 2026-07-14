@@ -28,7 +28,7 @@ type WatchOptions struct {
 // WatchWorkspace starts a filesystem watcher for changes to manuscript.md and .pithos.toml.
 // It blocks until context is cancelled or a fatal watcher error occurs.
 //
-//nolint:gocognit // WatchWorkspace coordinates multiple asynchronous channels (cancellation, fsnotify events, errors)
+//nolint:gocognit,funlen // WatchWorkspace coordinates multiple asynchronous channels (cancellation, fsnotify events, errors)
 func WatchWorkspace(ctx context.Context, opts WatchOptions) error {
 	if opts.BookDir == "" {
 		return fmt.Errorf("book directory is not specified")
@@ -43,6 +43,14 @@ func WatchWorkspace(ctx context.Context, opts WatchOptions) error {
 	absBookDir, err := filepath.Abs(opts.BookDir)
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute book directory: %w", err)
+	}
+
+	info, err := os.Stat(absBookDir)
+	if err != nil {
+		return fmt.Errorf("failed to stat book directory: %w", err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("book directory must be a directory, not a file")
 	}
 
 	if err := watcher.Add(absBookDir); err != nil {
