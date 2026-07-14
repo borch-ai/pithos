@@ -1,6 +1,8 @@
 package pipeline
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -32,13 +34,17 @@ func GenerateWebPreview(outputDir string, m *manifest.Manifest) error {
 		return fmt.Errorf("failed to write preview.js: %w", err)
 	}
 
-	// 4. Generate data.js
-	dataJS, err := generateDataJS(m)
+	// 4. Generate data.js and version.js
+	dataJS, version, err := generateDataJS(m)
 	if err != nil {
 		return fmt.Errorf("failed to generate book data JS: %w", err)
 	}
 	if err := os.WriteFile(filepath.Join(previewDir, "data.js"), []byte(dataJS), 0600); err != nil {
 		return fmt.Errorf("failed to write data.js: %w", err)
+	}
+	versionJS := fmt.Sprintf("window.bookDataVersion = %q;\n", version)
+	if err := os.WriteFile(filepath.Join(previewDir, "version.js"), []byte(versionJS), 0600); err != nil {
+		return fmt.Errorf("failed to write version.js: %w", err)
 	}
 
 	return nil
@@ -56,13 +62,13 @@ type previewData struct {
 	Theme            string             `json:"theme"`
 	Style            string             `json:"style"`
 	CharacterProfile string             `json:"characterProfile"`
-	TrimSize         string             `json:"trimSize,omitempty"`
-	Format           string             `json:"format,omitempty"`
-	KDPLayout        manifest.KDPLayout `json:"kdpLayout,omitempty"`
+	TrimSize         string             `json:"trimSize"`
+	Format           string             `json:"format"`
+	KDPLayout        manifest.KDPLayout `json:"kdpLayout"`
 	Pages            []previewPage      `json:"pages"`
 }
 
-func generateDataJS(m *manifest.Manifest) (string, error) {
+func generateDataJS(m *manifest.Manifest) (string, string, error) {
 	manifestPages := m.Progress.Pages
 
 	pages := make([]previewPage, len(manifestPages))
@@ -92,10 +98,13 @@ func generateDataJS(m *manifest.Manifest) (string, error) {
 
 	jsonData, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
-	return fmt.Sprintf("const bookData = %s;\n", string(jsonData)), nil
+	hash := sha256.Sum256(jsonData)
+	version := hex.EncodeToString(hash[:])
+
+	return fmt.Sprintf("window.bookDataVersion = %q;\nwindow.bookData = %s;\n", version, string(jsonData)), version, nil
 }
 
 const htmlTemplate = `<!DOCTYPE html>
@@ -787,14 +796,16 @@ body {
 `
 
 const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
-  if (typeof bookData === 'undefined') {
-    console.error('bookData is not defined. Make sure data.js is loaded.');
+  if (typeof window.bookData === 'undefined') {
+    console.error('window.bookData is not defined. Make sure data.js is loaded.');
     const pageContainer = document.getElementById('page-container');
     if (pageContainer) {
-      pageContainer.innerHTML = '<div class="page"><div class="pending-layout"><div class="stanza-text-print">Error: bookData is not defined. data.js may have failed to load.</div></div></div>';
+      pageContainer.innerHTML = '<div class="page"><div class="pending-layout"><div class="stanza-text-print">Error: window.bookData is not defined. data.js may have failed to load.</div></div></div>';
     }
     return;
   }
+
+  const bookData = window.bookData;
 
   // 1. Initial configuration mapping
   const metaTheme = document.getElementById('meta-theme');
@@ -819,11 +830,21 @@ const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
   let showPrompts = false;
   let showGuides = false;
 
+  try {
+    activeIndex = parseInt(sessionStorage.getItem('pithos_activeIndex'), 10) || 0;
+    showPrompts = sessionStorage.getItem('pithos_showPrompts') === 'true';
+    showGuides = sessionStorage.getItem('pithos_showGuides') === 'true';
+  } catch (e) {}
+
   const pages = bookData.pages || [];
 
   if (pages.length === 0) {
     pageContainer.innerHTML = '<div class="page"><div class="pending-layout"><div class="stanza-text-print">No pages generated yet.</div></div></div>';
     return;
+  }
+
+  if (activeIndex >= pages.length) {
+    activeIndex = 0;
   }
 
   // 3. Aspect Ratio and Sizing Calculation
@@ -1083,6 +1104,9 @@ const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
   function nextPage() {
     if (activeIndex < pages.length - 1) {
       activeIndex++;
+      try {
+        sessionStorage.setItem('pithos_activeIndex', activeIndex);
+      } catch (e) {}
       updateDOMState();
     }
   }
@@ -1090,13 +1114,20 @@ const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
   function prevPage() {
     if (activeIndex > 0) {
       activeIndex--;
+      try {
+        sessionStorage.setItem('pithos_activeIndex', activeIndex);
+      } catch (e) {}
       updateDOMState();
     }
   }
 
+  // Jump to specific page
   function jumpToPage(index) {
     if (index >= 0 && index < pages.length) {
       activeIndex = index;
+      try {
+        sessionStorage.setItem('pithos_activeIndex', activeIndex);
+      } catch (e) {}
       updateDOMState();
     }
   }
@@ -1109,6 +1140,9 @@ const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
   const togglePromptsBtn = document.getElementById('toggle-prompts');
   togglePromptsBtn.addEventListener('click', () => {
     showPrompts = !showPrompts;
+    try {
+      sessionStorage.setItem('pithos_showPrompts', showPrompts);
+    } catch (e) {}
     if (showPrompts) {
       togglePromptsBtn.classList.add('active');
     } else {
@@ -1121,6 +1155,9 @@ const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
   const toggleGuidesBtn = document.getElementById('toggle-guides');
   toggleGuidesBtn.addEventListener('click', () => {
     showGuides = !showGuides;
+    try {
+      sessionStorage.setItem('pithos_showGuides', showGuides);
+    } catch (e) {}
     if (showGuides) {
       toggleGuidesBtn.classList.add('active');
       pageContainer.classList.add('show-guides');
@@ -1138,6 +1175,49 @@ const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
       prevPage();
     }
   });
+
+  // Set initial UI classes/states for active prompts/guides buttons
+  if (showPrompts) {
+    togglePromptsBtn.classList.add('active');
+  }
+  if (showGuides) {
+    toggleGuidesBtn.classList.add('active');
+    pageContainer.classList.add('show-guides');
+  }
+
+  // Polling for hot-reload
+  const isWatchMode = new URLSearchParams(window.location.search).has('watch');
+  if (isWatchMode) {
+    let currentDataVersion = window.bookDataVersion || '';
+    let pollPending = false;
+    function pollForUpdates() {
+      if (document.visibilityState !== 'visible') {
+        return;
+      }
+      if (pollPending) {
+        return;
+      }
+      pollPending = true;
+      const script = document.createElement('script');
+      script.className = 'pithos-poll-script';
+      script.src = 'version.js?t=' + Date.now();
+      script.onload = () => {
+        script.remove();
+        pollPending = false;
+        const newDataVersion = window.bookDataVersion || '';
+        if (newDataVersion !== currentDataVersion) {
+          console.log('Book data updated. Reloading...');
+          window.location.reload();
+        }
+      };
+      script.onerror = () => {
+        script.remove();
+        pollPending = false;
+      };
+      document.head.appendChild(script);
+    }
+    setInterval(pollForUpdates, 1500);
+  }
 
   // Initial State Run
   updateDOMState();

@@ -13,12 +13,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # pin@v7.0.0
         with:
           fetch-depth: 0
 
       - name: Generate GitHub App Token
-        uses: actions/create-github-app-token@v3
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # pin@v3.2.0
         id: app-token
         with:
           app-id: ${{ secrets.CI_APP_ID }}
@@ -26,7 +26,7 @@ jobs:
           owner: ${{ github.repository_owner }}
 
       - name: Checkout Powerword
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # pin@v7.0.0
         with:
           repository: borch-ai/powerword
           path: powerword
@@ -36,7 +36,7 @@ jobs:
         run: ln -s "$GITHUB_WORKSPACE/powerword" "$GITHUB_WORKSPACE/../powerword"
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # pin@v6.5.0
         with:
           go-version-file: go.mod
           cache: true
@@ -44,11 +44,14 @@ jobs:
             go.sum
             powerword/go.sum
 
+      - name: Install powerword
+        run: |
+          cd powerword
+          go install ./cmd/powerword
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+
       - name: Run Linter
-        uses: golangci/golangci-lint-action@v9
-        with:
-          version: v2.12.2
-          args: --config=../powerword/.golangci.yml
+        run: make lint
 
       - name: Check Dependency Tidy Hygiene
         run: |
@@ -62,7 +65,7 @@ jobs:
         run: make check-coverage
 
       - name: Run Semantic Release
-        uses: go-semantic-release/action@v1
+        uses: go-semantic-release/action@453e003c94ddb9c64e7ea4153794ef69e477259e # pin@v1.24.1
         id: semrel
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -81,7 +84,6 @@ jobs:
           GOOS=linux GOARCH=amd64 go build -ldflags "-X github.com/borch-ai/pithos/internal/config.Version=${VERSION_TAG}" -o dist/pithos-linux-amd64 ./cmd/pithos
           GOOS=linux GOARCH=arm64 go build -ldflags "-X github.com/borch-ai/pithos/internal/config.Version=${VERSION_TAG}" -o dist/pithos-linux-arm64 ./cmd/pithos
           GOOS=windows GOARCH=amd64 go build -ldflags "-X github.com/borch-ai/pithos/internal/config.Version=${VERSION_TAG}" -o dist/pithos-windows-amd64.exe ./cmd/pithos
-
 
       - name: Upload Binaries to GitHub Release
         if: steps.semrel.outputs.version != ''

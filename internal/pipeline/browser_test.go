@@ -52,6 +52,40 @@ func TestTriggerBrowserOpen_Error(t *testing.T) {
 	triggerBrowserOpen(context.Background(), "https://example.com")
 }
 
+func TestTriggerBrowserOpen_Exported(t *testing.T) {
+	origFunc := openBrowserFunc
+	defer func() { openBrowserFunc = origFunc }()
+
+	var calledURL string
+	openBrowserFunc = func(ctx context.Context, urlStr string) error {
+		calledURL = urlStr
+		return nil
+	}
+
+	TriggerBrowserOpen(context.Background(), "some/local/file.html")
+	if !strings.HasPrefix(calledURL, "file://") {
+		t.Errorf("expected URL to start with file://, got %q", calledURL)
+	}
+}
+
+func TestFormatFileURL_QueryParam(t *testing.T) {
+	url1 := formatFileURL("some/local/file.html")
+	if !strings.HasPrefix(url1, "file://") {
+		t.Errorf("expected URL to start with file://, got %q", url1)
+	}
+	if strings.Contains(url1, "?") {
+		t.Errorf("expected URL not to contain query parameter, got %q", url1)
+	}
+
+	url2 := formatFileURL("some/local/file.html?watch=1")
+	if !strings.HasPrefix(url2, "file://") {
+		t.Errorf("expected URL to start with file://, got %q", url2)
+	}
+	if !strings.HasSuffix(url2, "?watch=1") {
+		t.Errorf("expected URL to end with '?watch=1', got %q", url2)
+	}
+}
+
 func TestDefaultOpenBrowser_AllPlatforms(t *testing.T) {
 	origExec := execCommandContext
 	origGOOS := goos
