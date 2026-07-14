@@ -24,7 +24,7 @@ This task implements a `pithos preview --watch` command that listens for edits t
 ### Directory Watcher
 
 #### [NEW] [watcher.go](file://../../internal/pipeline/watcher.go)
-- Integrate `github.com/fsnotify/fsnotify`.
+- Integrate `github.com/fsnotify/fsnotify` (surfacing fatal watcher errors rather than silently ignoring).
 - Monitor the book's workspace folder for changes to:
   - `manuscript.md`
   - `.pithos.toml` (inside the workspace)
