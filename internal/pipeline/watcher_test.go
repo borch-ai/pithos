@@ -24,8 +24,7 @@ func TestHandleReload_Basic(t *testing.T) {
 
 	// Scaffolding a mock configuration
 	cfgFile := filepath.Join(tmpDir, ".pithos.toml")
-	typstPath := strings.ReplaceAll(os.Args[0], "\\", "\\\\")
-	cfgContent := fmt.Sprintf("workspaces_root = %q\nconcurrency = 1\n[mcp]\ntypst_path = %q\n", tmpDir, typstPath)
+	cfgContent := fmt.Sprintf("workspaces_root = %q\nconcurrency = 1\n[mcp]\ntypst_path = %q\n", tmpDir, os.Args[0])
 	//nolint:gosec // Test scaffolding using secure temp directory
 	if writeErr := os.WriteFile(cfgFile, []byte(cfgContent), 0600); writeErr != nil {
 		t.Fatalf("failed to write config: %v", writeErr)
@@ -430,8 +429,7 @@ func TestHandleReload_TypstCompileError(t *testing.T) {
 	})
 
 	cfgFile := filepath.Join(tmpDir, ".pithos.toml")
-	typstPath := strings.ReplaceAll(os.Args[0], "\\", "\\\\")
-	cfgContent := fmt.Sprintf("[mcp]\ntypst_path = %q\n", typstPath)
+	cfgContent := fmt.Sprintf("[mcp]\ntypst_path = %q\n", os.Args[0])
 	//nolint:gosec // Test scaffolding using secure temp directory
 	if writeErr := os.WriteFile(cfgFile, []byte(cfgContent), 0600); writeErr != nil {
 		t.Fatalf("failed to write config: %v", writeErr)

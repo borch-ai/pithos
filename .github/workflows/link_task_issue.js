@@ -42,14 +42,7 @@ try {
 
   console.log(`Analyzing changes in PR #${prNumber} (HEAD: ${prHeadSha}) compared to base ref '${baseRef}'...`);
 
-  // 1. Fetch the base branch and PR head SHA from the remote repository to ensure we can diff against them
-  try {
-    console.log(`Fetching origin/${baseRef}...`);
-    runGitInherit(['fetch', 'origin', baseRef]);
-  } catch (err) {
-    console.log(`[WARNING] Failed to fetch origin/${baseRef}:`, err.message);
-  }
-
+  // 1. Fetch the PR head SHA from the remote repository to ensure we can diff against it
   try {
     console.log(`Fetching PR head pull ref for PR #${prNumber}...`);
     runGitInherit(['fetch', 'origin', `pull/${prNumber}/head`]);
@@ -58,7 +51,7 @@ try {
   }
 
   // 2. Find modified files in this PR
-  const diffOutput = runGit(['diff', '--name-only', `origin/${baseRef}...${prHeadSha}`]);
+  const diffOutput = runGit(['diff', '--name-only', `HEAD...${prHeadSha}`]);
   const modifiedFiles = diffOutput.split('\n').map(f => f.trim()).filter(Boolean);
   console.log("Modified files detected:\n", modifiedFiles.map(f => ` - ${f}`).join('\n'));
 
