@@ -134,6 +134,8 @@ func WatchWorkspace(ctx context.Context, opts WatchOptions) error {
 }
 
 // handleReload loads configuration and manifest updates, updates previews, and recompiles PDFs.
+//
+//nolint:gocognit // handleReload handles sequential steps of configuration reloading, manuscript importing, preview generation and PDF compilation.
 func handleReload(ctx context.Context, bookDir string, configFile string, dryRun bool) error {
 	logger.Info("Change detected. Starting hot-reload...")
 
@@ -148,8 +150,10 @@ func handleReload(ctx context.Context, bookDir string, configFile string, dryRun
 			return fmt.Errorf("failed to check local configuration status: %w", err)
 		}
 	}
-	if _, err := config.LoadConfig(reloadFile); err != nil {
-		logger.Warn("Failed to reload configuration, using previous configuration", "error", err)
+	if reloadFile != "" {
+		if _, err := config.LoadConfig(reloadFile); err != nil {
+			logger.Warn("Failed to reload configuration, using previous configuration", "error", err)
+		}
 	}
 
 	// 2. Load latest manifest
