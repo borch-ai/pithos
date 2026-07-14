@@ -1,4 +1,7 @@
 const { execFileSync } = require('child_process');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 
 // execFileSync is used with argument arrays (no shell spawn) to prevent shell command injection.
 // All arguments (PR number, base ref, head SHA, file paths) are strictly validated/regex-checked before execution.
@@ -120,7 +123,13 @@ try {
   }
 
   console.log("Updating PR description body...");
-  runGh(['pr', 'edit', prNumber, '--body', newBody]);
+  const tempBodyPath = path.join(os.tmpdir(), `pr-${prNumber}-body.txt`);
+  fs.writeFileSync(tempBodyPath, newBody, 'utf8');
+  try {
+    runGh(['pr', 'edit', prNumber, '--body-file', tempBodyPath]);
+  } finally {
+    fs.unlinkSync(tempBodyPath);
+  }
 
   console.log("[SUCCESS] Successfully updated the PR description with closing references.");
 } catch (error) {
