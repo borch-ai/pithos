@@ -1,7 +1,9 @@
 package registry
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sync"
@@ -527,4 +529,99 @@ func TestRegistryOperations_Concurrent(t *testing.T) {
 	}
 
 	wg.Wait()
+}
+
+type mockFileWriter struct {
+	writeFunc func(p []byte) (n int, err error)
+	syncFunc  func() error
+	closeFunc func() error
+	nameFunc  func() string
+}
+
+func (m *mockFileWriter) Write(p []byte) (n int, err error) {
+	if m.writeFunc != nil {
+		return m.writeFunc(p)
+	}
+	return len(p), nil
+}
+
+func (m *mockFileWriter) Sync() error {
+	if m.syncFunc != nil {
+		return m.syncFunc()
+	}
+	return nil
+}
+
+func (m *mockFileWriter) Close() error {
+	if m.closeFunc != nil {
+		return m.closeFunc()
+	}
+	return nil
+}
+
+func (m *mockFileWriter) Name() string {
+	if m.nameFunc != nil {
+		return m.nameFunc()
+	}
+	return "mock.tmp"
+}
+
+func TestRegistryEdgeCases_SaveFileWriterErrors(t *testing.T) {
+	setupTestFile(t)
+
+	// Mock fileWriter to return Write error
+	oldCreateTempFile := createTempFile
+	defer func() { createTempFile = oldCreateTempFile }()
+
+	// 1. Test Write Error
+	createTempFile = func(dir, pattern string) (fileWriter, error) {
+		return &mockFileWriter{
+			writeFunc: func(p []byte) (n int, err error) {
+				return 0, os.ErrPermission
+			},
+		}, nil
+	}
+	err := save([]string{"/test"})
+	if err == nil || !errors.Is(err, os.ErrPermission) {
+		t.Errorf("expected write permission error, got %v", err)
+	}
+
+	// 2. Test Short Write
+	createTempFile = func(dir, pattern string) (fileWriter, error) {
+		return &mockFileWriter{
+			writeFunc: func(p []byte) (n int, err error) {
+				return len(p) - 1, nil
+			},
+		}, nil
+	}
+	err = save([]string{"/test"})
+	if err == nil || !errors.Is(err, io.ErrShortWrite) {
+		t.Errorf("expected short write error, got %v", err)
+	}
+
+	// 3. Test Sync Error
+	createTempFile = func(dir, pattern string) (fileWriter, error) {
+		return &mockFileWriter{
+			syncFunc: func() error {
+				return os.ErrInvalid
+			},
+		}, nil
+	}
+	err = save([]string{"/test"})
+	if err == nil || !errors.Is(err, os.ErrInvalid) {
+		t.Errorf("expected sync invalid error, got %v", err)
+	}
+
+	// 4. Test Close Error
+	createTempFile = func(dir, pattern string) (fileWriter, error) {
+		return &mockFileWriter{
+			closeFunc: func() error {
+				return os.ErrClosed
+			},
+		}, nil
+	}
+	err = save([]string{"/test"})
+	if err == nil || !errors.Is(err, os.ErrClosed) {
+		t.Errorf("expected close closed error, got %v", err)
+	}
 }

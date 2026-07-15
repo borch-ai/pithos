@@ -23,6 +23,17 @@ var mu sync.Mutex
 
 var renameFunc = os.Rename
 
+type fileWriter interface {
+	Write(p []byte) (n int, err error)
+	Sync() error
+	Close() error
+	Name() string
+}
+
+var createTempFile = func(dir, pattern string) (fileWriter, error) {
+	return os.CreateTemp(dir, pattern)
+}
+
 var registryPathOverride string
 
 // SetRegistryPathOverride overrides the default registry file path for testing purposes.
@@ -192,7 +203,7 @@ func save(workspaces []string) error {
 	}
 
 	// Write atomically using temporary file in same directory
-	tmpFile, err := os.CreateTemp(dir, "registry-*.tmp")
+	tmpFile, err := createTempFile(dir, "registry-*.tmp")
 	if err != nil {
 		return err
 	}
@@ -202,8 +213,15 @@ func save(workspaces []string) error {
 		_ = os.Remove(tmpPath)
 	}()
 
-	if _, writeErr := tmpFile.Write(data); writeErr != nil {
+	n, writeErr := tmpFile.Write(data)
+	if writeErr != nil {
 		return writeErr
+	}
+	if n < len(data) {
+		return io.ErrShortWrite
+	}
+	if syncErr := tmpFile.Sync(); syncErr != nil {
+		return syncErr
 	}
 	if closeErr := tmpFile.Close(); closeErr != nil {
 		return closeErr
