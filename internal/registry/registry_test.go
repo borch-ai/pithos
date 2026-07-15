@@ -387,6 +387,7 @@ func TestRegistryEdgeCases_PruneFailures(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to chmod secret parent dir: %v", err)
 	}
+	// #nosec G302
 	defer func() { _ = os.Chmod(secretParent, 0750) }()
 
 	err = Prune()

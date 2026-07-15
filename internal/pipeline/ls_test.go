@@ -232,6 +232,7 @@ func TestListWorkspaces_PermissionDeniedWorkspaceStat(t *testing.T) {
 	if err := os.Chmod(secretParent, 0000); err != nil {
 		t.Fatalf("failed to chmod: %v", err)
 	}
+	// #nosec G302
 	defer func() { _ = os.Chmod(secretParent, 0750) }()
 
 	_, err := ListWorkspaces(tmpRoot)
