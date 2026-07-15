@@ -289,6 +289,11 @@ func (m *Manifest) SaveTo(path string) error {
 
 // UpdatePageStatus updates the progress state of a specific page and saves the manifest.
 func (m *Manifest) UpdatePageStatus(pageIndex int, status PageStatus, imagePath, imageModel string) error {
+	if status == StatusPending || status == StatusGeneratingImages {
+		imagePath = ""
+		imageModel = ""
+	}
+
 	m.mu.Lock()
 
 	// Check if page already exists in m.Progress.Pages
