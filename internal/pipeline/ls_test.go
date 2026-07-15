@@ -180,6 +180,12 @@ func TestListWorkspaces_PermissionDeniedDir(t *testing.T) {
 
 	_, err := ListWorkspaces(permDeniedDir)
 	if err == nil {
+		// If the OS/filesystem doesn't enforce permission restrictions on read (e.g. running as root),
+		// we skip the failure to avoid breaking CI.
+		_, readErr := os.ReadDir(permDeniedDir)
+		if readErr == nil {
+			t.Skip("skipping test: filesystem permitted read access to 0000 directory")
+		}
 		t.Error("expected error when listing directory with permission denied, got nil")
 	}
 }

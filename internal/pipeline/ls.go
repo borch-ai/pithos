@@ -152,6 +152,9 @@ func loadBookSummary(path string) (*BookSummary, bool, error) {
 
 	m, err := manifest.LoadManifest(manifestPath)
 	if err != nil {
+		if os.IsPermission(err) {
+			return nil, false, err
+		}
 		return nil, false, nil
 	}
 
