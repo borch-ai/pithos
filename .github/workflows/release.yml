@@ -9,88 +9,9 @@ permissions:
 
 jobs:
   release:
-    name: Build & Release
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # pin@v7.0.0
-        with:
-          fetch-depth: 0
-
-      - name: Generate GitHub App Token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # pin@v3.2.0
-        id: app-token
-        with:
-          app-id: ${{ secrets.CI_APP_ID }}
-          private-key: ${{ secrets.CI_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-
-      - name: Checkout Powerword
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # pin@v7.0.0
-        with:
-          repository: borch-ai/powerword
-          path: powerword
-          token: ${{ steps.app-token.outputs.token }}
-
-      - name: Create Powerword Sibling Symlink
-        run: ln -s "$GITHUB_WORKSPACE/powerword" "$GITHUB_WORKSPACE/../powerword"
-
-      - name: Set up Go
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # pin@v6.5.0
-        with:
-          go-version-file: go.mod
-          cache: true
-          cache-dependency-path: |
-            go.sum
-            powerword/go.sum
-
-      - name: Install powerword
-        run: |
-          cd powerword
-          go install ./cmd/powerword
-          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
-
-      - name: Run Linter
-        run: make lint
-
-      - name: Check Dependency Tidy Hygiene
-        run: |
-          make tidy
-          git diff --exit-code go.mod go.sum
-
-      - name: Run Vulnerability Scan
-        run: make vuln
-
-      - name: Run Tests & Check Coverage
-        run: make check-coverage
-
-      - name: Run Semantic Release
-        uses: go-semantic-release/action@453e003c94ddb9c64e7ea4153794ef69e477259e # pin@v1.24.1
-        id: semrel
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build Pithos Binaries
-        if: steps.semrel.outputs.version != ''
-        env:
-          VERSION: ${{ steps.semrel.outputs.version }}
-        run: |
-          mkdir -p dist
-          VERSION_NUM="${VERSION#v}"
-          VERSION_TAG="v${VERSION_NUM}"
-          echo "Building version ${VERSION_TAG}..."
-          GOOS=darwin GOARCH=amd64 go build -ldflags "-X github.com/borch-ai/pithos/internal/config.Version=${VERSION_TAG}" -o dist/pithos-darwin-amd64 ./cmd/pithos
-          GOOS=darwin GOARCH=arm64 go build -ldflags "-X github.com/borch-ai/pithos/internal/config.Version=${VERSION_TAG}" -o dist/pithos-darwin-arm64 ./cmd/pithos
-          GOOS=linux GOARCH=amd64 go build -ldflags "-X github.com/borch-ai/pithos/internal/config.Version=${VERSION_TAG}" -o dist/pithos-linux-amd64 ./cmd/pithos
-          GOOS=linux GOARCH=arm64 go build -ldflags "-X github.com/borch-ai/pithos/internal/config.Version=${VERSION_TAG}" -o dist/pithos-linux-arm64 ./cmd/pithos
-          GOOS=windows GOARCH=amd64 go build -ldflags "-X github.com/borch-ai/pithos/internal/config.Version=${VERSION_TAG}" -o dist/pithos-windows-amd64.exe ./cmd/pithos
-
-      - name: Upload Binaries to GitHub Release
-        if: steps.semrel.outputs.version != ''
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ steps.semrel.outputs.version }}
-        run: |
-          VERSION_NUM="${VERSION#v}"
-          VERSION_TAG="v${VERSION_NUM}"
-          gh release upload "$VERSION_TAG" dist/* --clobber
+    uses: borch-ai/.github/.github/workflows/release-go-binary.yml@v0.1.0
+    with:
+      binary-name: pithos
+      sibling-repo: borch-ai/powerword
+      sibling-path: powerword
+    secrets: inherit

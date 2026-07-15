@@ -62,8 +62,8 @@ type previewData struct {
 	Theme            string             `json:"theme"`
 	Style            string             `json:"style"`
 	CharacterProfile string             `json:"characterProfile"`
-	TrimSize         string             `json:"trimSize"`
-	Format           string             `json:"format"`
+	TrimSize         string             `json:"trimSize,omitempty"`
+	Format           string             `json:"format,omitempty"`
 	KDPLayout        manifest.KDPLayout `json:"kdpLayout"`
 	Pages            []previewPage      `json:"pages"`
 }
@@ -72,17 +72,19 @@ func generateDataJS(m *manifest.Manifest) (string, string, error) {
 	manifestPages := m.Progress.Pages
 
 	pages := make([]previewPage, len(manifestPages))
-	for i, p := range manifestPages {
-		imgPath := p.ImagePath
-		if imgPath != "" {
-			imgPath = "../" + imgPath
+	for i, page := range manifestPages {
+		var imgPath string
+		if page.ImagePath != "" {
+			// Resolve relative path to the web_preview directory
+			// Since pages are rendered from web_preview, we prefix it with '../'
+			imgPath = "../" + page.ImagePath
 		}
 		pages[i] = previewPage{
-			PageIndex:          p.PageIndex,
-			Text:               p.Text,
+			PageIndex:          page.PageIndex,
+			Text:               page.Text,
 			ImagePath:          imgPath,
-			IllustrationPrompt: p.IllustrationPrompt,
-			Layout:             p.Layout,
+			IllustrationPrompt: page.IllustrationPrompt,
+			Layout:             page.Layout,
 		}
 	}
 
