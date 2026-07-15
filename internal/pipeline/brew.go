@@ -685,13 +685,13 @@ Loop:
 			}
 			m.RecordImageGeneration(pricing)
 
-			logger.Info("Generated illustration", "page", p.PageIndex, "model", modelName)
 			if err := m.UpdatePageStatus(p.PageIndex, manifest.StatusCompleted, imgPath, modelName); err != nil {
 				errsMu.Lock()
 				workerErrors = append(workerErrors, fmt.Errorf("failed to update page %d status to completed: %w", p.PageIndex, err))
 				errsMu.Unlock()
 				return
 			}
+			logger.Info("Generated illustration", "page", p.PageIndex, "model", modelName)
 		}(page)
 	}
 
@@ -764,7 +764,7 @@ func generateImageRaw(ctx context.Context, mcpClient *mcp.PluginClient, prompt s
 		return "", "", fmt.Errorf("unexpected imagegen response format: %q", resText)
 	}
 
-	return strings.TrimPrefix(resText, prefix), "legacy-model", nil
+	return strings.TrimPrefix(resText, prefix), "unknown", nil
 }
 
 func generateSingleImage(ctx context.Context, mcpClient *mcp.PluginClient, pageIndex int, pageText string, styleID string, outputDir string, imageSize string, crefURL string, charWeight *int) (string, string, error) {

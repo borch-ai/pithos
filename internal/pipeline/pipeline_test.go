@@ -175,24 +175,20 @@ func setupMockImageGenServerWithCapabilities(t *testing.T, ctx context.Context, 
 		}
 
 		if strings.Contains(args.Prompt, "FAIL_FORMAT") {
-			return &mcpsdk.CallToolResult{
-				Content: []mcpsdk.Content{
-					&mcpsdk.TextContent{Text: "bad response format"},
-				},
-			}, nil
+			return &mcpsdk.CallToolResult{Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: "bad response format"}}}, nil
 		}
 
 		if strings.Contains(args.Prompt, "LEGACY_FORMAT") {
-			return &mcpsdk.CallToolResult{
-				Content: []mcpsdk.Content{
-					&mcpsdk.TextContent{Text: "Successfully generated image and saved to: " + generatedImagePath},
-				},
-			}, nil
+			return &mcpsdk.CallToolResult{Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: "Successfully generated image and saved to: " + generatedImagePath}}}, nil
 		}
 
+		payload, _ := json.Marshal(map[string]string{
+			"image_path": generatedImagePath,
+			"model":      "mock-imagen-pro",
+		})
 		return &mcpsdk.CallToolResult{
 			Content: []mcpsdk.Content{
-				&mcpsdk.TextContent{Text: `{"image_path":"` + generatedImagePath + `", "model":"mock-imagen-pro"}`},
+				&mcpsdk.TextContent{Text: string(payload)},
 			},
 		}, nil
 	})
@@ -658,8 +654,8 @@ func TestBrew_LegacyMCPFallback(t *testing.T) {
 		t.Fatalf("expected 1 page, got %d", len(m.Progress.Pages))
 	}
 	page1 := m.Progress.Pages[0]
-	if page1.ImageModel != "legacy-model" {
-		t.Errorf("expected page 1 ImageModel 'legacy-model', got %q", page1.ImageModel)
+	if page1.ImageModel != "unknown" {
+		t.Errorf("expected page 1 ImageModel 'unknown', got %q", page1.ImageModel)
 	}
 
 	// Verify that files were copied

@@ -295,14 +295,19 @@ func (m *Manifest) UpdatePageStatus(pageIndex int, status PageStatus, imagePath,
 	found := false
 	for i, p := range m.Progress.Pages {
 		if p.PageIndex == pageIndex {
+			found = true
 			m.Progress.Pages[i].Status = status
+			if status == StatusPending || status == StatusGeneratingImages {
+				m.Progress.Pages[i].ImagePath = ""
+				m.Progress.Pages[i].ImageModel = ""
+				break
+			}
 			if imagePath != "" {
 				m.Progress.Pages[i].ImagePath = imagePath
 			}
 			if imageModel != "" {
 				m.Progress.Pages[i].ImageModel = imageModel
 			}
-			found = true
 			break
 		}
 	}
