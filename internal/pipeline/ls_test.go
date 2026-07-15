@@ -198,10 +198,18 @@ func TestListWorkspaces_PermissionDeniedWorkspace(t *testing.T) {
 
 	_, err := ListWorkspaces(tmpRoot)
 	if err == nil {
-		// If the OS/filesystem doesn't enforce permission restrictions on stat (e.g. returns ENOENT instead of EACCES),
-		// we skip the failure to avoid breaking CI.
+		// Debug logging for CI failures
 		manifestPath := filepath.Join(secretDir, "manifest.json")
 		_, statErr := os.Stat(manifestPath)
+		entries, readErr := os.ReadDir(tmpRoot)
+
+		t.Logf("ListWorkspaces returned nil error.")
+		t.Logf("os.Stat(manifestPath) err: %v, IsNotExist: %v", statErr, errors.Is(statErr, os.ErrNotExist))
+		t.Logf("ReadDir(tmpRoot) err: %v", readErr)
+		for _, entry := range entries {
+			t.Logf(" - Entry: %s, IsDir: %v", entry.Name(), entry.IsDir())
+		}
+
 		if statErr != nil && errors.Is(statErr, os.ErrNotExist) {
 			t.Skip("skipping test: filesystem returned ENOENT instead of EACCES for non-searchable directory contents")
 		}
