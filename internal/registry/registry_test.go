@@ -396,3 +396,43 @@ func TestRegistryEdgeCases_PruneFailures(t *testing.T) {
 		t.Error("expected error when Prune stats a directory with permission denied, got nil")
 	}
 }
+
+func TestRegistryEdgeCases_SaveWindowsFallback(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "pithos_registry_windows_fallback")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(tempDir) })
+
+	// Set destination path to a sub-directory. Since it's a directory,
+	// the first rename call will fail, but the destination exists, triggering the fallback.
+	registryDir := filepath.Join(tempDir, "registry.json")
+	err = os.Mkdir(registryDir, 0750)
+	if err != nil {
+		t.Fatalf("failed to create directory in place of registry file: %v", err)
+	}
+
+	oldOverride := SetRegistryPathOverride(registryDir)
+	t.Cleanup(func() { SetRegistryPathOverride(oldOverride) })
+
+	// Mock Windows platform
+	oldIsWindows := isWindows
+	isWindows = true
+	defer func() { isWindows = oldIsWindows }()
+
+	// Calling save should trigger the rename error, enter fallback, remove the directory,
+	// and successfully rename the temp file to registry.json.
+	err = save([]string{"/test/path"})
+	if err != nil {
+		t.Fatalf("expected save to succeed via Windows fallback, got error: %v", err)
+	}
+
+	// Verify it successfully wrote the registry
+	workspaces, err := Load()
+	if err != nil {
+		t.Fatalf("failed to load registry: %v", err)
+	}
+	if len(workspaces) != 1 || workspaces[0] != "/test/path" {
+		t.Errorf("unexpected workspaces loaded: %v", workspaces)
+	}
+}

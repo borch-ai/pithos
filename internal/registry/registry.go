@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 )
 
 // Registry represents the structure of the registry JSON file.
@@ -14,6 +15,8 @@ type Registry struct {
 }
 
 var userHomeDir = os.UserHomeDir
+
+var isWindows = runtime.GOOS == "windows"
 
 var registryPathOverride string
 
@@ -187,11 +190,13 @@ func save(workspaces []string) error {
 	}
 
 	err = os.Rename(tmpPath, path)
-	if err != nil {
-		// On Windows, os.Rename might fail if the destination file already exists.
-		// We fallback to removing the destination and renaming.
-		_ = os.Remove(path)
-		err = os.Rename(tmpPath, path)
+	if err != nil && isWindows {
+		if _, statErr := os.Stat(path); statErr == nil {
+			// On Windows, os.Rename might fail if the destination file already exists.
+			// We fallback to removing the destination and renaming.
+			_ = os.Remove(path)
+			err = os.Rename(tmpPath, path)
+		}
 	}
 	return err
 }
