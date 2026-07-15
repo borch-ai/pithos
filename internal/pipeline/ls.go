@@ -1,12 +1,14 @@
 package pipeline
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/borch-ai/pithos/internal/manifest"
+	"github.com/borch-ai/pithos/internal/registry"
 )
 
 // BookSummary holds summary details of a book workspace for listing.
@@ -20,29 +22,70 @@ type BookSummary struct {
 	TotalCost       float64
 }
 
-// ListWorkspaces scans the given workspaceRoot directory, parses manifest.json in each subdirectory,
-// and returns a list of BookSummary.
+// ListWorkspaces scans the given workspaceRoot directory and the global registry,
+// parses manifest.json in each workspace, and returns a list of BookSummary.
 func ListWorkspaces(workspaceRoot string) ([]BookSummary, error) {
-	entries, err := os.ReadDir(workspaceRoot)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
+	var paths []string
+
+	// 1. Load paths from global registry
+	regPaths, err := registry.Load()
+	if err == nil {
+		paths = append(paths, regPaths...)
+	}
+
+	// 2. Scan default workspaces root for subdirectories
+	if workspaceRoot != "" {
+		absRoot, err := filepath.Abs(workspaceRoot)
+		if err != nil {
+			return nil, err
 		}
-		return nil, err
+
+		entries, err := os.ReadDir(absRoot)
+		if err != nil {
+			if !errors.Is(err, os.ErrNotExist) {
+				return nil, err
+			}
+		} else {
+			for _, entry := range entries {
+				if entry.IsDir() {
+					paths = append(paths, filepath.Join(absRoot, entry.Name()))
+				}
+			}
+		}
+	}
+
+	// 3. Deduplicate paths by converting them to absolute clean paths
+	uniquePathsMap := make(map[string]bool)
+	var uniquePaths []string
+	for _, p := range paths {
+		abs, err := filepath.Abs(p)
+		if err != nil {
+			continue
+		}
+		abs = filepath.Clean(abs)
+		if !uniquePathsMap[abs] {
+			uniquePathsMap[abs] = true
+			uniquePaths = append(uniquePaths, abs)
+		}
 	}
 
 	var summaries []BookSummary
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
+	var stalePaths []string
 
-		manifestPath := filepath.Join(workspaceRoot, entry.Name(), "manifest.json")
-		if _, err := os.Stat(manifestPath); err != nil {
-			if os.IsNotExist(err) {
+	// 4. Load manifest and compile summary for each workspace path
+	for _, path := range uniquePaths {
+		if _, err := os.Stat(path); err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				stalePaths = append(stalePaths, path)
 				continue
 			}
 			return nil, err
+		}
+
+		manifestPath := filepath.Join(path, "manifest.json")
+		if _, err := os.Stat(manifestPath); err != nil {
+			// If manifest.json does not exist, it's not a valid book workspace
+			continue
 		}
 
 		m, err := manifest.LoadManifest(manifestPath)
@@ -52,7 +95,7 @@ func ListWorkspaces(workspaceRoot string) ([]BookSummary, error) {
 		}
 
 		summaries = append(summaries, BookSummary{
-			DirName:         entry.Name(),
+			DirName:         filepath.Base(path),
 			Theme:           m.BookProperties.Theme,
 			Format:          m.BookProperties.Format,
 			PageCount:       len(m.Progress.Pages),
@@ -62,6 +105,11 @@ func ListWorkspaces(workspaceRoot string) ([]BookSummary, error) {
 		})
 	}
 
+	// 5. Prune any stale paths from the global registry
+	for _, stale := range stalePaths {
+		_ = registry.Remove(stale)
+	}
+
 	// Sort alphabetically by DirName to ensure deterministic ordering
 	sort.Slice(summaries, func(i, j int) bool {
 		return strings.Compare(summaries[i].DirName, summaries[j].DirName) < 0
@@ -69,3 +117,4 @@ func ListWorkspaces(workspaceRoot string) ([]BookSummary, error) {
 
 	return summaries, nil
 }
+

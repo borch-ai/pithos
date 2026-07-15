@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/borch-ai/pithos/internal/manifest"
+	"github.com/borch-ai/pithos/internal/registry"
 )
 
 func TestListWorkspaces_NonExistent(t *testing.T) {
@@ -166,3 +167,90 @@ func TestListWorkspaces_InvalidAndIgnored(t *testing.T) {
 		t.Fatalf("expected 0 book summaries, got %d", len(summaries))
 	}
 }
+
+func TestListWorkspaces_WithRegistry(t *testing.T) {
+	// Set registry file override
+	registryTemp := t.TempDir()
+	registry.SetRegistryPathOverride(filepath.Join(registryTemp, "registry.json"))
+	defer registry.SetRegistryPathOverride("")
+
+	// Create root directories
+	workspaceRoot := t.TempDir()
+	customRoot := t.TempDir()
+
+	// 1. Create a workspace in default root (book-local)
+	bookLocalDir := filepath.Join(workspaceRoot, "book-local")
+	if err := os.Mkdir(bookLocalDir, 0700); err != nil {
+		t.Fatalf("failed to create bookLocalDir: %v", err)
+	}
+	mLocal := manifest.NewManifest(filepath.Join(bookLocalDir, "manifest.json"))
+	mLocal.BookProperties.Theme = "Local Theme"
+	if err := mLocal.Save(); err != nil {
+		t.Fatalf("failed to save local manifest: %v", err)
+	}
+
+	// 2. Create a workspace in custom root (book-custom)
+	bookCustomDir := filepath.Join(customRoot, "book-custom")
+	if err := os.Mkdir(bookCustomDir, 0700); err != nil {
+		t.Fatalf("failed to create bookCustomDir: %v", err)
+	}
+	mCustom := manifest.NewManifest(filepath.Join(bookCustomDir, "manifest.json"))
+	mCustom.BookProperties.Theme = "Custom Theme"
+	if err := mCustom.Save(); err != nil {
+		t.Fatalf("failed to save custom manifest: %v", err)
+	}
+
+	// Register the custom book path
+	if err := registry.Add(bookCustomDir); err != nil {
+		t.Fatalf("failed to register custom workspace: %v", err)
+	}
+
+	// 3. Run ListWorkspaces
+	summaries, err := ListWorkspaces(workspaceRoot)
+	if err != nil {
+		t.Fatalf("failed to list workspaces: %v", err)
+	}
+
+	// Verify both local and custom are found
+	if len(summaries) != 2 {
+		t.Fatalf("expected exactly 2 book summaries, got %d (list: %+v)", len(summaries), summaries)
+	}
+
+	// Because of alphabetical sorting, book-custom comes first
+	if summaries[0].DirName != "book-custom" || summaries[0].Theme != "Custom Theme" {
+		t.Errorf("unexpected summary at index 0: %+v", summaries[0])
+	}
+	if summaries[1].DirName != "book-local" || summaries[1].Theme != "Local Theme" {
+		t.Errorf("unexpected summary at index 1: %+v", summaries[1])
+	}
+
+	// 4. Delete custom book workspace and verify auto-prune
+	if err := os.RemoveAll(bookCustomDir); err != nil {
+		t.Fatalf("failed to delete bookCustomDir: %v", err)
+	}
+
+	summaries, err = ListWorkspaces(workspaceRoot)
+	if err != nil {
+		t.Fatalf("failed to list workspaces after delete: %v", err)
+	}
+
+	// Only local remains
+	if len(summaries) != 1 {
+		t.Fatalf("expected 1 book summary after deleting custom workspace, got %d", len(summaries))
+	}
+	if summaries[0].DirName != "book-local" {
+		t.Errorf("expected book-local to remain, got %s", summaries[0].DirName)
+	}
+
+	// Registry should have pruned the stale path
+	workspaces, err := registry.Load()
+	if err != nil {
+		t.Fatalf("failed to load registry: %v", err)
+	}
+	for _, ws := range workspaces {
+		if ws == bookCustomDir {
+			t.Errorf("expected book-custom path to be pruned from registry, but it was found")
+		}
+	}
+}
+
