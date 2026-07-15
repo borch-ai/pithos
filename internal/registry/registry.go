@@ -18,8 +18,11 @@ var userHomeDir = os.UserHomeDir
 var registryPathOverride string
 
 // SetRegistryPathOverride overrides the default registry file path for testing purposes.
-func SetRegistryPathOverride(path string) {
+// It returns the previous override value, allowing callers to restore it via defer.
+func SetRegistryPathOverride(path string) string {
+	old := registryPathOverride
 	registryPathOverride = path
+	return old
 }
 
 // GetRegistryPath resolves the absolute path to the registry JSON file.

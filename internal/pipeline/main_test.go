@@ -15,11 +15,11 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
-	registry.SetRegistryPathOverride(filepath.Join(tmpDir, "registry.json"))
+	oldOverride := registry.SetRegistryPathOverride(filepath.Join(tmpDir, "registry.json"))
 
 	code := m.Run()
 
-	registry.SetRegistryPathOverride("")
+	registry.SetRegistryPathOverride(oldOverride)
 	_ = os.RemoveAll(tmpDir)
 
 	os.Exit(code)

@@ -16,9 +16,9 @@ func setupTestFile(t *testing.T) string {
 	})
 
 	regFile := filepath.Join(tempDir, "registry.json")
-	SetRegistryPathOverride(regFile)
+	old := SetRegistryPathOverride(regFile)
 	t.Cleanup(func() {
-		SetRegistryPathOverride("")
+		SetRegistryPathOverride(old)
 	})
 
 	return tempDir
@@ -189,7 +189,8 @@ func TestRegistryOperations_Prune(t *testing.T) {
 }
 
 func TestRegistryEdgeCases_GetRegistryPath(t *testing.T) {
-	SetRegistryPathOverride("")
+	old := SetRegistryPathOverride("")
+	defer SetRegistryPathOverride(old)
 	path := GetRegistryPath()
 	if path == "" {
 		t.Error("expected non-empty path from GetRegistryPath")
@@ -221,8 +222,8 @@ func TestRegistryEdgeCases_LoadFailurePropagation(t *testing.T) {
 		t.Fatalf("failed to write bad file: %v", err)
 	}
 
-	SetRegistryPathOverride(badFile)
-	t.Cleanup(func() { SetRegistryPathOverride("") })
+	old := SetRegistryPathOverride(badFile)
+	t.Cleanup(func() { SetRegistryPathOverride(old) })
 
 	_, err = Load()
 	if err == nil {
@@ -275,8 +276,8 @@ func TestRegistryEdgeCases_NullWorkspaces(t *testing.T) {
 		t.Fatalf("failed to write null workspaces file: %v", err)
 	}
 
-	SetRegistryPathOverride(nullFile)
-	t.Cleanup(func() { SetRegistryPathOverride("") })
+	old := SetRegistryPathOverride(nullFile)
+	t.Cleanup(func() { SetRegistryPathOverride(old) })
 
 	workspaces, err := Load()
 	if err != nil {
@@ -300,8 +301,8 @@ func TestRegistryEdgeCases_SaveFailures(t *testing.T) {
 		t.Fatalf("failed to create conflict file: %v", err)
 	}
 
-	SetRegistryPathOverride(filepath.Join(conflictFile, "registry.json"))
-	t.Cleanup(func() { SetRegistryPathOverride("") })
+	old := SetRegistryPathOverride(filepath.Join(conflictFile, "registry.json"))
+	t.Cleanup(func() { SetRegistryPathOverride(old) })
 
 	err = Add(tempDir)
 	if err == nil {
@@ -322,13 +323,15 @@ func TestRegistryEdgeCases_SaveFailures(t *testing.T) {
 	// #nosec G302
 	defer func() { _ = os.Chmod(readOnlyDir, 0750) }()
 
-	SetRegistryPathOverride(filepath.Join(readOnlyDir, "registry.json"))
+	oldReadOnly := SetRegistryPathOverride(filepath.Join(readOnlyDir, "registry.json"))
+	defer SetRegistryPathOverride(oldReadOnly)
 	err = Add(tempDir)
 	if err == nil {
 		t.Error("expected error when CreateTemp fails inside readonly dir, got nil")
 	}
 
-	SetRegistryPathOverride(tempDir)
+	oldTemp := SetRegistryPathOverride(tempDir)
+	defer SetRegistryPathOverride(oldTemp)
 	err = save([]string{"/some/path"})
 	if err == nil {
 		t.Error("expected error when writing to a directory path, got nil")
@@ -342,8 +345,8 @@ func TestRegistryEdgeCases_RemoveNonExistent(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(tempDir) })
 
-	SetRegistryPathOverride(filepath.Join(tempDir, "non_existent_registry.json"))
-	t.Cleanup(func() { SetRegistryPathOverride("") })
+	old := SetRegistryPathOverride(filepath.Join(tempDir, "non_existent_registry.json"))
+	t.Cleanup(func() { SetRegistryPathOverride(old) })
 
 	err = Remove("/some/path/that/is/not/there")
 	if err != nil {
@@ -371,8 +374,8 @@ func TestRegistryEdgeCases_PruneFailures(t *testing.T) {
 	}
 
 	regFile := filepath.Join(tempDir, "registry.json")
-	SetRegistryPathOverride(regFile)
-	t.Cleanup(func() { SetRegistryPathOverride("") })
+	old := SetRegistryPathOverride(regFile)
+	t.Cleanup(func() { SetRegistryPathOverride(old) })
 
 	// Add nested workspace to registry while parent is accessible
 	err = Add(wsDir)

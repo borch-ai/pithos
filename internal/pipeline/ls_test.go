@@ -216,8 +216,8 @@ func TestListWorkspaces_PermissionDeniedWorkspace(t *testing.T) {
 func TestListWorkspaces_PermissionDeniedWorkspaceStat(t *testing.T) {
 	// Set registry file override
 	registryTemp := t.TempDir()
-	registry.SetRegistryPathOverride(filepath.Join(registryTemp, "registry.json"))
-	defer registry.SetRegistryPathOverride("")
+	oldOverride := registry.SetRegistryPathOverride(filepath.Join(registryTemp, "registry.json"))
+	defer registry.SetRegistryPathOverride(oldOverride)
 
 	tmpRoot := t.TempDir()
 
@@ -257,8 +257,8 @@ func TestListWorkspaces_PermissionDeniedWorkspaceStat(t *testing.T) {
 func TestListWorkspaces_WithRegistry(t *testing.T) {
 	// Set registry file override
 	registryTemp := t.TempDir()
-	registry.SetRegistryPathOverride(filepath.Join(registryTemp, "registry.json"))
-	defer registry.SetRegistryPathOverride("")
+	oldOverride := registry.SetRegistryPathOverride(filepath.Join(registryTemp, "registry.json"))
+	defer registry.SetRegistryPathOverride(oldOverride)
 
 	// Create root directories
 	workspaceRoot := t.TempDir()
