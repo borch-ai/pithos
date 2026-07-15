@@ -174,6 +174,7 @@ func TestListWorkspaces_PermissionDeniedDir(t *testing.T) {
 	if err := os.Mkdir(permDeniedDir, 0000); err != nil {
 		t.Fatalf("failed to create directory: %v", err)
 	}
+	// #nosec G302
 	defer func() { _ = os.Chmod(permDeniedDir, 0700) }() // restore permission for cleanup
 
 	_, err := ListWorkspaces(permDeniedDir)
@@ -182,6 +183,62 @@ func TestListWorkspaces_PermissionDeniedDir(t *testing.T) {
 	}
 }
 
+func TestListWorkspaces_PermissionDeniedWorkspace(t *testing.T) {
+	tmpRoot := t.TempDir()
+
+	createManifestA(t, tmpRoot)
+
+	secretDir := filepath.Join(tmpRoot, "book-secret")
+	if err := os.Mkdir(secretDir, 0000); err != nil {
+		t.Fatalf("failed to create secretDir: %v", err)
+	}
+	// #nosec G302
+	defer func() { _ = os.Chmod(secretDir, 0700) }()
+
+	_, err := ListWorkspaces(tmpRoot)
+	if err == nil {
+		t.Error("expected error when workspace folder read fails with permission denied, got nil")
+	}
+}
+
+func TestListWorkspaces_PermissionDeniedWorkspaceStat(t *testing.T) {
+	// Set registry file override
+	registryTemp := t.TempDir()
+	registry.SetRegistryPathOverride(filepath.Join(registryTemp, "registry.json"))
+	defer registry.SetRegistryPathOverride("")
+
+	tmpRoot := t.TempDir()
+
+	// Create secret parent and nested workspace directory
+	secretParent := filepath.Join(tmpRoot, "secret_parent")
+	if err := os.Mkdir(secretParent, 0750); err != nil {
+		t.Fatalf("failed to create secret parent dir: %v", err)
+	}
+	wsDir := filepath.Join(secretParent, "ws")
+	if err := os.Mkdir(wsDir, 0750); err != nil {
+		t.Fatalf("failed to create nested ws dir: %v", err)
+	}
+	// Add manifest.json so it's a valid workspace
+	if err := os.WriteFile(filepath.Join(wsDir, "manifest.json"), []byte("{}"), 0600); err != nil {
+		t.Fatalf("failed to write manifest: %v", err)
+	}
+
+	// Register it
+	if err := registry.Add(wsDir); err != nil {
+		t.Fatalf("failed to add to registry: %v", err)
+	}
+
+	// Block search permission on parent
+	if err := os.Chmod(secretParent, 0000); err != nil {
+		t.Fatalf("failed to chmod: %v", err)
+	}
+	defer func() { _ = os.Chmod(secretParent, 0750) }()
+
+	_, err := ListWorkspaces(tmpRoot)
+	if err == nil {
+		t.Error("expected error when workspace folder stat fails with permission denied, got nil")
+	}
+}
 
 func TestListWorkspaces_WithRegistry(t *testing.T) {
 	// Set registry file override
