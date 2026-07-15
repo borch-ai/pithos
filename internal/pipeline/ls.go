@@ -143,11 +143,11 @@ func loadBookSummary(path string) (*BookSummary, bool, error) {
 	}
 
 	manifestPath := filepath.Join(path, "manifest.json")
-	if _, err := os.Stat(manifestPath); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
+	if _, statErr := os.Stat(manifestPath); statErr != nil {
+		if errors.Is(statErr, os.ErrNotExist) {
 			return nil, false, nil
 		}
-		return nil, false, err
+		return nil, false, statErr
 	}
 
 	m, err := manifest.LoadManifest(manifestPath)

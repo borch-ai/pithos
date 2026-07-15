@@ -247,6 +247,7 @@ func TestListWorkspaces_PermissionDeniedWorkspaceStat(t *testing.T) {
 	}
 }
 
+//nolint:gocognit,funlen
 func TestListWorkspaces_WithRegistry(t *testing.T) {
 	// Set registry file override
 	registryTemp := t.TempDir()
@@ -334,11 +335,11 @@ func TestListWorkspaces_WithRegistry(t *testing.T) {
 
 	// 5. Test registering a regular file (should be treated as stale/pruned)
 	regFilePath := filepath.Join(workspaceRoot, "regular-file.txt")
-	if err := os.WriteFile(regFilePath, []byte("not-a-directory"), 0600); err != nil {
-		t.Fatalf("failed to write regular file: %v", err)
+	if writeErr := os.WriteFile(regFilePath, []byte("not-a-directory"), 0600); writeErr != nil {
+		t.Fatalf("failed to write regular file: %v", writeErr)
 	}
-	if err := registry.Add(regFilePath); err != nil {
-		t.Fatalf("failed to add file path to registry: %v", err)
+	if addErr := registry.Add(regFilePath); addErr != nil {
+		t.Fatalf("failed to add file path to registry: %v", addErr)
 	}
 
 	// ListWorkspaces should prune the file path

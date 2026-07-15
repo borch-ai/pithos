@@ -176,11 +176,11 @@ func save(workspaces []string) error {
 		_ = os.Remove(tmpPath)
 	}()
 
-	if _, err := tmpFile.Write(data); err != nil {
-		return err
+	if _, writeErr := tmpFile.Write(data); writeErr != nil {
+		return writeErr
 	}
-	if err := tmpFile.Close(); err != nil {
-		return err
+	if closeErr := tmpFile.Close(); closeErr != nil {
+		return closeErr
 	}
 
 	err = os.Rename(tmpPath, path)
