@@ -156,6 +156,7 @@ func TestGenerateWebPreview(t *testing.T) {
 	}
 }
 
+//nolint:funlen // TestGenerateWebPreview_Errors contains multiple sequential file write error assertions
 func TestGenerateWebPreview_Errors(t *testing.T) {
 	m := manifest.NewManifest("")
 	m.BookProperties.Theme = "Test Theme"
@@ -178,19 +179,68 @@ func TestGenerateWebPreview_Errors(t *testing.T) {
 		t.Error("expected error when MkdirAll fails, got nil")
 	}
 
-	// 2. WriteFile errors for assets
-	files := []string{"preview.html", "preview.css", "preview.js", "data.js", "version.js"}
-	for _, file := range files {
-		t.Run("write_error_"+file, func(t *testing.T) {
-			tmpDir, err := os.MkdirTemp("", "pithos-preview-err-*")
-			if err != nil {
-				t.Fatalf("failed to create temp directory: %v", err)
-			}
-			defer func() { _ = os.RemoveAll(tmpDir) }()
-			_ = os.MkdirAll(filepath.Join(tmpDir, "web_preview", file), 0750)
-			if err = GenerateWebPreview(tmpDir, m); err == nil {
-				t.Errorf("expected error when writing %s fails, got nil", file)
-			}
-		})
+	// 2a. WriteFile error for html
+	tmpHtml, err := os.MkdirTemp("", "pithos-preview-html-*")
+	if err != nil {
+		t.Fatalf("failed to create temp directory: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpHtml) }()
+	if mkdirErr := os.MkdirAll(filepath.Join(tmpHtml, "web_preview", "preview.html"), 0750); mkdirErr != nil {
+		t.Fatalf("failed to create file blocking html path: %v", mkdirErr)
+	}
+	if err = GenerateWebPreview(tmpHtml, m); err == nil {
+		t.Error("expected error when writing html fails, got nil")
+	}
+
+	// 2b. WriteFile error for css
+	tmpCss, err := os.MkdirTemp("", "pithos-preview-css-*")
+	if err != nil {
+		t.Fatalf("failed to create temp directory: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpCss) }()
+	if mkdirErr := os.MkdirAll(filepath.Join(tmpCss, "web_preview", "preview.css"), 0750); mkdirErr != nil {
+		t.Fatalf("failed to create file blocking css path: %v", mkdirErr)
+	}
+	if err = GenerateWebPreview(tmpCss, m); err == nil {
+		t.Error("expected error when writing css fails, got nil")
+	}
+
+	// 2c. WriteFile error for js
+	tmpJs, err := os.MkdirTemp("", "pithos-preview-js-*")
+	if err != nil {
+		t.Fatalf("failed to create temp directory: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpJs) }()
+	if mkdirErr := os.MkdirAll(filepath.Join(tmpJs, "web_preview", "preview.js"), 0750); mkdirErr != nil {
+		t.Fatalf("failed to create file blocking js path: %v", mkdirErr)
+	}
+	if err = GenerateWebPreview(tmpJs, m); err == nil {
+		t.Error("expected error when writing js fails, got nil")
+	}
+
+	// 2d. WriteFile error for data.js
+	tmpData, err := os.MkdirTemp("", "pithos-preview-data-*")
+	if err != nil {
+		t.Fatalf("failed to create temp directory: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpData) }()
+	if mkdirErr := os.MkdirAll(filepath.Join(tmpData, "web_preview", "data.js"), 0750); mkdirErr != nil {
+		t.Fatalf("failed to create file blocking data.js path: %v", mkdirErr)
+	}
+	if err = GenerateWebPreview(tmpData, m); err == nil {
+		t.Error("expected error when writing data.js fails, got nil")
+	}
+
+	// 2e. WriteFile error for version.js
+	tmpVersion, err := os.MkdirTemp("", "pithos-preview-version-*")
+	if err != nil {
+		t.Fatalf("failed to create temp directory: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpVersion) }()
+	if mkdirErr := os.MkdirAll(filepath.Join(tmpVersion, "web_preview", "version.js"), 0750); mkdirErr != nil {
+		t.Fatalf("failed to create file blocking version.js path: %v", mkdirErr)
+	}
+	if err = GenerateWebPreview(tmpVersion, m); err == nil {
+		t.Error("expected error when writing version.js fails, got nil")
 	}
 }

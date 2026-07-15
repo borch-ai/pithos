@@ -28,7 +28,7 @@ type WatchOptions struct {
 // WatchWorkspace starts a filesystem watcher for changes to manuscript.md and .pithos.toml.
 // It blocks until context is cancelled or a fatal watcher error occurs.
 //
-//nolint:gocognit,funlen // WatchWorkspace coordinates multiple asynchronous channels (cancellation, fsnotify events, errors)
+//nolint:gocognit,funlen // WatchWorkspace coordinates multiple asynchronous channels (cancellation, fsnotify events, errors) and setup checks
 func WatchWorkspace(ctx context.Context, opts WatchOptions) error {
 	if opts.BookDir == "" {
 		return fmt.Errorf("book directory is not specified")

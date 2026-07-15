@@ -2,7 +2,7 @@
 
 **Status:** Completed (Issue #62)
 **Date Completed:** 2026-07-13
-**Unit Test Coverage:** 92.2%
+**Unit Test Coverage:** 91.1%
 **Go Version:** 1.26.5
 
 ## User Review Required
@@ -33,16 +33,16 @@ Update the pull request template to integrate Aeolian's overview and issue auto-
 Create branch naming enforcement rule allowing prefixes `feature/`, `docs/`, `bugfix/`, `chore/`, `refactor/`, and `test/`.
 
 #### [MODIFY] [ci.yml](file://../../.github/workflows/ci.yml)
-Pin the reusable `go-ci-with-sibling.yml` workflow version to `@6fd0a9a05fa00d21159402147a3445af04a191c5` (v1.0.0) and explicitly set the `coverage-threshold` to `91`.
+Pin the reusable `go-ci-with-sibling.yml` workflow version to `@v0.1.0` and explicitly set the `coverage-threshold` to `91`.
 
 #### [MODIFY] [codeql.yml](file://../../.github/workflows/codeql.yml)
-Pin the reusable `codeql-with-sibling.yml` workflow version to `@6fd0a9a05fa00d21159402147a3445af04a191c5` (v1.0.0).
+Pin the reusable `codeql-with-sibling.yml` workflow version to `@v0.1.0`.
 
 #### [MODIFY] [link-task-issue.yml](file://../../.github/workflows/link-task-issue.yml)
 Refactor to execute the local `link_task_issue.js` script on `pull_request_target` events to parse modified plan files for active issue IDs securely from the base branch context.
 
 #### [NEW] [link_task_issue.js](file://../../.github/workflows/link_task_issue.js)
-Copy the node script that extracts issue IDs from modified plans at the PR's HEAD SHA (fetched via `git fetch` and read using `git show`) and appends them to the PR description via the GitHub CLI. PR description text is deliberately not echoed to CI logs to avoid leaking sensitive credentials.
+Copy the node script that extracts issue IDs from modified plans at the PR's HEAD SHA (fetched via `git fetch` and read using `git show`) and appends them to the PR description via the GitHub CLI.
 
 #### [NEW] [markdown-lint.yml](file://../../.github/workflows/markdown-lint.yml)
 Introduce a markdown lint workflow triggered on `.md` changes and configuration updates, using the pinned shared workflow version.
@@ -51,7 +51,7 @@ Introduce a markdown lint workflow triggered on `.md` changes and configuration 
 Introduce a PR description validation workflow using the pinned shared workflow version.
 
 #### [MODIFY] [pr-title.yml](file://../../.github/workflows/pr-title.yml)
-Pin the reusable `pr-title.yml` workflow version to `@6fd0a9a05fa00d21159402147a3445af04a191c5` (v1.0.0).
+Pin the reusable `pr-title.yml` workflow version to `@v0.1.0`.
 
 #### [MODIFY] [release.yml](file://../../.github/workflows/release.yml)
 Align with Aeolian's release workflow by explicitly checking out and installing the powerword sibling first, and running linting via `make lint`.

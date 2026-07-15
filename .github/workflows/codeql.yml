@@ -16,7 +16,7 @@ permissions:
 jobs:
   analyze-go:
     name: Analyze (Go)
-    uses: borch-ai/.github/.github/workflows/codeql-with-sibling.yml@6fd0a9a05fa00d21159402147a3445af04a191c5 # v1.0.0
+    uses: borch-ai/.github/.github/workflows/codeql-with-sibling.yml@v0.2.1
     with:
       sibling-repo: borch-ai/powerword
       sibling-path: powerword

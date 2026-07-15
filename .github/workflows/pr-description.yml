@@ -10,4 +10,4 @@ permissions:
 
 jobs:
   check:
-    uses: borch-ai/.github/.github/workflows/pr-description.yml@6fd0a9a05fa00d21159402147a3445af04a191c5 # v1.0.0
+    uses: borch-ai/.github/.github/workflows/pr-description.yml@v0.2.1
