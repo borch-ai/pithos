@@ -198,18 +198,8 @@ func TestListWorkspaces_PermissionDeniedWorkspace(t *testing.T) {
 
 	_, err := ListWorkspaces(tmpRoot)
 	if err == nil {
-		// Debug logging for CI failures
 		manifestPath := filepath.Join(secretDir, "manifest.json")
 		_, statErr := os.Stat(manifestPath)
-		entries, readErr := os.ReadDir(tmpRoot)
-
-		t.Logf("ListWorkspaces returned nil error.")
-		t.Logf("os.Stat(manifestPath) err: %v, IsNotExist: %v", statErr, errors.Is(statErr, os.ErrNotExist))
-		t.Logf("ReadDir(tmpRoot) err: %v", readErr)
-		for _, entry := range entries {
-			t.Logf(" - Entry: %s, IsDir: %v", entry.Name(), entry.IsDir())
-		}
-
 		if statErr != nil && errors.Is(statErr, os.ErrNotExist) {
 			t.Skip("skipping test: filesystem returned ENOENT instead of EACCES for non-searchable directory contents")
 		}
@@ -339,6 +329,34 @@ func TestListWorkspaces_WithRegistry(t *testing.T) {
 	for _, ws := range workspaces {
 		if ws == bookCustomDir {
 			t.Errorf("expected book-custom path to be pruned from registry, but it was found")
+		}
+	}
+
+	// 5. Test registering a regular file (should be treated as stale/pruned)
+	regFilePath := filepath.Join(workspaceRoot, "regular-file.txt")
+	if err := os.WriteFile(regFilePath, []byte("not-a-directory"), 0600); err != nil {
+		t.Fatalf("failed to write regular file: %v", err)
+	}
+	if err := registry.Add(regFilePath); err != nil {
+		t.Fatalf("failed to add file path to registry: %v", err)
+	}
+
+	// ListWorkspaces should prune the file path
+	summaries, err = ListWorkspaces(workspaceRoot)
+	if err != nil {
+		t.Fatalf("failed to list workspaces with file in registry: %v", err)
+	}
+	if len(summaries) != 1 || summaries[0].DirName != "book-local" {
+		t.Errorf("unexpected summaries after file prune: %+v", summaries)
+	}
+
+	workspaces, err = registry.Load()
+	if err != nil {
+		t.Fatalf("failed to load registry: %v", err)
+	}
+	for _, ws := range workspaces {
+		if ws == regFilePath {
+			t.Errorf("expected regular file path to be pruned from registry, but it was found")
 		}
 	}
 }

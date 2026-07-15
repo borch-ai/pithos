@@ -131,11 +131,15 @@ func deduplicatePaths(paths []string) []string {
 }
 
 func loadBookSummary(path string) (*BookSummary, bool, error) {
-	if _, err := os.Stat(path); err != nil {
+	fi, err := os.Stat(path)
+	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, true, nil
 		}
 		return nil, false, err
+	}
+	if !fi.IsDir() {
+		return nil, true, nil
 	}
 
 	manifestPath := filepath.Join(path, "manifest.json")

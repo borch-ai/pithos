@@ -183,5 +183,12 @@ func save(workspaces []string) error {
 		return err
 	}
 
-	return os.Rename(tmpPath, path)
+	err = os.Rename(tmpPath, path)
+	if err != nil {
+		// On Windows, os.Rename might fail if the destination file already exists.
+		// We fallback to removing the destination and renaming.
+		_ = os.Remove(path)
+		err = os.Rename(tmpPath, path)
+	}
+	return err
 }
