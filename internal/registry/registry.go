@@ -24,13 +24,19 @@ func SetRegistryPathOverride(path string) {
 // It defaults to ~/.config/pithos/registry.json, falling back to a local
 // file in the current working directory if the home directory is inaccessible.
 func GetRegistryPath() string {
+	var path string
 	if registryPathOverride != "" {
-		return registryPathOverride
+		path = registryPathOverride
+	} else if home, err := os.UserHomeDir(); err == nil {
+		path = filepath.Join(home, ".config", "pithos", "registry.json")
+	} else {
+		path = ".pithos_registry.json"
 	}
-	if home, err := os.UserHomeDir(); err == nil {
-		return filepath.Join(home, ".config", "pithos", "registry.json")
+	abs, err := filepath.Abs(path)
+	if err == nil {
+		return filepath.Clean(abs)
 	}
-	return ".pithos_registry.json"
+	return filepath.Clean(path)
 }
 
 // Load reads and unmarshals the workspace paths from the registry file.
@@ -125,8 +131,10 @@ func Prune() error {
 	for _, ws := range workspaces {
 		if _, err := os.Stat(ws); err == nil {
 			active = append(active, ws)
-		} else {
+		} else if errors.Is(err, os.ErrNotExist) {
 			changed = true
+		} else {
+			return err
 		}
 	}
 
@@ -136,7 +144,7 @@ func Prune() error {
 	return nil
 }
 
-// save marshals and writes workspace paths to the resolved registry path.
+// save marshals and writes workspace paths to the resolved registry path atomically.
 func save(workspaces []string) error {
 	if workspaces == nil {
 		workspaces = []string{}
@@ -150,9 +158,28 @@ func save(workspaces []string) error {
 
 	path := GetRegistryPath()
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0750); err != nil {
+	err = os.MkdirAll(dir, 0750)
+	if err != nil {
 		return err
 	}
 
-	return os.WriteFile(path, data, 0600)
+	// Write atomically using temporary file in same directory
+	tmpFile, err := os.CreateTemp(dir, "registry-*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmpFile.Name()
+	defer func() {
+		_ = tmpFile.Close()
+		_ = os.Remove(tmpPath)
+	}()
+
+	if _, err := tmpFile.Write(data); err != nil {
+		return err
+	}
+	if err := tmpFile.Close(); err != nil {
+		return err
+	}
+
+	return os.Rename(tmpPath, path)
 }

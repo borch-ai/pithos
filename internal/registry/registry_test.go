@@ -255,6 +255,7 @@ func TestRegistryEdgeCases_LoadFailurePropagation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to chmod: %v", err)
 	}
+	// #nosec G302
 	defer func() { _ = os.Chmod(secretParent, 0750) }()
 
 	_, err = Load()
@@ -315,10 +316,12 @@ func TestRegistryEdgeCases_SaveFailures(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create readonly dir: %v", err)
 	}
+	// #nosec G302
 	err = os.Chmod(readOnlyDir, 0500)
 	if err != nil {
 		t.Fatalf("failed to chmod readonly dir: %v", err)
 	}
+	// #nosec G302
 	defer func() { _ = os.Chmod(readOnlyDir, 0750) }()
 
 	SetRegistryPathOverride(filepath.Join(readOnlyDir, "registry.json"))
