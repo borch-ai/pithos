@@ -756,6 +756,9 @@ func generateImageRaw(ctx context.Context, mcpClient *mcp.PluginClient, prompt s
 		Model     string `json:"model"`
 	}
 	if err := json.Unmarshal([]byte(resText), &jsonRes); err == nil && jsonRes.ImagePath != "" {
+		if jsonRes.Model == "" {
+			jsonRes.Model = "unknown"
+		}
 		return jsonRes.ImagePath, jsonRes.Model, nil
 	}
 
