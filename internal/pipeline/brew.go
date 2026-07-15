@@ -453,7 +453,7 @@ func generateIllustrations(ctx context.Context, m *manifest.Manifest, opts BrewO
 				return fmt.Errorf("budget exceeded during execution: actual cost $%.4f exceeds budget limit $%.4f", actualCost, budget)
 			}
 
-			if err := m.UpdatePageStatus(page.PageIndex, manifest.StatusGeneratingImages, ""); err != nil {
+			if err := m.UpdatePageStatus(page.PageIndex, manifest.StatusGeneratingImages, "", ""); err != nil {
 				return fmt.Errorf("failed to update page %d status to generating: %w", page.PageIndex, err)
 			}
 			imgName := fmt.Sprintf("page_%d.png", page.PageIndex)
@@ -469,7 +469,7 @@ func generateIllustrations(ctx context.Context, m *manifest.Manifest, opts BrewO
 			m.RecordImageGeneration(pricing)
 
 			relPath := filepath.Join("images", imgName)
-			if err := m.UpdatePageStatus(page.PageIndex, manifest.StatusCompleted, relPath); err != nil {
+			if err := m.UpdatePageStatus(page.PageIndex, manifest.StatusCompleted, relPath, "simulated-model"); err != nil {
 				return fmt.Errorf("failed to update page %d status to completed: %w", page.PageIndex, err)
 			}
 		}
@@ -634,13 +634,13 @@ Loop:
 				workerErrors = append(workerErrors, fmt.Errorf("budget exceeded: actual cost $%.4f exceeds budget limit $%.4f", actualCost, budget))
 				errsMu.Unlock()
 				// Revert to pending
-				_ = m.UpdatePageStatus(p.PageIndex, manifest.StatusPending, "")
+				_ = m.UpdatePageStatus(p.PageIndex, manifest.StatusPending, "", "")
 				cancel()
 				return
 			}
 
 			// 1. Update status to generating
-			if err := m.UpdatePageStatus(p.PageIndex, manifest.StatusGeneratingImages, ""); err != nil {
+			if err := m.UpdatePageStatus(p.PageIndex, manifest.StatusGeneratingImages, "", ""); err != nil {
 				errsMu.Lock()
 				workerErrors = append(workerErrors, fmt.Errorf("failed to update page %d status to generating: %w", p.PageIndex, err))
 				errsMu.Unlock()
@@ -665,11 +665,11 @@ Loop:
 				charWeight = &w
 			}
 			imageSize := getBestImageSize(m.BookProperties.TrimSize)
-			imgPath, err := generateSingleImage(brewCtx, mcpClient, p.PageIndex, prompt, styleID, opts.OutputDir, imageSize, m.BookProperties.CharacterReferenceURL, charWeight)
+			imgPath, modelName, err := generateSingleImage(brewCtx, mcpClient, p.PageIndex, prompt, styleID, opts.OutputDir, imageSize, m.BookProperties.CharacterReferenceURL, charWeight)
 			if err != nil {
 				logger.Error("Error generating image", "page", p.PageIndex, "error", err)
 				// Revert to pending
-				if revertErr := m.UpdatePageStatus(p.PageIndex, manifest.StatusPending, ""); revertErr != nil {
+				if revertErr := m.UpdatePageStatus(p.PageIndex, manifest.StatusPending, "", ""); revertErr != nil {
 					logger.Error("Error reverting page status", "page", p.PageIndex, "error", revertErr)
 				}
 				errsMu.Lock()
@@ -685,12 +685,13 @@ Loop:
 			}
 			m.RecordImageGeneration(pricing)
 
-			if err := m.UpdatePageStatus(p.PageIndex, manifest.StatusCompleted, imgPath); err != nil {
+			if err := m.UpdatePageStatus(p.PageIndex, manifest.StatusCompleted, imgPath, modelName); err != nil {
 				errsMu.Lock()
 				workerErrors = append(workerErrors, fmt.Errorf("failed to update page %d status to completed: %w", p.PageIndex, err))
 				errsMu.Unlock()
 				return
 			}
+			logger.Info("Generated illustration", "page", p.PageIndex, "model", modelName)
 		}(page)
 	}
 
@@ -727,7 +728,7 @@ func registerStyleProfile(ctx context.Context, mcpClient *mcp.PluginClient, styl
 	return styleID, nil
 }
 
-func generateImageRaw(ctx context.Context, mcpClient *mcp.PluginClient, prompt string, styleID string, imageSize string, crefURL string, charWeight *int) (string, error) {
+func generateImageRaw(ctx context.Context, mcpClient *mcp.PluginClient, prompt string, styleID string, imageSize string, crefURL string, charWeight *int) (string, string, error) {
 	if imageSize == "" {
 		imageSize = "1024x1024"
 	}
@@ -747,21 +748,32 @@ func generateImageRaw(ctx context.Context, mcpClient *mcp.PluginClient, prompt s
 
 	resText, err := mcpClient.CallTool(ctx, "imagegen_generate", generateArgs)
 	if err != nil {
-		return "", err
+		return "", "", err
+	}
+
+	var jsonRes struct {
+		ImagePath string `json:"image_path"`
+		Model     string `json:"model"`
+	}
+	if err := json.Unmarshal([]byte(resText), &jsonRes); err == nil && jsonRes.ImagePath != "" {
+		if jsonRes.Model == "" {
+			jsonRes.Model = "unknown"
+		}
+		return jsonRes.ImagePath, jsonRes.Model, nil
 	}
 
 	prefix := "Successfully generated image and saved to: "
 	if !strings.HasPrefix(resText, prefix) {
-		return "", fmt.Errorf("unexpected imagegen response format: %q", resText)
+		return "", "", fmt.Errorf("unexpected imagegen response format: %q", resText)
 	}
 
-	return strings.TrimPrefix(resText, prefix), nil
+	return strings.TrimPrefix(resText, prefix), "unknown", nil
 }
 
-func generateSingleImage(ctx context.Context, mcpClient *mcp.PluginClient, pageIndex int, pageText string, styleID string, outputDir string, imageSize string, crefURL string, charWeight *int) (string, error) {
-	srcPath, err := generateImageRaw(ctx, mcpClient, pageText, styleID, imageSize, crefURL, charWeight)
+func generateSingleImage(ctx context.Context, mcpClient *mcp.PluginClient, pageIndex int, pageText string, styleID string, outputDir string, imageSize string, crefURL string, charWeight *int) (string, string, error) {
+	srcPath, modelName, err := generateImageRaw(ctx, mcpClient, pageText, styleID, imageSize, crefURL, charWeight)
 	if err != nil {
-		return "", fmt.Errorf("failed to generate image for page %d: %w", pageIndex, err)
+		return "", "", fmt.Errorf("failed to generate image for page %d: %w", pageIndex, err)
 	}
 
 	ext := filepath.Ext(srcPath)
@@ -773,10 +785,10 @@ func generateSingleImage(ctx context.Context, mcpClient *mcp.PluginClient, pageI
 	destPath := filepath.Join(outputDir, "images", destFileName)
 
 	if err := copyFile(srcPath, destPath); err != nil {
-		return "", fmt.Errorf("failed to copy generated image for page %d: %w", pageIndex, err)
+		return "", "", fmt.Errorf("failed to copy generated image for page %d: %w", pageIndex, err)
 	}
 
-	return filepath.Join("images", destFileName), nil
+	return filepath.Join("images", destFileName), modelName, nil
 }
 
 func copyFile(src, dst string) error {
@@ -1275,10 +1287,11 @@ func bootstrapCharacterReferenceWithClient(ctx context.Context, m *manifest.Mani
 	imageSize := getBestImageSize(m.BookProperties.TrimSize)
 
 	logger.Info("Generating character seed portrait...")
-	srcPath, err := generateImageRaw(ctx, mcpClient, seedPrompt, actualStyleID, imageSize, "", nil)
+	srcPath, modelName, err := generateImageRaw(ctx, mcpClient, seedPrompt, actualStyleID, imageSize, "", nil)
 	if err != nil {
 		return fmt.Errorf("failed to generate character seed portrait: %w", err)
 	}
+	logger.Info("Generated character seed", "model", modelName)
 
 	var pricing map[string]telemetry.ModelPricing
 	if config.Cfg != nil {

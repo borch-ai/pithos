@@ -28,10 +28,10 @@ func createManifestA(t *testing.T, tmpRoot string) {
 	manifestA.BookProperties.Theme = "Existential Dread"
 	manifestA.BookProperties.Format = "hardcover"
 	manifestA.BookProperties.TargetPageCount = 20
-	if err := manifestA.UpdatePageStatus(0, manifest.StatusCompleted, "img0.png"); err != nil {
+	if err := manifestA.UpdatePageStatus(0, manifest.StatusCompleted, "img0.png", ""); err != nil {
 		t.Fatalf("failed to update page status: %v", err)
 	}
-	if err := manifestA.UpdatePageStatus(1, manifest.StatusCompleted, "img1.png"); err != nil {
+	if err := manifestA.UpdatePageStatus(1, manifest.StatusCompleted, "img1.png", ""); err != nil {
 		t.Fatalf("failed to update page status: %v", err)
 	}
 	if err := manifestA.AddMilestone("initiate_complete"); err != nil {

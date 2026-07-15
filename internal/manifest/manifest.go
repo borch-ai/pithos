@@ -30,6 +30,7 @@ type PageState struct {
 	IllustrationPrompt string     `json:"illustration_prompt,omitempty"`
 	CharacterWeight    *int       `json:"character_weight,omitempty"`
 	Layout             string     `json:"layout,omitempty"`
+	ImageModel         string     `json:"image_model,omitempty"`
 }
 
 // BookProperties holds high-level configurations of the book.
@@ -287,18 +288,31 @@ func (m *Manifest) SaveTo(path string) error {
 }
 
 // UpdatePageStatus updates the progress state of a specific page and saves the manifest.
-func (m *Manifest) UpdatePageStatus(pageIndex int, status PageStatus, imagePath string) error {
+func (m *Manifest) UpdatePageStatus(pageIndex int, status PageStatus, imagePath, imageModel string) error {
+	if status == StatusPending || status == StatusGeneratingImages {
+		imagePath = ""
+		imageModel = ""
+	}
+
 	m.mu.Lock()
 
 	// Check if page already exists in m.Progress.Pages
 	found := false
 	for i, p := range m.Progress.Pages {
 		if p.PageIndex == pageIndex {
+			found = true
 			m.Progress.Pages[i].Status = status
+			if status == StatusPending || status == StatusGeneratingImages {
+				m.Progress.Pages[i].ImagePath = ""
+				m.Progress.Pages[i].ImageModel = ""
+				break
+			}
 			if imagePath != "" {
 				m.Progress.Pages[i].ImagePath = imagePath
 			}
-			found = true
+			if imageModel != "" {
+				m.Progress.Pages[i].ImageModel = imageModel
+			}
 			break
 		}
 	}
@@ -306,9 +320,10 @@ func (m *Manifest) UpdatePageStatus(pageIndex int, status PageStatus, imagePath 
 	// If page was not found, create it
 	if !found {
 		m.Progress.Pages = append(m.Progress.Pages, PageState{
-			PageIndex: pageIndex,
-			Status:    status,
-			ImagePath: imagePath,
+			PageIndex:  pageIndex,
+			Status:     status,
+			ImagePath:  imagePath,
+			ImageModel: imageModel,
 		})
 	}
 

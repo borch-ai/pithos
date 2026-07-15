@@ -1,9 +1,9 @@
 # plan: Task 5.23: Dynamic Image Model Discovery
 
-**Status:** Open
+**Status:** Completed
 **Go Version:** 1.26.4
-**Date Completed:** —
-**Unit Test Coverage:** —
+**Date Completed:** 2026-07-15
+**Unit Test Coverage:** 91.3%
 
 Implement dynamic model discovery and capability resolution for the MCP image generation plugin to prevent hard failures when upstream model names are deprecated or updated by providers (e.g., resolving the Google Imagen/Veo version mismatch).
 
