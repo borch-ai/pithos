@@ -1,8 +1,10 @@
 package registry
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 )
 
@@ -404,12 +406,66 @@ func TestRegistryEdgeCases_SaveWindowsFallback(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(tempDir) })
 
-	// Set destination path to a sub-directory. Since it's a directory,
-	// the first rename call will fail, but the destination exists, triggering the fallback.
+	// Set destination path to a regular file
+	registryFile := filepath.Join(tempDir, "registry.json")
+	err = os.WriteFile(registryFile, []byte("{}"), 0600)
+	if err != nil {
+		t.Fatalf("failed to create registry file: %v", err)
+	}
+
+	oldOverride := SetRegistryPathOverride(registryFile)
+	t.Cleanup(func() { SetRegistryPathOverride(oldOverride) })
+
+	// Mock Windows platform
+	oldIsWindows := isWindows
+	isWindows = true
+	defer func() { isWindows = oldIsWindows }()
+
+	// Mock renameFunc to fail on first call and succeed on second call
+	renameCallCount := 0
+	oldRenameFunc := renameFunc
+	renameFunc = func(oldpath, newpath string) error {
+		renameCallCount++
+		if renameCallCount == 1 {
+			return os.ErrExist
+		}
+		return oldRenameFunc(oldpath, newpath)
+	}
+	defer func() { renameFunc = oldRenameFunc }()
+
+	// Calling save should trigger the rename error, enter fallback, remove the file,
+	// and successfully rename the temp file to registry.json.
+	err = save([]string{"/test/path"})
+	if err != nil {
+		t.Fatalf("expected save to succeed via Windows fallback, got error: %v", err)
+	}
+
+	if renameCallCount != 2 {
+		t.Errorf("expected rename to be called twice, got %d", renameCallCount)
+	}
+
+	// Verify it successfully wrote the registry using unlocked load
+	workspaces, err := loadUnlocked()
+	if err != nil {
+		t.Fatalf("failed to load registry: %v", err)
+	}
+	if len(workspaces) != 1 || workspaces[0] != "/test/path" {
+		t.Errorf("unexpected workspaces loaded: %v", workspaces)
+	}
+}
+
+func TestRegistryEdgeCases_SaveWindowsFallbackDir(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "pithos_registry_windows_fallback_dir")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(tempDir) })
+
+	// Set destination path to a directory
 	registryDir := filepath.Join(tempDir, "registry.json")
 	err = os.Mkdir(registryDir, 0750)
 	if err != nil {
-		t.Fatalf("failed to create directory in place of registry file: %v", err)
+		t.Fatalf("failed to create registry directory: %v", err)
 	}
 
 	oldOverride := SetRegistryPathOverride(registryDir)
@@ -420,19 +476,55 @@ func TestRegistryEdgeCases_SaveWindowsFallback(t *testing.T) {
 	isWindows = true
 	defer func() { isWindows = oldIsWindows }()
 
-	// Calling save should trigger the rename error, enter fallback, remove the directory,
-	// and successfully rename the temp file to registry.json.
+	// Mock renameFunc to fail on first call
+	renameCallCount := 0
+	oldRenameFunc := renameFunc
+	renameFunc = func(oldpath, newpath string) error {
+		renameCallCount++
+		return os.ErrExist
+	}
+	defer func() { renameFunc = oldRenameFunc }()
+
+	// Calling save should trigger the rename error, see that destination is a directory,
+	// and refuse to delete it, returning the original error.
 	err = save([]string{"/test/path"})
-	if err != nil {
-		t.Fatalf("expected save to succeed via Windows fallback, got error: %v", err)
+	if err == nil {
+		t.Fatal("expected save to fail when destination is a directory, got nil")
 	}
 
-	// Verify it successfully wrote the registry
-	workspaces, err := Load()
-	if err != nil {
-		t.Fatalf("failed to load registry: %v", err)
+	if renameCallCount != 1 {
+		t.Errorf("expected rename to be called once, got %d", renameCallCount)
 	}
-	if len(workspaces) != 1 || workspaces[0] != "/test/path" {
-		t.Errorf("unexpected workspaces loaded: %v", workspaces)
+
+	// Verify the directory still exists
+	fi, statErr := os.Stat(registryDir)
+	if statErr != nil {
+		t.Fatalf("expected directory to still exist, got stat error: %v", statErr)
 	}
+	if !fi.IsDir() {
+		t.Error("expected destination to remain a directory")
+	}
+}
+
+func TestRegistryOperations_Concurrent(t *testing.T) {
+	setupTestFile(t)
+
+	var wg sync.WaitGroup
+	workers := 10
+	iterations := 20
+
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func(workerID int) {
+			defer wg.Done()
+			for j := 0; j < iterations; j++ {
+				path := fmt.Sprintf("/some/path/%d/%d", workerID, j)
+				_ = Add(path)
+				_, _ = Load()
+				_ = Remove(path)
+			}
+		}(i)
+	}
+
+	wg.Wait()
 }

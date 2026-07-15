@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 )
 
 // Registry represents the structure of the registry JSON file.
@@ -17,6 +18,10 @@ type Registry struct {
 var userHomeDir = os.UserHomeDir
 
 var isWindows = runtime.GOOS == "windows"
+
+var mu sync.Mutex
+
+var renameFunc = os.Rename
 
 var registryPathOverride string
 
@@ -50,6 +55,12 @@ func GetRegistryPath() string {
 // Load reads and unmarshals the workspace paths from the registry file.
 // If the registry file does not exist, it returns an empty slice and no error.
 func Load() ([]string, error) {
+	mu.Lock()
+	defer mu.Unlock()
+	return loadUnlocked()
+}
+
+func loadUnlocked() ([]string, error) {
 	path := GetRegistryPath()
 	// #nosec G304
 	file, err := os.Open(path)
@@ -81,13 +92,16 @@ func Load() ([]string, error) {
 // Add resolves the absolute path of a workspace and appends it to the registry
 // if it is not already present.
 func Add(path string) error {
+	mu.Lock()
+	defer mu.Unlock()
+
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return err
 	}
 	absPath = filepath.Clean(absPath)
 
-	workspaces, err := Load()
+	workspaces, err := loadUnlocked()
 	if err != nil {
 		return err
 	}
@@ -105,13 +119,16 @@ func Add(path string) error {
 
 // Remove cleans the given path, removes it from the registry, and saves the updates.
 func Remove(path string) error {
+	mu.Lock()
+	defer mu.Unlock()
+
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return err
 	}
 	absPath = filepath.Clean(absPath)
 
-	workspaces, err := Load()
+	workspaces, err := loadUnlocked()
 	if err != nil {
 		return err
 	}
@@ -129,7 +146,10 @@ func Remove(path string) error {
 // Prune validates all registered paths and removes any that no longer exist
 // on the local filesystem.
 func Prune() error {
-	workspaces, err := Load()
+	mu.Lock()
+	defer mu.Unlock()
+
+	workspaces, err := loadUnlocked()
 	if err != nil {
 		return err
 	}
@@ -189,14 +209,24 @@ func save(workspaces []string) error {
 		return closeErr
 	}
 
-	err = os.Rename(tmpPath, path)
-	if err != nil && isWindows {
-		if _, statErr := os.Stat(path); statErr == nil {
-			// On Windows, os.Rename might fail if the destination file already exists.
-			// We fallback to removing the destination and renaming.
-			_ = os.Remove(path)
-			err = os.Rename(tmpPath, path)
-		}
+	err = renameFunc(tmpPath, path)
+	if err == nil || !isWindows {
+		return err
 	}
-	return err
+
+	fi, statErr := os.Stat(path)
+	if statErr != nil {
+		return err
+	}
+
+	if fi.IsDir() {
+		return err
+	}
+
+	// On Windows, os.Rename might fail if the destination file already exists.
+	// We fallback to removing the destination and renaming.
+	if removeErr := os.Remove(path); removeErr != nil {
+		return removeErr
+	}
+	return renameFunc(tmpPath, path)
 }
