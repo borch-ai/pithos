@@ -121,7 +121,7 @@ Focus: Remote monitoring, Kiln state manifest integration, testing, and ecosyste
 *   [x] **Task 5.22: Preflight Diagnostic Subcommand (`pithos doctor`)**
     *   Implement a `doctor` subcommand to run connectivity, credential, and backend health checks for all configured MCP plugins.
     *   [Implementation Plan](plans/phase_5/task_5_22_preflight_diagnostics_doctor.md)
-*   [ ] **Task 5.23: Dynamic Image Model Discovery**
+*   [x] **Task 5.23: Dynamic Image Model Discovery**
     *   Query model capability list dynamically from provider APIs to select the best available model version.
     *   [Implementation Plan](plans/phase_5/task_5_23_dynamic_image_model_discovery.md)
 *   [ ] **Task 5.24: Graceful Image Backend Fallbacks**

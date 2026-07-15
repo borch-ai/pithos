@@ -204,7 +204,7 @@ func TestUpdateHelpers(t *testing.T) {
 		t.Errorf("expected registry value 'value', got '%s'", mNilAsset.AssetRegistry["key"])
 	}
 	// Update page status - page not exist
-	if err := m.UpdatePageStatus(1, StatusGeneratingImages, ""); err != nil {
+	if err := m.UpdatePageStatus(1, StatusGeneratingImages, "", ""); err != nil {
 		t.Fatalf("UpdatePageStatus failed: %v", err)
 	}
 	if len(m.Progress.Pages) != 1 || m.Progress.Pages[0].PageIndex != 1 || m.Progress.Pages[0].Status != StatusGeneratingImages {
@@ -212,7 +212,7 @@ func TestUpdateHelpers(t *testing.T) {
 	}
 
 	// Update page status - page exists
-	if err := m.UpdatePageStatus(1, StatusCompleted, "/page_1.png"); err != nil {
+	if err := m.UpdatePageStatus(1, StatusCompleted, "/page_1.png", "legacy-model"); err != nil {
 		t.Fatalf("UpdatePageStatus failed: %v", err)
 	}
 	if len(m.Progress.Pages) != 1 || m.Progress.Pages[0].Status != StatusCompleted || m.Progress.Pages[0].ImagePath != "/page_1.png" {
@@ -242,7 +242,7 @@ func TestConcurrentSaveAndUpdates(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < iterations; j++ {
 				pageIdx := workerID*iterations + j
-				if opErr := m.UpdatePageStatus(pageIdx, StatusCompleted, "/path.png"); opErr != nil {
+				if opErr := m.UpdatePageStatus(pageIdx, StatusCompleted, "/path.png", ""); opErr != nil {
 					errChan <- opErr
 				}
 				if opErr := m.RegisterAsset("key", "val"); opErr != nil {

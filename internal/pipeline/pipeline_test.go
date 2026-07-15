@@ -182,9 +182,17 @@ func setupMockImageGenServerWithCapabilities(t *testing.T, ctx context.Context, 
 			}, nil
 		}
 
+		if strings.Contains(args.Prompt, "LEGACY_FORMAT") {
+			return &mcpsdk.CallToolResult{
+				Content: []mcpsdk.Content{
+					&mcpsdk.TextContent{Text: "Successfully generated image and saved to: " + generatedImagePath},
+				},
+			}, nil
+		}
+
 		return &mcpsdk.CallToolResult{
 			Content: []mcpsdk.Content{
-				&mcpsdk.TextContent{Text: "Successfully generated image and saved to: " + generatedImagePath},
+				&mcpsdk.TextContent{Text: `{"image_path":"` + generatedImagePath + `", "model":"mock-imagen-pro"}`},
 			},
 		}, nil
 	})
@@ -562,6 +570,9 @@ func TestBrew_EndToEnd_Mocked(t *testing.T) {
 	if page1.ImagePath != "images/page_1.png" {
 		t.Errorf("expected page 1 ImagePath 'images/page_1.png', got %q", page1.ImagePath)
 	}
+	if page1.ImageModel != "mock-imagen-pro" {
+		t.Errorf("expected page 1 ImageModel 'mock-imagen-pro', got %q", page1.ImageModel)
+	}
 
 	// Verify telemetry updates
 	if m.Telemetry.ImageGenerations != 3 {
@@ -577,6 +588,78 @@ func TestBrew_EndToEnd_Mocked(t *testing.T) {
 	// Verify Kiln milestones
 	if len(m.Kiln.Milestones) != 2 || m.Kiln.Milestones[0] != "initiate_complete" || m.Kiln.Milestones[1] != "brew_complete" {
 		t.Errorf("expected milestones [initiate_complete, brew_complete], got %v", m.Kiln.Milestones)
+	}
+
+	// Verify that files were copied
+	if _, statErr := os.Stat(filepath.Join(tmpDir, "images", "page_1.png")); os.IsNotExist(statErr) {
+		t.Error("page_1.png image file does not exist")
+	}
+}
+
+func TestBrew_LegacyMCPFallback(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos-brew-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	dummySourceImage := filepath.Join(tmpDir, "source.png")
+	if writeErr := os.WriteFile(dummySourceImage, []byte("fake-image-bytes"), 0600); writeErr != nil {
+		t.Fatalf("failed to write source image: %v", writeErr)
+	}
+
+	optsInit := InitiateOptions{
+		OutputDir:       tmpDir,
+		Theme:           "LEGACY_FORMAT theme",
+		Style:           "legacy-style",
+		TargetPageCount: 1,
+	}
+	mInit, err := Initiate(optsInit)
+	if err != nil {
+		t.Fatalf("failed to initiate book: %v", err)
+	}
+	mInit.BookProperties.CharacterProfile = "LEGACY_FORMAT character profile"
+	if err = mInit.Save(); err != nil {
+		t.Fatalf("failed to save manifest: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	clientTransport, serverTransport := mcpsdk.NewInMemoryTransports()
+	_, cleanupMCP := setupMockImageGenServer(t, ctx, serverTransport, dummySourceImage)
+	defer cleanupMCP()
+
+	cloudClientTransport, cloudCleanup := setupMockCloudTransport(t, ctx, "http://example.com/uploaded_character.png")
+	defer cloudCleanup()
+
+	mockLLMClient := &mockLLM{
+		stanzas: []string{"LEGACY_FORMAT stanza"},
+	}
+
+	optsBrew := BrewOptions{
+		OutputDir:         tmpDir,
+		MCPTransport:      clientTransport,
+		CloudMCPTransport: cloudClientTransport,
+		LLM:               mockLLMClient,
+	}
+
+	err = Brew(ctx, optsBrew)
+	if err != nil {
+		t.Fatalf("Brew failed: %v", err)
+	}
+
+	m, err := manifest.LoadManifest(filepath.Join(tmpDir, "manifest.json"))
+	if err != nil {
+		t.Fatalf("failed to load manifest: %v", err)
+	}
+
+	if len(m.Progress.Pages) != 1 {
+		t.Fatalf("expected 1 page, got %d", len(m.Progress.Pages))
+	}
+	page1 := m.Progress.Pages[0]
+	if page1.ImageModel != "legacy-model" {
+		t.Errorf("expected page 1 ImageModel 'legacy-model', got %q", page1.ImageModel)
 	}
 
 	// Verify that files were copied
