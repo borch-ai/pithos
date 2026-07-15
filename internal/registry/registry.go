@@ -13,6 +13,8 @@ type Registry struct {
 	Workspaces []string `json:"workspaces"`
 }
 
+var userHomeDir = os.UserHomeDir
+
 var registryPathOverride string
 
 // SetRegistryPathOverride overrides the default registry file path for testing purposes.
@@ -27,7 +29,7 @@ func GetRegistryPath() string {
 	var path string
 	if registryPathOverride != "" {
 		path = registryPathOverride
-	} else if home, err := os.UserHomeDir(); err == nil {
+	} else if home, err := userHomeDir(); err == nil {
 		path = filepath.Join(home, ".config", "pithos", "registry.json")
 	} else {
 		path = ".pithos_registry.json"

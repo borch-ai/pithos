@@ -195,19 +195,17 @@ func TestRegistryEdgeCases_GetRegistryPath(t *testing.T) {
 		t.Error("expected non-empty path from GetRegistryPath")
 	}
 
-	oldHome := os.Getenv("HOME")
-	_ = os.Setenv("HOME", "")
-	oldUserProfile := os.Getenv("USERPROFILE")
-	_ = os.Setenv("USERPROFILE", "")
+	oldUserHomeDir := userHomeDir
+	userHomeDir = func() (string, error) {
+		return "", os.ErrNotExist
+	}
+	defer func() { userHomeDir = oldUserHomeDir }()
 
 	fallbackPath := GetRegistryPath()
 	expectedPath, _ := filepath.Abs(".pithos_registry.json")
 	if fallbackPath != filepath.Clean(expectedPath) {
 		t.Errorf("expected fallback path %s, got %s", expectedPath, fallbackPath)
 	}
-
-	_ = os.Setenv("HOME", oldHome)
-	_ = os.Setenv("USERPROFILE", oldUserProfile)
 }
 
 func TestRegistryEdgeCases_LoadFailurePropagation(t *testing.T) {

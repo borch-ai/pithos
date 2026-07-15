@@ -26,12 +26,20 @@ type BookSummary struct {
 // parses manifest.json in each workspace, and returns a list of BookSummary.
 func ListWorkspaces(workspaceRoot string) ([]BookSummary, error) {
 	var paths []string
+	isRegPath := make(map[string]bool)
 
 	// 1. Load paths from global registry
 	regPaths, err := registry.Load()
-	if err == nil {
-		paths = append(paths, regPaths...)
+	if err != nil {
+		return nil, err
 	}
+	for _, p := range regPaths {
+		abs, absErr := filepath.Abs(p)
+		if absErr == nil {
+			isRegPath[filepath.Clean(abs)] = true
+		}
+	}
+	paths = append(paths, regPaths...)
 
 	// 2. Scan default workspaces root for subdirectories
 	rootPaths, err := scanWorkspaceRoot(workspaceRoot)
@@ -53,7 +61,9 @@ func ListWorkspaces(workspaceRoot string) ([]BookSummary, error) {
 			return nil, err
 		}
 		if isStale {
-			stalePaths = append(stalePaths, path)
+			if isRegPath[path] {
+				stalePaths = append(stalePaths, path)
+			}
 			continue
 		}
 		if summary != nil {
@@ -63,7 +73,9 @@ func ListWorkspaces(workspaceRoot string) ([]BookSummary, error) {
 
 	// 5. Prune any stale paths from the global registry
 	for _, stale := range stalePaths {
-		_ = registry.Remove(stale)
+		if err := registry.Remove(stale); err != nil {
+			return nil, err
+		}
 	}
 
 	// Sort alphabetically by DirName to ensure deterministic ordering
@@ -128,7 +140,10 @@ func loadBookSummary(path string) (*BookSummary, bool, error) {
 
 	manifestPath := filepath.Join(path, "manifest.json")
 	if _, err := os.Stat(manifestPath); err != nil {
-		return nil, false, nil
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, false, nil
+		}
+		return nil, false, err
 	}
 
 	m, err := manifest.LoadManifest(manifestPath)
@@ -146,4 +161,3 @@ func loadBookSummary(path string) (*BookSummary, bool, error) {
 		TotalCost:       m.Telemetry.TotalCostUSD,
 	}, false, nil
 }
-
