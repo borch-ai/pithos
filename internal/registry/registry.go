@@ -37,6 +37,7 @@ func GetRegistryPath() string {
 // If the registry file does not exist, it returns an empty slice and no error.
 func Load() ([]string, error) {
 	path := GetRegistryPath()
+	// #nosec G304
 	file, err := os.Open(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -44,7 +45,7 @@ func Load() ([]string, error) {
 		}
 		return nil, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	data, err := io.ReadAll(file)
 	if err != nil {

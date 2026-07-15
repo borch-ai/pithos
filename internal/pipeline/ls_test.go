@@ -168,6 +168,21 @@ func TestListWorkspaces_InvalidAndIgnored(t *testing.T) {
 	}
 }
 
+func TestListWorkspaces_PermissionDeniedDir(t *testing.T) {
+	tmpRoot := t.TempDir()
+	permDeniedDir := filepath.Join(tmpRoot, "perm-denied")
+	if err := os.Mkdir(permDeniedDir, 0000); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+	defer func() { _ = os.Chmod(permDeniedDir, 0700) }() // restore permission for cleanup
+
+	_, err := ListWorkspaces(permDeniedDir)
+	if err == nil {
+		t.Error("expected error when listing directory with permission denied, got nil")
+	}
+}
+
+
 func TestListWorkspaces_WithRegistry(t *testing.T) {
 	// Set registry file override
 	registryTemp := t.TempDir()
@@ -225,8 +240,8 @@ func TestListWorkspaces_WithRegistry(t *testing.T) {
 	}
 
 	// 4. Delete custom book workspace and verify auto-prune
-	if err := os.RemoveAll(bookCustomDir); err != nil {
-		t.Fatalf("failed to delete bookCustomDir: %v", err)
+	if removeErr := os.RemoveAll(bookCustomDir); removeErr != nil {
+		t.Fatalf("failed to delete bookCustomDir: %v", removeErr)
 	}
 
 	summaries, err = ListWorkspaces(workspaceRoot)
@@ -253,4 +268,3 @@ func TestListWorkspaces_WithRegistry(t *testing.T) {
 		}
 	}
 }
-

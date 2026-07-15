@@ -34,75 +34,31 @@ func ListWorkspaces(workspaceRoot string) ([]BookSummary, error) {
 	}
 
 	// 2. Scan default workspaces root for subdirectories
-	if workspaceRoot != "" {
-		absRoot, err := filepath.Abs(workspaceRoot)
-		if err != nil {
-			return nil, err
-		}
-
-		entries, err := os.ReadDir(absRoot)
-		if err != nil {
-			if !errors.Is(err, os.ErrNotExist) {
-				return nil, err
-			}
-		} else {
-			for _, entry := range entries {
-				if entry.IsDir() {
-					paths = append(paths, filepath.Join(absRoot, entry.Name()))
-				}
-			}
-		}
+	rootPaths, err := scanWorkspaceRoot(workspaceRoot)
+	if err != nil {
+		return nil, err
 	}
+	paths = append(paths, rootPaths...)
 
-	// 3. Deduplicate paths by converting them to absolute clean paths
-	uniquePathsMap := make(map[string]bool)
-	var uniquePaths []string
-	for _, p := range paths {
-		abs, err := filepath.Abs(p)
-		if err != nil {
-			continue
-		}
-		abs = filepath.Clean(abs)
-		if !uniquePathsMap[abs] {
-			uniquePathsMap[abs] = true
-			uniquePaths = append(uniquePaths, abs)
-		}
-	}
+	// 3. Deduplicate paths
+	uniquePaths := deduplicatePaths(paths)
 
 	var summaries []BookSummary
 	var stalePaths []string
 
 	// 4. Load manifest and compile summary for each workspace path
 	for _, path := range uniquePaths {
-		if _, err := os.Stat(path); err != nil {
-			if errors.Is(err, os.ErrNotExist) {
-				stalePaths = append(stalePaths, path)
-				continue
-			}
+		summary, isStale, err := loadBookSummary(path)
+		if err != nil {
 			return nil, err
 		}
-
-		manifestPath := filepath.Join(path, "manifest.json")
-		if _, err := os.Stat(manifestPath); err != nil {
-			// If manifest.json does not exist, it's not a valid book workspace
+		if isStale {
+			stalePaths = append(stalePaths, path)
 			continue
 		}
-
-		m, err := manifest.LoadManifest(manifestPath)
-		if err != nil {
-			// Skip corrupt manifests so one failure does not block listing other workspaces
-			continue
+		if summary != nil {
+			summaries = append(summaries, *summary)
 		}
-
-		summaries = append(summaries, BookSummary{
-			DirName:         filepath.Base(path),
-			Theme:           m.BookProperties.Theme,
-			Format:          m.BookProperties.Format,
-			PageCount:       len(m.Progress.Pages),
-			TargetPageCount: m.BookProperties.TargetPageCount,
-			Milestones:      m.Kiln.Milestones,
-			TotalCost:       m.Telemetry.TotalCostUSD,
-		})
 	}
 
 	// 5. Prune any stale paths from the global registry
@@ -116,5 +72,78 @@ func ListWorkspaces(workspaceRoot string) ([]BookSummary, error) {
 	})
 
 	return summaries, nil
+}
+
+func scanWorkspaceRoot(workspaceRoot string) ([]string, error) {
+	if workspaceRoot == "" {
+		return nil, nil
+	}
+
+	absRoot, err := filepath.Abs(workspaceRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	entries, err := os.ReadDir(absRoot)
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+		return nil, nil
+	}
+
+	var paths []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			paths = append(paths, filepath.Join(absRoot, entry.Name()))
+		}
+	}
+	return paths, nil
+}
+
+func deduplicatePaths(paths []string) []string {
+	uniquePathsMap := make(map[string]bool)
+	var uniquePaths []string
+	for _, p := range paths {
+		abs, err := filepath.Abs(p)
+		if err != nil {
+			continue
+		}
+		abs = filepath.Clean(abs)
+		if !uniquePathsMap[abs] {
+			uniquePathsMap[abs] = true
+			uniquePaths = append(uniquePaths, abs)
+		}
+	}
+	return uniquePaths
+}
+
+func loadBookSummary(path string) (*BookSummary, bool, error) {
+	if _, err := os.Stat(path); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, true, nil
+		}
+		return nil, false, err
+	}
+
+	manifestPath := filepath.Join(path, "manifest.json")
+	if _, err := os.Stat(manifestPath); err != nil {
+		return nil, false, nil
+	}
+
+	m, err := manifest.LoadManifest(manifestPath)
+	if err != nil {
+		return nil, false, nil
+	}
+
+	return &BookSummary{
+		DirName:         filepath.Base(path),
+		Theme:           m.BookProperties.Theme,
+		Format:          m.BookProperties.Format,
+		PageCount:       len(m.Progress.Pages),
+		TargetPageCount: m.BookProperties.TargetPageCount,
+		Milestones:      m.Kiln.Milestones,
+		TotalCost:       m.Telemetry.TotalCostUSD,
+	}, false, nil
 }
 
