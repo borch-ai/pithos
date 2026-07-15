@@ -103,6 +103,60 @@ func setupMockImageGenServer(t *testing.T, ctx context.Context, serverTransport 
 	return setupMockImageGenServerWithCapabilities(t, ctx, serverTransport, generatedImagePath, "mock", true, true)
 }
 
+func handleMockImagegenGenerate(req *mcpsdk.CallToolRequest, generatedImagePath string) (*mcpsdk.CallToolResult, error) {
+	// Verify if we should fail or return path
+	var args struct {
+		Prompt string `json:"prompt"`
+	}
+	_ = json.Unmarshal(req.Params.Arguments, &args)
+
+	if strings.Contains(args.Prompt, "SLEEP") {
+		atomic.AddInt32(&mockActiveCount, 1)
+		defer atomic.AddInt32(&mockActiveCount, -1)
+		for {
+			currMax := atomic.LoadInt32(&mockMaxActiveCount)
+			currActive := atomic.LoadInt32(&mockActiveCount)
+			if currActive <= currMax {
+				break
+			}
+			if atomic.CompareAndSwapInt32(&mockMaxActiveCount, currMax, currActive) {
+				break
+			}
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	if strings.Contains(args.Prompt, "FAIL_GENERATION") {
+		return &mcpsdk.CallToolResult{
+			IsError: true,
+			Content: []mcpsdk.Content{
+				&mcpsdk.TextContent{Text: "failed to generate image: mock error"},
+			},
+		}, nil
+	}
+
+	if strings.Contains(args.Prompt, "FAIL_FORMAT") {
+		return &mcpsdk.CallToolResult{Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: "bad response format"}}}, nil
+	}
+
+	if strings.Contains(args.Prompt, "LEGACY_FORMAT") {
+		return &mcpsdk.CallToolResult{Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: "Successfully generated image and saved to: " + generatedImagePath}}}, nil
+	}
+
+	payload, err := json.Marshal(map[string]string{
+		"image_path": generatedImagePath,
+		"model":      "mock-imagen-pro",
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &mcpsdk.CallToolResult{
+		Content: []mcpsdk.Content{
+			&mcpsdk.TextContent{Text: string(payload)},
+		},
+	}, nil
+}
+
 func setupMockImageGenServerWithCapabilities(t *testing.T, ctx context.Context, serverTransport mcpsdk.Transport, generatedImagePath string, backend string, supportsCref, supportsSref bool) (*mcpsdk.ServerSession, func()) {
 	t.Helper()
 	server := mcpsdk.NewServer(&mcpsdk.Implementation{
@@ -143,54 +197,7 @@ func setupMockImageGenServerWithCapabilities(t *testing.T, ctx context.Context, 
 			"type": "object",
 		},
 	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
-		// Verify if we should fail or return path
-		var args struct {
-			Prompt string `json:"prompt"`
-		}
-		_ = json.Unmarshal(req.Params.Arguments, &args)
-
-		if strings.Contains(args.Prompt, "SLEEP") {
-			atomic.AddInt32(&mockActiveCount, 1)
-			defer atomic.AddInt32(&mockActiveCount, -1)
-			for {
-				currMax := atomic.LoadInt32(&mockMaxActiveCount)
-				currActive := atomic.LoadInt32(&mockActiveCount)
-				if currActive <= currMax {
-					break
-				}
-				if atomic.CompareAndSwapInt32(&mockMaxActiveCount, currMax, currActive) {
-					break
-				}
-			}
-			time.Sleep(100 * time.Millisecond)
-		}
-
-		if strings.Contains(args.Prompt, "FAIL_GENERATION") {
-			return &mcpsdk.CallToolResult{
-				IsError: true,
-				Content: []mcpsdk.Content{
-					&mcpsdk.TextContent{Text: "failed to generate image: mock error"},
-				},
-			}, nil
-		}
-
-		if strings.Contains(args.Prompt, "FAIL_FORMAT") {
-			return &mcpsdk.CallToolResult{Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: "bad response format"}}}, nil
-		}
-
-		if strings.Contains(args.Prompt, "LEGACY_FORMAT") {
-			return &mcpsdk.CallToolResult{Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: "Successfully generated image and saved to: " + generatedImagePath}}}, nil
-		}
-
-		payload, _ := json.Marshal(map[string]string{
-			"image_path": generatedImagePath,
-			"model":      "mock-imagen-pro",
-		})
-		return &mcpsdk.CallToolResult{
-			Content: []mcpsdk.Content{
-				&mcpsdk.TextContent{Text: string(payload)},
-			},
-		}, nil
+		return handleMockImagegenGenerate(req, generatedImagePath)
 	})
 
 	serverSession, err := server.Connect(ctx, serverTransport, nil)
