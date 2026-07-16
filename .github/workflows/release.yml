@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   release:
-    uses: borch-ai/.github/.github/workflows/release-go-binary.yml@v0.1.0
+    uses: borch-ai/.github/.github/workflows/release-go-binary.yml@v0.2.2
     with:
       binary-name: pithos
       sibling-repo: borch-ai/powerword
