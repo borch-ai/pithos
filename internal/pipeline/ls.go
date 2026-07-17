@@ -71,9 +71,9 @@ func ListWorkspaces(workspaceRoot string) ([]BookSummary, error) {
 		}
 	}
 
-	// 5. Prune any stale paths from the global registry
-	for _, stale := range stalePaths {
-		if err := registry.Remove(stale); err != nil {
+	// 5. Prune any stale paths from the global registry in a single batch operation
+	if len(stalePaths) > 0 {
+		if err := registry.RemovePaths(stalePaths); err != nil {
 			return nil, err
 		}
 	}

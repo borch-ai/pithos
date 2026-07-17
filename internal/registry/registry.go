@@ -42,6 +42,8 @@ var (
 // SetRegistryPathOverride overrides the default registry file path for testing purposes.
 // It returns the previous override value, allowing callers to restore it via defer.
 func SetRegistryPathOverride(path string) string {
+	mu.Lock()
+	defer mu.Unlock()
 	overrideMu.Lock()
 	defer overrideMu.Unlock()
 	old := registryPathOverride
@@ -155,6 +157,39 @@ func Remove(path string) error {
 	var updated []string
 	for _, ws := range workspaces {
 		if ws != absPath {
+			updated = append(updated, ws)
+		}
+	}
+
+	return save(updated)
+}
+
+// RemovePaths cleans the given paths, removes them from the registry, and saves the updates in a single batch operation.
+func RemovePaths(paths []string) error {
+	if len(paths) == 0 {
+		return nil
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	workspaces, err := loadUnlocked()
+	if err != nil {
+		return err
+	}
+
+	// Clean all incoming paths and put them in a map for O(1) lookup
+	toRemove := make(map[string]bool)
+	for _, p := range paths {
+		absPath, err := filepath.Abs(p)
+		if err == nil {
+			toRemove[filepath.Clean(absPath)] = true
+		}
+	}
+
+	var updated []string
+	for _, ws := range workspaces {
+		if !toRemove[ws] {
 			updated = append(updated, ws)
 		}
 	}

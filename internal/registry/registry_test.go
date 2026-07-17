@@ -682,3 +682,46 @@ func TestRegistryEdgeCases_SaveWindowsFallback_OtherErrors(t *testing.T) {
 		t.Errorf("expected registry file content to be unchanged, got %q", string(data))
 	}
 }
+
+func TestRegistryOperations_RemovePaths(t *testing.T) {
+	setupTestFile(t)
+
+	err := Add("/path/1")
+	if err != nil {
+		t.Fatalf("failed to add path 1: %v", err)
+	}
+	err = Add("/path/2")
+	if err != nil {
+		t.Fatalf("failed to add path 2: %v", err)
+	}
+	err = Add("/path/3")
+	if err != nil {
+		t.Fatalf("failed to add path 3: %v", err)
+	}
+
+	// 1. Test empty paths slice
+	err = RemovePaths([]string{})
+	if err != nil {
+		t.Fatalf("expected no-op on empty slice, got: %v", err)
+	}
+
+	// 2. Test batch removal
+	err = RemovePaths([]string{"/path/1", "/path/3", "/non-existent"})
+	if err != nil {
+		t.Fatalf("failed to remove paths: %v", err)
+	}
+
+	workspaces, err := Load()
+	if err != nil {
+		t.Fatalf("failed to load workspaces: %v", err)
+	}
+
+	if len(workspaces) != 1 {
+		t.Fatalf("expected 1 workspace remaining, got %d", len(workspaces))
+	}
+	absPath2, _ := filepath.Abs("/path/2")
+	absPath2 = filepath.Clean(absPath2)
+	if workspaces[0] != absPath2 {
+		t.Errorf("expected path/2 to remain, got %q", workspaces[0])
+	}
+}
