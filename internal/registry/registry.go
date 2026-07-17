@@ -34,11 +34,16 @@ var createTempFile = func(dir, pattern string) (fileWriter, error) {
 	return os.CreateTemp(dir, pattern)
 }
 
-var registryPathOverride string
+var (
+	registryPathOverride string
+	overrideMu           sync.RWMutex
+)
 
 // SetRegistryPathOverride overrides the default registry file path for testing purposes.
 // It returns the previous override value, allowing callers to restore it via defer.
 func SetRegistryPathOverride(path string) string {
+	overrideMu.Lock()
+	defer overrideMu.Unlock()
 	old := registryPathOverride
 	registryPathOverride = path
 	return old
@@ -48,13 +53,16 @@ func SetRegistryPathOverride(path string) string {
 // It defaults to ~/.config/pithos/registry.json, falling back to a local
 // file in the current working directory if the home directory is inaccessible.
 func GetRegistryPath() string {
-	var path string
-	if registryPathOverride != "" {
-		path = registryPathOverride
-	} else if home, err := userHomeDir(); err == nil {
-		path = filepath.Join(home, ".config", "pithos", "registry.json")
-	} else {
-		path = ".pithos_registry.json"
+	overrideMu.RLock()
+	path := registryPathOverride
+	overrideMu.RUnlock()
+
+	if path == "" {
+		if home, err := userHomeDir(); err == nil {
+			path = filepath.Join(home, ".config", "pithos", "registry.json")
+		} else {
+			path = ".pithos_registry.json"
+		}
 	}
 	abs, err := filepath.Abs(path)
 	if err == nil {
