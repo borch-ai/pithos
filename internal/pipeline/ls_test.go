@@ -247,6 +247,12 @@ func TestListWorkspaces_PermissionDeniedWorkspaceStat(t *testing.T) {
 	// #nosec G302
 	defer func() { _ = os.Chmod(secretParent, 0750) }()
 
+	// Probe if traversal permission restriction was actually enforced
+	_, statErr := os.Stat(wsDir)
+	if statErr == nil || errors.Is(statErr, os.ErrNotExist) {
+		t.Skip("skipping test: filesystem traversal was not blocked by chmod(0000)")
+	}
+
 	_, err := ListWorkspaces(tmpRoot)
 	if err == nil {
 		t.Error("expected error when workspace folder stat fails with permission denied, got nil")
