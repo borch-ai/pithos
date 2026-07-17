@@ -163,7 +163,7 @@ func Remove(path string) error {
 }
 
 // Prune validates all registered paths and removes any that no longer exist
-// on the local filesystem.
+// or are not directories on the local filesystem.
 func Prune() error {
 	mu.Lock()
 	defer mu.Unlock()
@@ -176,11 +176,17 @@ func Prune() error {
 	var active []string
 	changed := false
 	for _, ws := range workspaces {
-		if _, err := os.Stat(ws); err == nil {
-			active = append(active, ws)
-		} else if errors.Is(err, os.ErrNotExist) {
+		fi, err := os.Stat(ws)
+		switch {
+		case err == nil:
+			if fi.IsDir() {
+				active = append(active, ws)
+			} else {
+				changed = true
+			}
+		case errors.Is(err, os.ErrNotExist):
 			changed = true
-		} else {
+		default:
 			return err
 		}
 	}
@@ -237,6 +243,10 @@ func save(workspaces []string) error {
 
 	err = renameFunc(tmpPath, path)
 	if err == nil || !isWindows {
+		return err
+	}
+
+	if !os.IsExist(err) && !errors.Is(err, os.ErrExist) {
 		return err
 	}
 

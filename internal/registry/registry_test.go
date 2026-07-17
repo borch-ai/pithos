@@ -172,6 +172,16 @@ func TestRegistryOperations_Prune(t *testing.T) {
 		t.Fatalf("failed to add fake path: %v", err)
 	}
 
+	regularFile := filepath.Join(tempDir, "regular_file.txt")
+	err = os.WriteFile(regularFile, []byte("data"), 0600)
+	if err != nil {
+		t.Fatalf("failed to create regular file: %v", err)
+	}
+	err = Add(regularFile)
+	if err != nil {
+		t.Fatalf("failed to add regular file path: %v", err)
+	}
+
 	err = Prune()
 	if err != nil {
 		t.Fatalf("failed to prune: %v", err)
@@ -623,5 +633,52 @@ func TestRegistryEdgeCases_SaveFileWriterErrors(t *testing.T) {
 	err = save([]string{"/test"})
 	if err == nil || !errors.Is(err, os.ErrClosed) {
 		t.Errorf("expected close closed error, got %v", err)
+	}
+}
+
+func TestRegistryEdgeCases_SaveWindowsFallback_OtherErrors(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "pithos_registry_windows_fallback_other")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(tempDir) })
+
+	// Set destination path to a regular file
+	registryFile := filepath.Join(tempDir, "registry.json")
+	err = os.WriteFile(registryFile, []byte("existing"), 0600)
+	if err != nil {
+		t.Fatalf("failed to create registry file: %v", err)
+	}
+
+	oldOverride := SetRegistryPathOverride(registryFile)
+	t.Cleanup(func() { SetRegistryPathOverride(oldOverride) })
+
+	// Mock Windows platform
+	oldIsWindows := isWindows
+	isWindows = true
+	defer func() { isWindows = oldIsWindows }()
+
+	// Mock renameFunc to fail with permission error (not isExist error)
+	oldRenameFunc := renameFunc
+	renameFunc = func(oldpath, newpath string) error {
+		return os.ErrPermission
+	}
+	defer func() { renameFunc = oldRenameFunc }()
+
+	// Calling save should trigger the rename error, see that it is not os.IsExist,
+	// and return the permission error without deleting registry.json.
+	err = save([]string{"/test/path"})
+	if err == nil || !errors.Is(err, os.ErrPermission) {
+		t.Fatalf("expected save to fail with permission error, got: %v", err)
+	}
+
+	// Verify registry.json still exists and was not deleted/modified
+	// #nosec G304
+	data, err := os.ReadFile(registryFile)
+	if err != nil {
+		t.Fatalf("expected registry file to still exist, got: %v", err)
+	}
+	if string(data) != "existing" {
+		t.Errorf("expected registry file content to be unchanged, got %q", string(data))
 	}
 }
