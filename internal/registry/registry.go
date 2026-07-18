@@ -209,9 +209,12 @@ func RemovePaths(paths []string) error {
 	toRemove := make(map[string]bool)
 	for _, p := range paths {
 		absPath, err := filepath.Abs(p)
-		if err == nil {
-			toRemove[filepath.Clean(absPath)] = true
+		if err != nil {
+			absPath = filepath.Clean(p)
+		} else {
+			absPath = filepath.Clean(absPath)
 		}
+		toRemove[absPath] = true
 	}
 
 	var updated []string
@@ -273,7 +276,7 @@ func save(workspaces []string) error {
 
 	path := GetRegistryPath()
 	dir := filepath.Dir(path)
-	err = os.MkdirAll(dir, 0750)
+	err = os.MkdirAll(dir, 0700)
 	if err != nil {
 		return err
 	}
