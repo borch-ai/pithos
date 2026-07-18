@@ -10,5 +10,5 @@ permissions:
 
 jobs:
   check:
-    uses: borch-ai/.github/.github/workflows/pr-title.yml@v0.1.0
+    uses: borch-ai/.github/.github/workflows/pr-title.yml@v0.2.2
     secrets: inherit
