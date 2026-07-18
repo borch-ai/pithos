@@ -1,0 +1,142 @@
+//go:build integration
+
+package pipeline_test
+
+import (
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/borch-ai/pithos/internal/manifest"
+)
+
+func buildPithosBinary(t *testing.T, tempDir string) string {
+	t.Helper()
+	binaryPath := filepath.Join(tempDir, "pithos")
+	cmd := exec.Command("go", "build", "-o", binaryPath, "github.com/borch-ai/pithos/cmd/pithos")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("failed to build pithos binary: %v\nOutput: %s", err, string(out))
+	}
+	return binaryPath
+}
+
+func TestCLI_Initiate_Basic(t *testing.T) {
+	tempDir := t.TempDir()
+	bin := buildPithosBinary(t, tempDir)
+
+	bookDir := filepath.Join(tempDir, "mybook")
+
+	cmd := exec.Command(bin, "initiate", "--output", bookDir, "--theme", "existential dread of a house cat", "--pages", "10", "--dry-run")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("pithos initiate failed: %v\nOutput: %s", err, string(out))
+	}
+
+	manifestPath := filepath.Join(bookDir, "manifest.json")
+	if _, err := os.Stat(manifestPath); os.IsNotExist(err) {
+		t.Fatalf("manifest.json was not created at %s", manifestPath)
+	}
+
+	m, err := manifest.LoadManifest(manifestPath)
+	if err != nil {
+		t.Fatalf("failed to load manifest: %v", err)
+	}
+
+	if m.BookProperties.Theme != "existential dread of a house cat" {
+		t.Errorf("expected theme %q, got %q", "existential dread of a house cat", m.BookProperties.Theme)
+	}
+	if m.BookProperties.TargetPageCount != 10 {
+		t.Errorf("expected 10 pages, got %d", m.BookProperties.TargetPageCount)
+	}
+}
+
+func TestCLI_Initiate_Brainstorm_OptOut(t *testing.T) {
+	tempDir := t.TempDir()
+	bin := buildPithosBinary(t, tempDir)
+
+	bookDir := filepath.Join(tempDir, "turtlebook")
+
+	cmd := exec.Command(bin, "initiate", "--output", bookDir, "--theme", "turtle", "--no-brainstorm", "--dry-run")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("pithos initiate failed: %v\nOutput: %s", err, string(out))
+	}
+
+	manifestPath := filepath.Join(bookDir, "manifest.json")
+	m, err := manifest.LoadManifest(manifestPath)
+	if err != nil {
+		t.Fatalf("failed to load manifest: %v", err)
+	}
+
+	if m.BookProperties.Style != "" {
+		t.Errorf("expected empty Style, got %q", m.BookProperties.Style)
+	}
+	if m.BookProperties.CharacterProfile != "" {
+		t.Errorf("expected empty CharacterProfile, got %q", m.BookProperties.CharacterProfile)
+	}
+}
+
+func TestCLI_Initiate_Overwrite(t *testing.T) {
+	tempDir := t.TempDir()
+	bin := buildPithosBinary(t, tempDir)
+
+	bookDir := filepath.Join(tempDir, "overwritebook")
+
+	// First run to create the directory
+	cmd1 := exec.Command(bin, "initiate", "--output", bookDir, "--theme", "test1", "--dry-run")
+	if out, err := cmd1.CombinedOutput(); err != nil {
+		t.Fatalf("first pithos initiate failed: %v\nOutput: %s", err, string(out))
+	}
+
+	// Second run, input 'n' to decline overwrite
+	cmd2 := exec.Command(bin, "initiate", "--output", bookDir, "--theme", "test2", "--dry-run")
+	stdin2, err := cmd2.StdinPipe()
+	if err != nil {
+		t.Fatalf("failed to get stdin pipe: %v", err)
+	}
+
+	go func() {
+		defer stdin2.Close()
+		io.WriteString(stdin2, "n\n")
+	}()
+
+	out2, err2 := cmd2.CombinedOutput()
+	if err2 == nil {
+		t.Fatalf("expected command to fail when overwrite is declined, but it succeeded\nOutput: %s", string(out2))
+	}
+	if !strings.Contains(string(out2), "initiation cancelled") {
+		t.Errorf("expected 'initiation cancelled' in output, got: %s", string(out2))
+	}
+	
+	// Third run, input 'y' to accept overwrite
+	cmd3 := exec.Command(bin, "initiate", "--output", bookDir, "--theme", "test3", "--dry-run")
+	stdin3, err := cmd3.StdinPipe()
+	if err != nil {
+		t.Fatalf("failed to get stdin pipe: %v", err)
+	}
+
+	go func() {
+		defer stdin3.Close()
+		io.WriteString(stdin3, "y\n")
+	}()
+
+	out3, err3 := cmd3.CombinedOutput()
+	if err3 != nil {
+		t.Fatalf("expected command to succeed when overwrite is accepted, but failed: %v\nOutput: %s", err3, string(out3))
+	}
+
+	// Verify the theme was overwritten
+	manifestPath := filepath.Join(bookDir, "manifest.json")
+	m, err := manifest.LoadManifest(manifestPath)
+	if err != nil {
+		t.Fatalf("failed to load manifest: %v", err)
+	}
+
+	if m.BookProperties.Theme != "test3" {
+		t.Errorf("expected theme 'test3' after overwrite, got %q", m.BookProperties.Theme)
+	}
+}

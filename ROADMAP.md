@@ -181,7 +181,7 @@ Focus: Remote monitoring, Kiln state manifest integration, testing, and ecosyste
     *   [Implementation Plan](plans/phase_5/task_5_38_workspace_repair_status.md)
 
 ### Tooling, Testing & DevOps
-*   [ ] **Task 5.40: E2E CLI Subprocess Integration Test Suite**
+*   [x] **Task 5.40: E2E CLI Subprocess Integration Test Suite**
     *   Implement end-to-end integration tests that build the `pithos` binary on-the-fly and execute subprocess CLI commands.
     *   Assert correct exit codes, stdout/stderr formatting, flag parsing, and interactive stdin prompt responses.
     *   [Implementation Plan](plans/phase_5/task_5_40_e2e_cli_subprocess_tests.md)
