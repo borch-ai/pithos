@@ -1,11 +1,13 @@
 package pipeline
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/borch-ai/pithos/internal/manifest"
+	"github.com/borch-ai/pithos/internal/registry"
 )
 
 func TestListWorkspaces_NonExistent(t *testing.T) {
@@ -164,5 +166,244 @@ func TestListWorkspaces_InvalidAndIgnored(t *testing.T) {
 	// Assertions: none of C, D, or E should be loaded as valid books
 	if len(summaries) != 0 {
 		t.Fatalf("expected 0 book summaries, got %d", len(summaries))
+	}
+}
+
+func TestListWorkspaces_PermissionDeniedDir(t *testing.T) {
+	tmpRoot := t.TempDir()
+	permDeniedDir := filepath.Join(tmpRoot, "perm-denied")
+	if err := os.Mkdir(permDeniedDir, 0000); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+	// #nosec G302
+	defer func() { _ = os.Chmod(permDeniedDir, 0700) }() // restore permission for cleanup
+
+	_, err := ListWorkspaces(permDeniedDir)
+	if err == nil {
+		// If the OS/filesystem doesn't enforce permission restrictions on read (e.g. running as root),
+		// we skip the failure to avoid breaking CI.
+		_, readErr := os.ReadDir(permDeniedDir)
+		if readErr == nil {
+			t.Skip("skipping test: filesystem permitted read access to 0000 directory")
+		}
+		t.Error("expected error when listing directory with permission denied, got nil")
+	}
+}
+
+func TestListWorkspaces_PermissionDeniedWorkspace(t *testing.T) {
+	tmpRoot := t.TempDir()
+
+	createManifestA(t, tmpRoot)
+
+	secretDir := filepath.Join(tmpRoot, "book-secret")
+	if err := os.Mkdir(secretDir, 0000); err != nil {
+		t.Fatalf("failed to create secretDir: %v", err)
+	}
+	// #nosec G302
+	defer func() { _ = os.Chmod(secretDir, 0700) }()
+
+	_, err := ListWorkspaces(tmpRoot)
+	if err == nil {
+		manifestPath := filepath.Join(secretDir, "manifest.json")
+		_, statErr := os.Stat(manifestPath)
+		if statErr != nil && errors.Is(statErr, os.ErrNotExist) {
+			t.Skip("skipping test: filesystem returned ENOENT instead of EACCES for non-searchable directory contents")
+		}
+		t.Error("expected error when workspace folder read fails with permission denied, got nil")
+	}
+}
+
+func TestListWorkspaces_PermissionDeniedWorkspaceStat(t *testing.T) {
+	// Set registry file override
+	registryTemp := t.TempDir()
+	oldOverride := registry.SetRegistryPathOverride(filepath.Join(registryTemp, "registry.json"))
+	defer registry.SetRegistryPathOverride(oldOverride)
+
+	tmpRoot := t.TempDir()
+
+	// Create secret parent and nested workspace directory
+	secretParent := filepath.Join(tmpRoot, "secret_parent")
+	if err := os.Mkdir(secretParent, 0750); err != nil {
+		t.Fatalf("failed to create secret parent dir: %v", err)
+	}
+	wsDir := filepath.Join(secretParent, "ws")
+	if err := os.Mkdir(wsDir, 0750); err != nil {
+		t.Fatalf("failed to create nested ws dir: %v", err)
+	}
+	// Add manifest.json so it's a valid workspace
+	if err := os.WriteFile(filepath.Join(wsDir, "manifest.json"), []byte("{}"), 0600); err != nil {
+		t.Fatalf("failed to write manifest: %v", err)
+	}
+
+	// Register it
+	if err := registry.Add(wsDir); err != nil {
+		t.Fatalf("failed to add to registry: %v", err)
+	}
+
+	// Block search permission on parent
+	if err := os.Chmod(secretParent, 0000); err != nil {
+		t.Fatalf("failed to chmod: %v", err)
+	}
+	// #nosec G302
+	defer func() { _ = os.Chmod(secretParent, 0750) }()
+
+	// Probe if traversal permission restriction was actually enforced
+	_, statErr := os.Stat(wsDir)
+	if statErr == nil || errors.Is(statErr, os.ErrNotExist) {
+		t.Skip("skipping test: filesystem traversal was not blocked by chmod(0000)")
+	}
+
+	_, err := ListWorkspaces(tmpRoot)
+	if err == nil {
+		t.Error("expected error when workspace folder stat fails with permission denied, got nil")
+	}
+}
+
+//nolint:gocognit,funlen
+func TestListWorkspaces_WithRegistry(t *testing.T) {
+	// Set registry file override
+	registryTemp := t.TempDir()
+	oldOverride := registry.SetRegistryPathOverride(filepath.Join(registryTemp, "registry.json"))
+	defer registry.SetRegistryPathOverride(oldOverride)
+
+	// Create root directories
+	workspaceRoot := t.TempDir()
+	customRoot := t.TempDir()
+
+	// 1. Create a workspace in default root (book-local)
+	bookLocalDir := filepath.Join(workspaceRoot, "book-local")
+	if err := os.Mkdir(bookLocalDir, 0700); err != nil {
+		t.Fatalf("failed to create bookLocalDir: %v", err)
+	}
+	mLocal := manifest.NewManifest(filepath.Join(bookLocalDir, "manifest.json"))
+	mLocal.BookProperties.Theme = "Local Theme"
+	if err := mLocal.Save(); err != nil {
+		t.Fatalf("failed to save local manifest: %v", err)
+	}
+
+	// 2. Create a workspace in custom root (book-custom)
+	bookCustomDir := filepath.Join(customRoot, "book-custom")
+	if err := os.Mkdir(bookCustomDir, 0700); err != nil {
+		t.Fatalf("failed to create bookCustomDir: %v", err)
+	}
+	mCustom := manifest.NewManifest(filepath.Join(bookCustomDir, "manifest.json"))
+	mCustom.BookProperties.Theme = "Custom Theme"
+	if err := mCustom.Save(); err != nil {
+		t.Fatalf("failed to save custom manifest: %v", err)
+	}
+
+	// Register the custom book path
+	if err := registry.Add(bookCustomDir); err != nil {
+		t.Fatalf("failed to register custom workspace: %v", err)
+	}
+
+	// 3. Run ListWorkspaces
+	summaries, err := ListWorkspaces(workspaceRoot)
+	if err != nil {
+		t.Fatalf("failed to list workspaces: %v", err)
+	}
+
+	// Verify both local and custom are found
+	if len(summaries) != 2 {
+		t.Fatalf("expected exactly 2 book summaries, got %d (list: %+v)", len(summaries), summaries)
+	}
+
+	// Because of alphabetical sorting, book-custom comes first
+	if summaries[0].DirName != "book-custom" || summaries[0].Theme != "Custom Theme" {
+		t.Errorf("unexpected summary at index 0: %+v", summaries[0])
+	}
+	if summaries[1].DirName != "book-local" || summaries[1].Theme != "Local Theme" {
+		t.Errorf("unexpected summary at index 1: %+v", summaries[1])
+	}
+
+	// 4. Delete custom book workspace and verify auto-prune
+	if removeErr := os.RemoveAll(bookCustomDir); removeErr != nil {
+		t.Fatalf("failed to delete bookCustomDir: %v", removeErr)
+	}
+
+	summaries, err = ListWorkspaces(workspaceRoot)
+	if err != nil {
+		t.Fatalf("failed to list workspaces after delete: %v", err)
+	}
+
+	// Only local remains
+	if len(summaries) != 1 {
+		t.Fatalf("expected 1 book summary after deleting custom workspace, got %d", len(summaries))
+	}
+	if summaries[0].DirName != "book-local" {
+		t.Errorf("expected book-local to remain, got %s", summaries[0].DirName)
+	}
+
+	// Registry should have pruned the stale path
+	workspaces, err := registry.Load()
+	if err != nil {
+		t.Fatalf("failed to load registry: %v", err)
+	}
+	for _, ws := range workspaces {
+		if ws == bookCustomDir {
+			t.Errorf("expected book-custom path to be pruned from registry, but it was found")
+		}
+	}
+
+	// 5. Test registering a regular file (should be treated as stale/pruned)
+	regFilePath := filepath.Join(workspaceRoot, "regular-file.txt")
+	if writeErr := os.WriteFile(regFilePath, []byte("not-a-directory"), 0600); writeErr != nil {
+		t.Fatalf("failed to write regular file: %v", writeErr)
+	}
+	if addErr := registry.Add(regFilePath); addErr != nil {
+		t.Fatalf("failed to add file path to registry: %v", addErr)
+	}
+
+	// ListWorkspaces should prune the file path
+	summaries, err = ListWorkspaces(workspaceRoot)
+	if err != nil {
+		t.Fatalf("failed to list workspaces with file in registry: %v", err)
+	}
+	if len(summaries) != 1 || summaries[0].DirName != "book-local" {
+		t.Errorf("unexpected summaries after file prune: %+v", summaries)
+	}
+
+	workspaces, err = registry.Load()
+	if err != nil {
+		t.Fatalf("failed to load registry: %v", err)
+	}
+	for _, ws := range workspaces {
+		if ws == regFilePath {
+			t.Errorf("expected regular file path to be pruned from registry, but it was found")
+		}
+	}
+}
+
+func TestListWorkspaces_AbsPathError(t *testing.T) {
+	registryTemp := t.TempDir()
+	oldOverride := registry.SetRegistryPathOverride(filepath.Join(registryTemp, "registry.json"))
+	defer registry.SetRegistryPathOverride(oldOverride)
+
+	// Add a registry entry
+	if err := registry.Add("some-registry-path"); err != nil {
+		t.Fatalf("failed to add path to registry: %v", err)
+	}
+
+	// Mock absFunc to return error
+	oldAbsFunc := absFunc
+	absFunc = func(path string) (string, error) {
+		return "", errors.New("mocked abs error")
+	}
+	defer func() { absFunc = oldAbsFunc }()
+
+	// Calling ListWorkspaces with empty root avoids calling absFunc(workspaceRoot)
+	// and lets us cover the fallback Clean(p) path for registry entries.
+	_, err := ListWorkspaces("")
+	if err != nil {
+		t.Fatalf("expected ListWorkspaces to succeed even with mocked abs error by falling back to Clean, got: %v", err)
+	}
+
+	// Verify the registry path was pruned because it doesn't exist
+	workspaces, err := registry.Load()
+	if err != nil {
+		t.Fatalf("failed to load registry: %v", err)
+	}
+	if len(workspaces) != 0 {
+		t.Errorf("expected registry to be empty after prune, got: %v", workspaces)
 	}
 }

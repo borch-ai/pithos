@@ -13,6 +13,7 @@ import (
 	"github.com/borch-ai/pithos/internal/logger"
 	"github.com/borch-ai/pithos/internal/manifest"
 	"github.com/borch-ai/pithos/internal/mcp"
+	"github.com/borch-ai/pithos/internal/registry"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -58,6 +59,11 @@ func Assemble(ctx context.Context, opts AssembleOptions) (*manifest.Manifest, er
 	m, err := manifest.LoadManifest(manifestPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load manifest: %w", err)
+	}
+
+	// Register book workspace path globally
+	if regErr := registry.Add(opts.InputDir); regErr != nil {
+		logger.Warn("Failed to register book workspace path in global registry during assemble", "error", regErr)
 	}
 
 	// 1. Count total pages in Progress.Pages or fallback to target page count

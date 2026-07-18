@@ -299,7 +299,7 @@ func buildImageGenBinary(t *testing.T, tempDir string) string {
 			t.Fatalf("failed to get absolute binary path: %v", err)
 		}
 		//nolint:gosec // siblingPath and binaryPath are constructed inside test dir
-		cmd := exec.CommandContext(context.Background(), "go", "build", "-o", absBinary, ".")
+		cmd := exec.CommandContext(context.Background(), "go", "build", "-buildvcs=false", "-o", absBinary, ".")
 		cmd.Dir = siblingPath
 		if buildErr := cmd.Run(); buildErr != nil {
 			t.Fatalf("failed to build pw-mcp-imagegen: %v", buildErr)
@@ -618,7 +618,7 @@ func buildTypstBinary(t *testing.T, tempDir string) string {
 	}
 
 	//nolint:gosec // siblingPath and binaryPath are constructed inside test dir
-	cmd := exec.CommandContext(context.Background(), "go", "build", "-o", absBinary, ".")
+	cmd := exec.CommandContext(context.Background(), "go", "build", "-buildvcs=false", "-o", absBinary, ".")
 	cmd.Dir = siblingPath
 	if buildErr := cmd.Run(); buildErr != nil {
 		t.Fatalf("failed to build pw-mcp-typst: %v", buildErr)
@@ -648,7 +648,7 @@ func buildPDFCheckBinary(t *testing.T, tempDir string) string {
 	}
 
 	//nolint:gosec // siblingPath and binaryPath are constructed inside test dir
-	cmd := exec.CommandContext(context.Background(), "go", "build", "-o", absBinary, ".")
+	cmd := exec.CommandContext(context.Background(), "go", "build", "-buildvcs=false", "-o", absBinary, ".")
 	cmd.Dir = siblingPath
 	if buildErr := cmd.Run(); buildErr != nil {
 		t.Fatalf("failed to build pw-mcp-pdfcheck: %v", buildErr)

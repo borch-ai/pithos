@@ -11,6 +11,7 @@ import (
 
 	"github.com/borch-ai/pithos/internal/logger"
 	"github.com/borch-ai/pithos/internal/manifest"
+	"github.com/borch-ai/pithos/internal/registry"
 	"github.com/charmbracelet/huh"
 )
 
@@ -94,6 +95,11 @@ func Initiate(opts InitiateOptions) (*manifest.Manifest, error) {
 	// 5. Create initial Git checkpoint
 	if err := Checkpoint(ctx, opts.OutputDir, "Initial workspace setup"); err != nil {
 		return nil, fmt.Errorf("failed to create initial git checkpoint: %w", err)
+	}
+
+	// 6. Register book workspace path globally
+	if err := registry.Add(opts.OutputDir); err != nil {
+		logger.Warn("Failed to register book workspace path in global registry", "error", err)
 	}
 
 	logger.Info("Initial workspace setup complete and git checkpoint created", "dir", opts.OutputDir)

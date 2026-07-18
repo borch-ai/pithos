@@ -20,6 +20,7 @@ import (
 	"github.com/borch-ai/pithos/internal/logger"
 	"github.com/borch-ai/pithos/internal/manifest"
 	"github.com/borch-ai/pithos/internal/mcp"
+	"github.com/borch-ai/pithos/internal/registry"
 	"github.com/borch-ai/pithos/internal/ui"
 	"github.com/borch-ai/powerword/pkg/telemetry"
 	"github.com/charmbracelet/huh"
@@ -66,6 +67,11 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 	m, err := manifest.LoadManifest(manifestPath)
 	if err != nil {
 		return fmt.Errorf("failed to load manifest from %s: %w", manifestPath, err)
+	}
+
+	// Register book workspace path globally
+	if regErr := registry.Add(opts.OutputDir); regErr != nil {
+		logger.Warn("Failed to register book workspace path in global registry during brew", "error", regErr)
 	}
 
 	if opts.Select {
