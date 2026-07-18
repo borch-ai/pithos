@@ -809,3 +809,100 @@ func TestRegistryOperations_LoadNormalization(t *testing.T) {
 		t.Errorf("expected %s, got %s", abs2, workspaces[1])
 	}
 }
+
+func TestRegistryEdgeCases_SaveWindowsFallback_StatPermissionError(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "pithos_registry_windows_fallback_stat_perm")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(tempDir) })
+
+	// Set destination path inside a subdirectory
+	subDir := filepath.Join(tempDir, "subdir")
+	err = os.Mkdir(subDir, 0750)
+	if err != nil {
+		t.Fatalf("failed to create subdir: %v", err)
+	}
+
+	registryFile := filepath.Join(subDir, "registry.json")
+	err = os.WriteFile(registryFile, []byte("existing"), 0600)
+	if err != nil {
+		t.Fatalf("failed to create registry file: %v", err)
+	}
+
+	oldOverride := SetRegistryPathOverride(registryFile)
+	t.Cleanup(func() { SetRegistryPathOverride(oldOverride) })
+
+	// Mock Windows platform
+	oldIsWindows := isWindows
+	isWindows = true
+	defer func() { isWindows = oldIsWindows }()
+
+	// Mock renameFunc to fail with os.ErrExist
+	oldRenameFunc := renameFunc
+	renameFunc = func(oldpath, newpath string) error {
+		return os.ErrExist
+	}
+	defer func() { renameFunc = oldRenameFunc }()
+
+	// Make parent directory inaccessible to trigger os.Stat permission error
+	err = os.Chmod(subDir, 0000)
+	if err != nil {
+		t.Fatalf("failed to chmod: %v", err)
+	}
+	// #nosec G302
+	defer func() { _ = os.Chmod(subDir, 0750) }()
+
+	// Probe if traversal permission restriction was actually enforced
+	_, statErr := os.Stat(registryFile)
+	if statErr == nil || errors.Is(statErr, os.ErrNotExist) {
+		t.Skip("skipping test: filesystem traversal was not blocked by chmod(0000)")
+	}
+
+	// Calling save should trigger rename error, attempt stat, fail with permission error,
+	// and return the stat permission error.
+	err = save([]string{"/test/path"})
+	if err == nil {
+		t.Fatal("expected save to fail with permission error, got nil")
+	}
+}
+
+func TestRegistryEdgeCases_SaveWindowsFallback_RetryNotExist(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "pithos_registry_windows_fallback_retry")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(tempDir) })
+
+	registryFile := filepath.Join(tempDir, "registry.json")
+
+	oldOverride := SetRegistryPathOverride(registryFile)
+	t.Cleanup(func() { SetRegistryPathOverride(oldOverride) })
+
+	// Mock Windows platform
+	oldIsWindows := isWindows
+	isWindows = true
+	defer func() { isWindows = oldIsWindows }()
+
+	renameCallCount := 0
+	oldRenameFunc := renameFunc
+	renameFunc = func(oldpath, newpath string) error {
+		renameCallCount++
+		if renameCallCount == 1 {
+			// Return ErrExist to trigger fallback stat, which will find the file doesn't exist
+			return os.ErrExist
+		}
+		// On retry, succeed
+		return nil
+	}
+	defer func() { renameFunc = oldRenameFunc }()
+
+	err = save([]string{"/test/path"})
+	if err != nil {
+		t.Fatalf("expected save to succeed via retry, got: %v", err)
+	}
+
+	if renameCallCount != 2 {
+		t.Errorf("expected rename to be called 2 times, got %d", renameCallCount)
+	}
+}

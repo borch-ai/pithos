@@ -373,3 +373,37 @@ func TestListWorkspaces_WithRegistry(t *testing.T) {
 		}
 	}
 }
+
+func TestListWorkspaces_AbsPathError(t *testing.T) {
+	registryTemp := t.TempDir()
+	registry.SetRegistryPathOverride(filepath.Join(registryTemp, "registry.json"))
+	defer registry.SetRegistryPathOverride("")
+
+	// Add a registry entry
+	if err := registry.Add("some-registry-path"); err != nil {
+		t.Fatalf("failed to add path to registry: %v", err)
+	}
+
+	// Mock absFunc to return error
+	oldAbsFunc := absFunc
+	absFunc = func(path string) (string, error) {
+		return "", errors.New("mocked abs error")
+	}
+	defer func() { absFunc = oldAbsFunc }()
+
+	// Calling ListWorkspaces with empty root avoids calling absFunc(workspaceRoot)
+	// and lets us cover the fallback Clean(p) path for registry entries.
+	_, err := ListWorkspaces("")
+	if err != nil {
+		t.Fatalf("expected ListWorkspaces to succeed even with mocked abs error by falling back to Clean, got: %v", err)
+	}
+
+	// Verify the registry path was pruned because it doesn't exist
+	workspaces, err := registry.Load()
+	if err != nil {
+		t.Fatalf("failed to load registry: %v", err)
+	}
+	if len(workspaces) != 0 {
+		t.Errorf("expected registry to be empty after prune, got: %v", workspaces)
+	}
+}

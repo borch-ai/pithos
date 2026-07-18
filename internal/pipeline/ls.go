@@ -11,6 +11,8 @@ import (
 	"github.com/borch-ai/pithos/internal/registry"
 )
 
+var absFunc = filepath.Abs
+
 // BookSummary holds summary details of a book workspace for listing.
 type BookSummary struct {
 	DirName         string
@@ -34,10 +36,14 @@ func ListWorkspaces(workspaceRoot string) ([]BookSummary, error) {
 		return nil, err
 	}
 	for _, p := range regPaths {
-		abs, absErr := filepath.Abs(p)
+		var resolved string
+		abs, absErr := absFunc(p)
 		if absErr == nil {
-			isRegPath[filepath.Clean(abs)] = true
+			resolved = filepath.Clean(abs)
+		} else {
+			resolved = filepath.Clean(p)
 		}
+		isRegPath[resolved] = true
 	}
 	paths = append(paths, regPaths...)
 
@@ -91,7 +97,7 @@ func scanWorkspaceRoot(workspaceRoot string) ([]string, error) {
 		return nil, nil
 	}
 
-	absRoot, err := filepath.Abs(workspaceRoot)
+	absRoot, err := absFunc(workspaceRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -117,14 +123,16 @@ func deduplicatePaths(paths []string) []string {
 	uniquePathsMap := make(map[string]bool)
 	var uniquePaths []string
 	for _, p := range paths {
-		abs, err := filepath.Abs(p)
-		if err != nil {
-			continue
+		var resolved string
+		abs, err := absFunc(p)
+		if err == nil {
+			resolved = filepath.Clean(abs)
+		} else {
+			resolved = filepath.Clean(p)
 		}
-		abs = filepath.Clean(abs)
-		if !uniquePathsMap[abs] {
-			uniquePathsMap[abs] = true
-			uniquePaths = append(uniquePaths, abs)
+		if !uniquePathsMap[resolved] {
+			uniquePathsMap[resolved] = true
+			uniquePaths = append(uniquePaths, resolved)
 		}
 	}
 	return uniquePaths

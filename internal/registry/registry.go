@@ -317,7 +317,10 @@ func save(workspaces []string) error {
 
 	fi, statErr := os.Stat(path)
 	if statErr != nil {
-		return err
+		if errors.Is(statErr, os.ErrNotExist) {
+			return renameFunc(tmpPath, path)
+		}
+		return statErr
 	}
 
 	if fi.IsDir() {
