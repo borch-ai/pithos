@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -543,9 +544,15 @@ func TestRegistryOperations_Concurrent(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < iterations; j++ {
 				path := fmt.Sprintf("/some/path/%d/%d", workerID, j)
-				_ = Add(path)
-				_, _ = Load()
-				_ = Remove(path)
+				if err := Add(path); err != nil {
+					t.Errorf("Add failed concurrently: %v", err)
+				}
+				if _, err := Load(); err != nil {
+					t.Errorf("Load failed concurrently: %v", err)
+				}
+				if err := Remove(path); err != nil {
+					t.Errorf("Remove failed concurrently: %v", err)
+				}
 			}
 		}(i)
 	}
@@ -735,5 +742,70 @@ func TestRegistryOperations_RemovePaths(t *testing.T) {
 	absPath2 = filepath.Clean(absPath2)
 	if workspaces[0] != absPath2 {
 		t.Errorf("expected path/2 to remain, got %q", workspaces[0])
+	}
+}
+
+func TestRegistryOperations_EmptyPaths(t *testing.T) {
+	setupTestFile(t)
+
+	err := Add("")
+	if err == nil {
+		t.Error("expected Add(\"\") to fail, got nil")
+	}
+
+	err = Remove("")
+	if err == nil {
+		t.Error("expected Remove(\"\") to fail, got nil")
+	}
+}
+
+func TestRegistryOperations_LoadNormalization(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "pithos_registry_normalization")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(tempDir) })
+
+	registryFile := filepath.Join(tempDir, "registry.json")
+	oldOverride := SetRegistryPathOverride(registryFile)
+	t.Cleanup(func() { SetRegistryPathOverride(oldOverride) })
+
+	// Write non-canonical, relative, empty, and duplicate paths to registry.json
+	regData := Registry{
+		Workspaces: []string{
+			"relative/path/1",
+			"",
+			"relative/path/1",
+			"another/path",
+		},
+	}
+	data, err := json.Marshal(regData)
+	if err != nil {
+		t.Fatalf("failed to marshal registry: %v", err)
+	}
+	err = os.WriteFile(registryFile, data, 0600)
+	if err != nil {
+		t.Fatalf("failed to write registry: %v", err)
+	}
+
+	workspaces, err := Load()
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	if len(workspaces) != 2 {
+		t.Fatalf("expected exactly 2 normalized workspaces, got %d", len(workspaces))
+	}
+
+	abs1, _ := filepath.Abs("relative/path/1")
+	abs1 = filepath.Clean(abs1)
+	abs2, _ := filepath.Abs("another/path")
+	abs2 = filepath.Clean(abs2)
+
+	if workspaces[0] != abs1 {
+		t.Errorf("expected %s, got %s", abs1, workspaces[0])
+	}
+	if workspaces[1] != abs2 {
+		t.Errorf("expected %s, got %s", abs2, workspaces[1])
 	}
 }

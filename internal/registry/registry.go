@@ -107,12 +107,35 @@ func loadUnlocked() ([]string, error) {
 		reg.Workspaces = []string{}
 	}
 
-	return reg.Workspaces, nil
+	// Normalize, drop empty, and deduplicate loaded paths
+	seen := make(map[string]bool)
+	normalized := []string{}
+	for _, ws := range reg.Workspaces {
+		if ws == "" {
+			continue
+		}
+		absPath, err := filepath.Abs(ws)
+		if err != nil {
+			absPath = filepath.Clean(ws)
+		} else {
+			absPath = filepath.Clean(absPath)
+		}
+		if !seen[absPath] {
+			seen[absPath] = true
+			normalized = append(normalized, absPath)
+		}
+	}
+
+	return normalized, nil
 }
 
 // Add resolves the absolute path of a workspace and appends it to the registry
 // if it is not already present.
 func Add(path string) error {
+	if path == "" {
+		return errors.New("cannot add empty path to registry")
+	}
+
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -140,6 +163,10 @@ func Add(path string) error {
 
 // Remove cleans the given path, removes it from the registry, and saves the updates.
 func Remove(path string) error {
+	if path == "" {
+		return errors.New("cannot remove empty path from registry")
+	}
+
 	mu.Lock()
 	defer mu.Unlock()
 
