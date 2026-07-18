@@ -725,7 +725,7 @@ func TestRegistryOperations_RemovePaths(t *testing.T) {
 	}
 
 	// 2. Test batch removal
-	err = RemovePaths([]string{"/path/1", "/path/3", "/non-existent"})
+	err = RemovePaths([]string{"/path/1", "/path/3", "/non-existent", ""})
 	if err != nil {
 		t.Fatalf("failed to remove paths: %v", err)
 	}

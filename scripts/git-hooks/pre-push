@@ -46,11 +46,8 @@ if ! command -v powerword >/dev/null 2>&1; then
   exit 1
 fi
 
-# Run the review command
-# Unset Git hook environment variables to prevent interfering with go builds / nested git invocations in tests
-unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX
-
-if ! powerword review --local; then
+# Run the review command without git hook environment variables to prevent interfering with go builds / nested git invocations in tests
+if ! env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_PREFIX powerword review --local; then
   echo ""
   echo "Error: Critic rejected the push or local validation failed."
   echo "Review the feedback in .powerword-critic.md and fix the issues."

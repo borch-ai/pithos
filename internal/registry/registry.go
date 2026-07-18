@@ -212,6 +212,9 @@ func RemovePaths(paths []string) error {
 	// Clean all incoming paths and put them in a map for O(1) lookup
 	toRemove := make(map[string]bool)
 	for _, p := range paths {
+		if p == "" {
+			continue
+		}
 		absPath, err := filepath.Abs(p)
 		if err != nil {
 			absPath = filepath.Clean(p)
