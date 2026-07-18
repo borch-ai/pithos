@@ -376,8 +376,8 @@ func TestListWorkspaces_WithRegistry(t *testing.T) {
 
 func TestListWorkspaces_AbsPathError(t *testing.T) {
 	registryTemp := t.TempDir()
-	registry.SetRegistryPathOverride(filepath.Join(registryTemp, "registry.json"))
-	defer registry.SetRegistryPathOverride("")
+	oldOverride := registry.SetRegistryPathOverride(filepath.Join(registryTemp, "registry.json"))
+	defer registry.SetRegistryPathOverride(oldOverride)
 
 	// Add a registry entry
 	if err := registry.Add("some-registry-path"); err != nil {

@@ -139,11 +139,13 @@ func Add(path string) error {
 	mu.Lock()
 	defer mu.Unlock()
 
-	absPath, err := filepath.Abs(path)
-	if err != nil {
-		return err
+	var absPath string
+	abs, err := filepath.Abs(path)
+	if err == nil {
+		absPath = filepath.Clean(abs)
+	} else {
+		absPath = filepath.Clean(path)
 	}
-	absPath = filepath.Clean(absPath)
 
 	workspaces, err := loadUnlocked()
 	if err != nil {
@@ -170,11 +172,13 @@ func Remove(path string) error {
 	mu.Lock()
 	defer mu.Unlock()
 
-	absPath, err := filepath.Abs(path)
-	if err != nil {
-		return err
+	var absPath string
+	abs, err := filepath.Abs(path)
+	if err == nil {
+		absPath = filepath.Clean(abs)
+	} else {
+		absPath = filepath.Clean(path)
 	}
-	absPath = filepath.Clean(absPath)
 
 	workspaces, err := loadUnlocked()
 	if err != nil {
