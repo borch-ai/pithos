@@ -592,7 +592,7 @@ func (m *mockFileWriter) Name() string {
 	if m.nameFunc != nil {
 		return m.nameFunc()
 	}
-	return "mock.tmp"
+	return filepath.Join(os.TempDir(), "pithos-mock.tmp")
 }
 
 func TestRegistryEdgeCases_SaveFileWriterErrors(t *testing.T) {
