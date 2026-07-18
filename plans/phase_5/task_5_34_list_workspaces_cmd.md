@@ -34,7 +34,7 @@ This task implements a `pithos ls` subcommand to inspect and list book workspace
   - `Load()`: Load registered workspace paths from the JSON database.
   - `Add(path)`: Add a new path, resolving it to its absolute representation and avoiding duplicates.
   - `Remove(path)`: Remove a path.
-  - `Prune()`: Scan paths and remove any that are stale (do not exist on disk). Pruning only triggers if the file path stat returns `os.ErrNotExist` to avoid accidental loss on transient disk or permission errors.
+  - `Prune()`: Scan paths and remove any that are stale (do not exist on disk, or exist but are not directories). Pruning only triggers if the file path stat returns `os.ErrNotExist` or if the path is not a directory, to avoid accidental loss on transient disk or permission errors. Other stat errors are propagated.
 - Updates are written atomically using a temporary file and `os.Rename`.
 
 ### Pipeline Engine
@@ -43,7 +43,7 @@ This task implements a `pithos ls` subcommand to inspect and list book workspace
 - Update `ListWorkspaces(workspaceRoot string) ([]BookSummary, error)`:
   - Scans both the default workspace root directory and the custom paths from the global registry.
   - Deduplicates all paths and loads `manifest.json` summaries.
-  - Propagates permission errors during scans and loads (for safety), but automatically prunes paths that return `os.ErrNotExist`.
+  - Propagates other stat errors (like permission denied) during scans and loads for safety, but automatically prunes registered paths that return `os.ErrNotExist` or are not directories.
 - Expose registry updates:
   - Automatically register workspaces on `initiate` and `brew`.
 
