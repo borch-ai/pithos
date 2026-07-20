@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   run:
-    uses: borch-ai/.github/.github/workflows/go-ci-with-sibling.yml@v0.1.0
+    uses: borch-ai/.github/.github/workflows/go-ci-with-sibling.yml@v0.2.2
     secrets: inherit
     with:
       sibling-repo: borch-ai/powerword
