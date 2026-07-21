@@ -96,8 +96,11 @@ func TestCLI_Initiate_Basic(t *testing.T) {
 	}
 
 	manifestPath := filepath.Join(bookDir, "manifest.json")
-	if _, err := os.Stat(manifestPath); os.IsNotExist(err) {
-		t.Fatalf("manifest.json was not created at %s", manifestPath)
+	if _, err := os.Stat(manifestPath); err != nil {
+		if os.IsNotExist(err) {
+			t.Fatalf("manifest.json was not created at %s", manifestPath)
+		}
+		t.Fatalf("failed to stat manifest.json: %v", err)
 	}
 
 	m, err := manifest.LoadManifest(manifestPath)
@@ -158,17 +161,19 @@ func TestCLI_Initiate_Overwrite(t *testing.T) {
 
 	bookDir := filepath.Join(tempDir, "overwritebook")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-
 	// First run to create the directory
-	cmd1 := newPithosCmd(ctx, homeDir, "initiate", "--output", bookDir, "--theme", "test1", "--dry-run")
-	if out, err := cmd1.CombinedOutput(); err != nil {
-		t.Fatalf("first pithos initiate failed: %v\nOutput: %s", err, string(out))
+	ctx1, cancel1 := context.WithTimeout(context.Background(), 10*time.Second)
+	cmd1 := newPithosCmd(ctx1, homeDir, "initiate", "--output", bookDir, "--theme", "test1", "--dry-run")
+	out1, err1 := cmd1.CombinedOutput()
+	cancel1()
+	if err1 != nil {
+		t.Fatalf("first pithos initiate failed: %v\nOutput: %s", err1, string(out1))
 	}
 
 	// Second run, input 'n' to decline overwrite
-	cmd2 := newPithosCmd(ctx, homeDir, "initiate", "--output", bookDir, "--theme", "test2", "--dry-run")
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel2()
+	cmd2 := newPithosCmd(ctx2, homeDir, "initiate", "--output", bookDir, "--theme", "test2", "--dry-run")
 	stdin2, err := cmd2.StdinPipe()
 	if err != nil {
 		t.Fatalf("failed to get stdin pipe: %v", err)
@@ -188,7 +193,9 @@ func TestCLI_Initiate_Overwrite(t *testing.T) {
 	}
 
 	// Third run, input 'y' to accept overwrite
-	cmd3 := newPithosCmd(ctx, homeDir, "initiate", "--output", bookDir, "--theme", "test3", "--dry-run")
+	ctx3, cancel3 := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel3()
+	cmd3 := newPithosCmd(ctx3, homeDir, "initiate", "--output", bookDir, "--theme", "test3", "--dry-run")
 	stdin3, err := cmd3.StdinPipe()
 	if err != nil {
 		t.Fatalf("failed to get stdin pipe: %v", err)
