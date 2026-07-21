@@ -1,6 +1,6 @@
 //go:build integration
 
-package pipeline_test
+package pipeline
 
 import (
 	"context"
@@ -9,33 +9,58 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/borch-ai/pithos/internal/manifest"
 )
 
-func buildPithosBinary(t *testing.T, tempDir string) string {
+var buildOnce sync.Once
+
+func getPithosBinary(t *testing.T) string {
 	t.Helper()
-	binaryPath := filepath.Join(tempDir, "pithos")
-	cmd := exec.Command("go", "build", "-o", binaryPath, "github.com/borch-ai/pithos/cmd/pithos")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("failed to build pithos binary: %v\nOutput: %s", err, string(out))
-	}
-	return binaryPath
+	buildOnce.Do(func() {
+		tmpDir, err := os.MkdirTemp("", "pithos-cli-test-*")
+		if err != nil {
+			t.Fatalf("failed to create temp dir: %v", err)
+		}
+		TestPithosBinaryPath = filepath.Join(tmpDir, "pithos")
+		cmd := exec.Command("go", "build", "-o", TestPithosBinaryPath, "github.com/borch-ai/pithos/cmd/pithos")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			os.RemoveAll(tmpDir)
+			t.Fatalf("failed to build pithos binary: %v\nOutput: %s", err, string(out))
+		}
+		TestPithosBinaryCleanup = func() {
+			os.RemoveAll(tmpDir)
+		}
+	})
+	return TestPithosBinaryPath
+}
+
+func newPithosCmd(ctx context.Context, homeDir string, args ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, TestPithosBinaryPath, args...)
+	cmd.Env = append(os.Environ(),
+		"HOME="+homeDir,
+		"XDG_CONFIG_HOME="+filepath.Join(homeDir, ".config"),
+		"XDG_DATA_HOME="+filepath.Join(homeDir, ".local", "share"),
+	)
+	return cmd
 }
 
 func TestCLI_Initiate_Basic(t *testing.T) {
+	getPithosBinary(t)
+
 	tempDir := t.TempDir()
-	bin := buildPithosBinary(t, tempDir)
+	homeDir := filepath.Join(tempDir, "home")
+	_ = os.MkdirAll(homeDir, 0755)
 
 	bookDir := filepath.Join(tempDir, "mybook")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, bin, "initiate", "--output", bookDir, "--theme", "existential dread of a house cat", "--pages", "10", "--dry-run")
+	cmd := newPithosCmd(ctx, homeDir, "initiate", "--output", bookDir, "--theme", "existential dread of a house cat", "--pages", "10", "--dry-run")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("pithos initiate failed: %v\nOutput: %s", err, string(out))
@@ -60,15 +85,18 @@ func TestCLI_Initiate_Basic(t *testing.T) {
 }
 
 func TestCLI_Initiate_Brainstorm_OptOut(t *testing.T) {
+	getPithosBinary(t)
+
 	tempDir := t.TempDir()
-	bin := buildPithosBinary(t, tempDir)
+	homeDir := filepath.Join(tempDir, "home")
+	_ = os.MkdirAll(homeDir, 0755)
 
 	bookDir := filepath.Join(tempDir, "turtlebook")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, bin, "initiate", "--output", bookDir, "--theme", "turtle", "--no-brainstorm", "--dry-run")
+	cmd := newPithosCmd(ctx, homeDir, "initiate", "--output", bookDir, "--theme", "turtle", "--no-brainstorm", "--dry-run")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("pithos initiate failed: %v\nOutput: %s", err, string(out))
@@ -89,8 +117,11 @@ func TestCLI_Initiate_Brainstorm_OptOut(t *testing.T) {
 }
 
 func TestCLI_Initiate_Overwrite(t *testing.T) {
+	getPithosBinary(t)
+
 	tempDir := t.TempDir()
-	bin := buildPithosBinary(t, tempDir)
+	homeDir := filepath.Join(tempDir, "home")
+	_ = os.MkdirAll(homeDir, 0755)
 
 	bookDir := filepath.Join(tempDir, "overwritebook")
 
@@ -98,13 +129,13 @@ func TestCLI_Initiate_Overwrite(t *testing.T) {
 	defer cancel()
 
 	// First run to create the directory
-	cmd1 := exec.CommandContext(ctx, bin, "initiate", "--output", bookDir, "--theme", "test1", "--dry-run")
+	cmd1 := newPithosCmd(ctx, homeDir, "initiate", "--output", bookDir, "--theme", "test1", "--dry-run")
 	if out, err := cmd1.CombinedOutput(); err != nil {
 		t.Fatalf("first pithos initiate failed: %v\nOutput: %s", err, string(out))
 	}
 
 	// Second run, input 'n' to decline overwrite
-	cmd2 := exec.CommandContext(ctx, bin, "initiate", "--output", bookDir, "--theme", "test2", "--dry-run")
+	cmd2 := newPithosCmd(ctx, homeDir, "initiate", "--output", bookDir, "--theme", "test2", "--dry-run")
 	stdin2, err := cmd2.StdinPipe()
 	if err != nil {
 		t.Fatalf("failed to get stdin pipe: %v", err)
@@ -124,7 +155,7 @@ func TestCLI_Initiate_Overwrite(t *testing.T) {
 	}
 
 	// Third run, input 'y' to accept overwrite
-	cmd3 := exec.CommandContext(ctx, bin, "initiate", "--output", bookDir, "--theme", "test3", "--dry-run")
+	cmd3 := newPithosCmd(ctx, homeDir, "initiate", "--output", bookDir, "--theme", "test3", "--dry-run")
 	stdin3, err := cmd3.StdinPipe()
 	if err != nil {
 		t.Fatalf("failed to get stdin pipe: %v", err)
