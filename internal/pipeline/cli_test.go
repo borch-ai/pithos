@@ -1,5 +1,3 @@
-//go:build integration
-
 package pipeline
 
 import (
@@ -41,7 +39,20 @@ func getPithosBinary(t *testing.T) string {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		cmd := exec.CommandContext(ctx, "go", "build", "-buildvcs=false", "-o", TestPithosBinaryPath, "../../cmd/pithos")
+		absBinaryPath, err := filepath.Abs(TestPithosBinaryPath)
+		if err != nil {
+			buildErr = err
+			return
+		}
+
+		absSourceDir, err := filepath.Abs("../../cmd/pithos")
+		if err != nil {
+			buildErr = err
+			return
+		}
+
+		cmd := exec.CommandContext(ctx, "go", "build", "-buildvcs=false", "-o", absBinaryPath, ".")
+		cmd.Dir = absSourceDir
 		if out, err := cmd.CombinedOutput(); err != nil {
 			os.RemoveAll(tmpDir)
 			buildErr = err
@@ -67,7 +78,16 @@ func newPithosCmd(ctx context.Context, homeDir string, args ...string) *exec.Cmd
 		panic("TestPithosBinaryPath is not initialized; call getPithosBinary(t) first")
 	}
 	cmd := exec.CommandContext(ctx, TestPithosBinaryPath, args...)
-	cmd.Env = append(os.Environ(),
+	
+	var env []string
+	for _, envVar := range os.Environ() {
+		if strings.HasPrefix(envVar, "PITHOS_") {
+			continue
+		}
+		env = append(env, envVar)
+	}
+
+	cmd.Env = append(env,
 		"HOME="+homeDir,
 		"XDG_CONFIG_HOME="+filepath.Join(homeDir, ".config"),
 		"XDG_DATA_HOME="+filepath.Join(homeDir, ".local", "share"),
