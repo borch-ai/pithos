@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -16,29 +17,48 @@ import (
 	"github.com/borch-ai/pithos/internal/manifest"
 )
 
-var buildOnce sync.Once
+var (
+	buildOnce sync.Once
+	buildErr  error
+	buildOut  string
+)
 
 func getPithosBinary(t *testing.T) string {
 	t.Helper()
 	buildOnce.Do(func() {
 		tmpDir, err := os.MkdirTemp("", "pithos-cli-test-*")
 		if err != nil {
-			t.Fatalf("failed to create temp dir: %v", err)
+			buildErr = err
+			return
 		}
-		TestPithosBinaryPath = filepath.Join(tmpDir, "pithos")
-		
+
+		binName := "pithos"
+		if runtime.GOOS == "windows" {
+			binName = "pithos.exe"
+		}
+		TestPithosBinaryPath = filepath.Join(tmpDir, binName)
+
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
 		cmd := exec.CommandContext(ctx, "go", "build", "-buildvcs=false", "-o", TestPithosBinaryPath, "../../cmd/pithos")
 		if out, err := cmd.CombinedOutput(); err != nil {
 			os.RemoveAll(tmpDir)
-			t.Fatalf("failed to build pithos binary: %v\nOutput: %s", err, string(out))
+			buildErr = err
+			buildOut = string(out)
+			return
 		}
 		TestPithosBinaryCleanup = func() {
 			os.RemoveAll(tmpDir)
 		}
 	})
+
+	if buildErr != nil {
+		if buildOut != "" {
+			t.Fatalf("failed to build pithos binary: %v\nOutput: %s", buildErr, buildOut)
+		}
+		t.Fatalf("failed to setup pithos binary test env: %v", buildErr)
+	}
 	return TestPithosBinaryPath
 }
 
