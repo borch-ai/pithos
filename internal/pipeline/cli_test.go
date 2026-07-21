@@ -84,7 +84,10 @@ func newPithosCmd(ctx context.Context, homeDir string, args ...string) *exec.Cmd
 
 	var cleanEnv []string
 	for _, envVar := range os.Environ() {
-		if strings.HasPrefix(envVar, "PITHOS_") {
+		if strings.HasPrefix(envVar, "PITHOS_") ||
+			strings.HasPrefix(envVar, "HOME=") ||
+			strings.HasPrefix(envVar, "XDG_CONFIG_HOME=") ||
+			strings.HasPrefix(envVar, "XDG_DATA_HOME=") {
 			continue
 		}
 		cleanEnv = append(cleanEnv, envVar)
