@@ -84,10 +84,16 @@ func newPithosCmd(ctx context.Context, homeDir string, args ...string) *exec.Cmd
 
 	var cleanEnv []string
 	for _, envVar := range os.Environ() {
-		if strings.HasPrefix(envVar, "PITHOS_") ||
-			strings.HasPrefix(envVar, "HOME=") ||
-			strings.HasPrefix(envVar, "XDG_CONFIG_HOME=") ||
-			strings.HasPrefix(envVar, "XDG_DATA_HOME=") {
+		upper := strings.ToUpper(envVar)
+		if strings.HasPrefix(upper, "PITHOS_") ||
+			strings.HasPrefix(upper, "HOME=") ||
+			strings.HasPrefix(upper, "XDG_CONFIG_HOME=") ||
+			strings.HasPrefix(upper, "XDG_DATA_HOME=") ||
+			strings.HasPrefix(upper, "USERPROFILE=") ||
+			strings.HasPrefix(upper, "HOMEDRIVE=") ||
+			strings.HasPrefix(upper, "HOMEPATH=") ||
+			strings.HasPrefix(upper, "APPDATA=") ||
+			strings.HasPrefix(upper, "LOCALAPPDATA=") {
 			continue
 		}
 		cleanEnv = append(cleanEnv, envVar)
@@ -97,6 +103,11 @@ func newPithosCmd(ctx context.Context, homeDir string, args ...string) *exec.Cmd
 		"HOME="+homeDir,
 		"XDG_CONFIG_HOME="+filepath.Join(homeDir, ".config"),
 		"XDG_DATA_HOME="+filepath.Join(homeDir, ".local", "share"),
+		"USERPROFILE="+homeDir,
+		"HOMEDRIVE="+filepath.VolumeName(homeDir),
+		"HOMEPATH="+homeDir[len(filepath.VolumeName(homeDir)):],
+		"APPDATA="+filepath.Join(homeDir, "AppData", "Roaming"),
+		"LOCALAPPDATA="+filepath.Join(homeDir, "AppData", "Local"),
 	)
 	cmd.Env = cleanEnv
 	return cmd
