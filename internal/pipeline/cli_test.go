@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 	"os/exec"
@@ -210,6 +211,14 @@ func TestCLI_Initiate_Overwrite(t *testing.T) {
 	out2, err2 := cmd2.CombinedOutput()
 	if err2 == nil {
 		t.Fatalf("expected command to fail when overwrite is declined, but it succeeded\nOutput: %s", string(out2))
+	}
+	var exitErr *exec.ExitError
+	if errors.As(err2, &exitErr) {
+		if exitErr.ExitCode() != 1 {
+			t.Errorf("expected exit code 1 when overwrite is declined, got %d. Output: %s", exitErr.ExitCode(), string(out2))
+		}
+	} else {
+		t.Fatalf("expected exec.ExitError when overwrite is declined, got %T: %v", err2, err2)
 	}
 	if !strings.Contains(string(out2), "initiation cancelled") {
 		t.Errorf("expected 'initiation cancelled' in output, got: %s", string(out2))
