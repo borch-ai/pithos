@@ -53,7 +53,9 @@ func TestCLI_Initiate_Basic(t *testing.T) {
 
 	tempDir := t.TempDir()
 	homeDir := filepath.Join(tempDir, "home")
-	_ = os.MkdirAll(homeDir, 0755)
+	if err := os.MkdirAll(homeDir, 0755); err != nil {
+		t.Fatalf("failed to create home dir: %v", err)
+	}
 
 	bookDir := filepath.Join(tempDir, "mybook")
 
@@ -89,7 +91,9 @@ func TestCLI_Initiate_Brainstorm_OptOut(t *testing.T) {
 
 	tempDir := t.TempDir()
 	homeDir := filepath.Join(tempDir, "home")
-	_ = os.MkdirAll(homeDir, 0755)
+	if err := os.MkdirAll(homeDir, 0755); err != nil {
+		t.Fatalf("failed to create home dir: %v", err)
+	}
 
 	bookDir := filepath.Join(tempDir, "turtlebook")
 
@@ -121,7 +125,9 @@ func TestCLI_Initiate_Overwrite(t *testing.T) {
 
 	tempDir := t.TempDir()
 	homeDir := filepath.Join(tempDir, "home")
-	_ = os.MkdirAll(homeDir, 0755)
+	if err := os.MkdirAll(homeDir, 0755); err != nil {
+		t.Fatalf("failed to create home dir: %v", err)
+	}
 
 	bookDir := filepath.Join(tempDir, "overwritebook")
 
