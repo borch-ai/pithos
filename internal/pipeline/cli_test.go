@@ -51,16 +51,17 @@ func getPithosBinary(t *testing.T) string {
 			return
 		}
 
+		//nolint:gosec // absolute paths and cmd.Dir set explicitly
 		cmd := exec.CommandContext(ctx, "go", "build", "-buildvcs=false", "-o", absBinaryPath, ".")
 		cmd.Dir = absSourceDir
 		if out, err := cmd.CombinedOutput(); err != nil {
-			os.RemoveAll(tmpDir)
+			_ = os.RemoveAll(tmpDir)
 			buildErr = err
 			buildOut = string(out)
 			return
 		}
 		TestPithosBinaryCleanup = func() {
-			os.RemoveAll(tmpDir)
+			_ = os.RemoveAll(tmpDir)
 		}
 	})
 
@@ -77,21 +78,23 @@ func newPithosCmd(ctx context.Context, homeDir string, args ...string) *exec.Cmd
 	if TestPithosBinaryPath == "" {
 		panic("TestPithosBinaryPath is not initialized; call getPithosBinary(t) first")
 	}
+	//nolint:gosec // TestPithosBinaryPath is verified to be built from current workspace source
 	cmd := exec.CommandContext(ctx, TestPithosBinaryPath, args...)
-	
-	var env []string
+
+	var cleanEnv []string
 	for _, envVar := range os.Environ() {
 		if strings.HasPrefix(envVar, "PITHOS_") {
 			continue
 		}
-		env = append(env, envVar)
+		cleanEnv = append(cleanEnv, envVar)
 	}
 
-	cmd.Env = append(env,
+	cleanEnv = append(cleanEnv,
 		"HOME="+homeDir,
 		"XDG_CONFIG_HOME="+filepath.Join(homeDir, ".config"),
 		"XDG_DATA_HOME="+filepath.Join(homeDir, ".local", "share"),
 	)
+	cmd.Env = cleanEnv
 	return cmd
 }
 
@@ -100,7 +103,7 @@ func TestCLI_Initiate_Basic(t *testing.T) {
 
 	tempDir := t.TempDir()
 	homeDir := filepath.Join(tempDir, "home")
-	if err := os.MkdirAll(homeDir, 0755); err != nil {
+	if err := os.MkdirAll(homeDir, 0700); err != nil {
 		t.Fatalf("failed to create home dir: %v", err)
 	}
 
@@ -116,11 +119,11 @@ func TestCLI_Initiate_Basic(t *testing.T) {
 	}
 
 	manifestPath := filepath.Join(bookDir, "manifest.json")
-	if _, err := os.Stat(manifestPath); err != nil {
-		if os.IsNotExist(err) {
+	if _, statErr := os.Stat(manifestPath); statErr != nil {
+		if os.IsNotExist(statErr) {
 			t.Fatalf("manifest.json was not created at %s", manifestPath)
 		}
-		t.Fatalf("failed to stat manifest.json: %v", err)
+		t.Fatalf("failed to stat manifest.json: %v", statErr)
 	}
 
 	m, err := manifest.LoadManifest(manifestPath)
@@ -141,7 +144,7 @@ func TestCLI_Initiate_Brainstorm_OptOut(t *testing.T) {
 
 	tempDir := t.TempDir()
 	homeDir := filepath.Join(tempDir, "home")
-	if err := os.MkdirAll(homeDir, 0755); err != nil {
+	if err := os.MkdirAll(homeDir, 0700); err != nil {
 		t.Fatalf("failed to create home dir: %v", err)
 	}
 
@@ -175,7 +178,7 @@ func TestCLI_Initiate_Overwrite(t *testing.T) {
 
 	tempDir := t.TempDir()
 	homeDir := filepath.Join(tempDir, "home")
-	if err := os.MkdirAll(homeDir, 0755); err != nil {
+	if err := os.MkdirAll(homeDir, 0700); err != nil {
 		t.Fatalf("failed to create home dir: %v", err)
 	}
 
@@ -200,8 +203,8 @@ func TestCLI_Initiate_Overwrite(t *testing.T) {
 	}
 
 	go func() {
-		defer stdin2.Close()
-		io.WriteString(stdin2, "n\n")
+		defer func() { _ = stdin2.Close() }()
+		_, _ = io.WriteString(stdin2, "n\n")
 	}()
 
 	out2, err2 := cmd2.CombinedOutput()
@@ -222,8 +225,8 @@ func TestCLI_Initiate_Overwrite(t *testing.T) {
 	}
 
 	go func() {
-		defer stdin3.Close()
-		io.WriteString(stdin3, "y\n")
+		defer func() { _ = stdin3.Close() }()
+		_, _ = io.WriteString(stdin3, "y\n")
 	}()
 
 	out3, err3 := cmd3.CombinedOutput()
