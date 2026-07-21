@@ -3,12 +3,14 @@
 package pipeline_test
 
 import (
+	"context"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/borch-ai/pithos/internal/manifest"
 )
@@ -30,7 +32,10 @@ func TestCLI_Initiate_Basic(t *testing.T) {
 
 	bookDir := filepath.Join(tempDir, "mybook")
 
-	cmd := exec.Command(bin, "initiate", "--output", bookDir, "--theme", "existential dread of a house cat", "--pages", "10", "--dry-run")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, bin, "initiate", "--output", bookDir, "--theme", "existential dread of a house cat", "--pages", "10", "--dry-run")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("pithos initiate failed: %v\nOutput: %s", err, string(out))
@@ -60,7 +65,10 @@ func TestCLI_Initiate_Brainstorm_OptOut(t *testing.T) {
 
 	bookDir := filepath.Join(tempDir, "turtlebook")
 
-	cmd := exec.Command(bin, "initiate", "--output", bookDir, "--theme", "turtle", "--no-brainstorm", "--dry-run")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, bin, "initiate", "--output", bookDir, "--theme", "turtle", "--no-brainstorm", "--dry-run")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("pithos initiate failed: %v\nOutput: %s", err, string(out))
@@ -86,14 +94,17 @@ func TestCLI_Initiate_Overwrite(t *testing.T) {
 
 	bookDir := filepath.Join(tempDir, "overwritebook")
 
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
 	// First run to create the directory
-	cmd1 := exec.Command(bin, "initiate", "--output", bookDir, "--theme", "test1", "--dry-run")
+	cmd1 := exec.CommandContext(ctx, bin, "initiate", "--output", bookDir, "--theme", "test1", "--dry-run")
 	if out, err := cmd1.CombinedOutput(); err != nil {
 		t.Fatalf("first pithos initiate failed: %v\nOutput: %s", err, string(out))
 	}
 
 	// Second run, input 'n' to decline overwrite
-	cmd2 := exec.Command(bin, "initiate", "--output", bookDir, "--theme", "test2", "--dry-run")
+	cmd2 := exec.CommandContext(ctx, bin, "initiate", "--output", bookDir, "--theme", "test2", "--dry-run")
 	stdin2, err := cmd2.StdinPipe()
 	if err != nil {
 		t.Fatalf("failed to get stdin pipe: %v", err)
@@ -111,9 +122,9 @@ func TestCLI_Initiate_Overwrite(t *testing.T) {
 	if !strings.Contains(string(out2), "initiation cancelled") {
 		t.Errorf("expected 'initiation cancelled' in output, got: %s", string(out2))
 	}
-	
+
 	// Third run, input 'y' to accept overwrite
-	cmd3 := exec.Command(bin, "initiate", "--output", bookDir, "--theme", "test3", "--dry-run")
+	cmd3 := exec.CommandContext(ctx, bin, "initiate", "--output", bookDir, "--theme", "test3", "--dry-run")
 	stdin3, err := cmd3.StdinPipe()
 	if err != nil {
 		t.Fatalf("failed to get stdin pipe: %v", err)

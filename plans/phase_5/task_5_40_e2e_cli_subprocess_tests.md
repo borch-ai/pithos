@@ -2,7 +2,7 @@
 
 **Status:** Completed
 **Date Completed:** 2026-07-17
-**Unit Test Coverage:** 91.0%
+**Unit Test Coverage:** 91.2%
 **Go Version:** 1.26.5
 
 This task implements a dedicated E2E integration test suite that builds the `pithos` command-line binary on-the-fly and executes it as a real subprocess to verify its behaviors at the CLI shell boundary.
