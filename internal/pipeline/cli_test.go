@@ -26,7 +26,11 @@ func getPithosBinary(t *testing.T) string {
 			t.Fatalf("failed to create temp dir: %v", err)
 		}
 		TestPithosBinaryPath = filepath.Join(tmpDir, "pithos")
-		cmd := exec.Command("go", "build", "-o", TestPithosBinaryPath, "github.com/borch-ai/pithos/cmd/pithos")
+		
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		cmd := exec.CommandContext(ctx, "go", "build", "-buildvcs=false", "-o", TestPithosBinaryPath, "../../cmd/pithos")
 		if out, err := cmd.CombinedOutput(); err != nil {
 			os.RemoveAll(tmpDir)
 			t.Fatalf("failed to build pithos binary: %v\nOutput: %s", err, string(out))
@@ -39,6 +43,9 @@ func getPithosBinary(t *testing.T) string {
 }
 
 func newPithosCmd(ctx context.Context, homeDir string, args ...string) *exec.Cmd {
+	if TestPithosBinaryPath == "" {
+		panic("TestPithosBinaryPath is not initialized; call getPithosBinary(t) first")
+	}
 	cmd := exec.CommandContext(ctx, TestPithosBinaryPath, args...)
 	cmd.Env = append(os.Environ(),
 		"HOME="+homeDir,
