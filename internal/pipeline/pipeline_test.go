@@ -3397,10 +3397,8 @@ func TestHandleImagegenFallback_InvalidCapabilitiesJSON(t *testing.T) {
 	}
 }
 
-func TestHandleImagegenFallback_NoFallbackCredentials(t *testing.T) {
-	ctx := context.Background()
-	generateArgs := map[string]interface{}{"prompt": "test"}
-
+func clearTestEnv(t *testing.T) {
+	t.Helper()
 	t.Setenv("POWERWORD_GEMINI_API_KEY", "")
 	t.Setenv("POWERWORD_OPENAI_API_KEY", "")
 	t.Setenv("POWERWORD_API_KEYS_GEMINI", "")
@@ -3410,6 +3408,19 @@ func TestHandleImagegenFallback_NoFallbackCredentials(t *testing.T) {
 	t.Setenv("GEMINI_API_KEY", "")
 	t.Setenv("GOOGLE_API_KEY", "")
 	t.Setenv("OPENAI_API_KEY", "")
+
+	origCfg := config.Cfg
+	config.Cfg = nil
+	t.Cleanup(func() {
+		config.Cfg = origCfg
+	})
+}
+
+func TestHandleImagegenFallback_NoFallbackCredentials(t *testing.T) {
+	ctx := context.Background()
+	generateArgs := map[string]interface{}{"prompt": "test"}
+
+	clearTestEnv(t)
 
 	origCfg := config.Cfg
 	defer func() { config.Cfg = origCfg }()
@@ -3528,6 +3539,7 @@ func TestHandleImagegenFallback_FallbackClientCallToolFailure(t *testing.T) {
 }
 
 func TestHasPowerwordCredential_EnvironmentVars(t *testing.T) {
+	clearTestEnv(t)
 	t.Setenv("POWERWORD_GEMINI_API_KEY", "env-gemini")
 	t.Setenv("POWERWORD_OPENAI_API_KEY", "env-openai")
 
@@ -3543,6 +3555,7 @@ func TestHasPowerwordCredential_EnvironmentVars(t *testing.T) {
 }
 
 func TestHasPowerwordCredential_ConfigCfg(t *testing.T) {
+	clearTestEnv(t)
 	origCfg := config.Cfg
 	defer func() { config.Cfg = origCfg }()
 	config.Cfg = &config.Config{
@@ -3561,6 +3574,7 @@ func TestHasPowerwordCredential_ConfigCfg(t *testing.T) {
 }
 
 func TestHasPowerwordCredential_TOMLParsing(t *testing.T) {
+	clearTestEnv(t)
 	tmpDir, err := os.MkdirTemp("", "has-credential-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
@@ -3586,6 +3600,7 @@ openai = "file-openai-key"
 }
 
 func TestHasPowerwordCredential_TOMLPlaceholders(t *testing.T) {
+	clearTestEnv(t)
 	tmpDir, err := os.MkdirTemp("", "has-credential-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
