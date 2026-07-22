@@ -3349,7 +3349,9 @@ func TestHandleImagegenFallback_CapabilityQueryFailure(t *testing.T) {
 		t.Fatal(errConn)
 	}
 	defer func() { _ = session.Close() }()
-	_ = client.Start(ctx)
+	if errStart := client.Start(ctx); errStart != nil {
+		t.Fatal(errStart)
+	}
 	defer func() { _ = client.Stop() }()
 
 	primaryErr := fmt.Errorf("401 unauthorized")
@@ -3383,7 +3385,9 @@ func TestHandleImagegenFallback_InvalidCapabilitiesJSON(t *testing.T) {
 		t.Fatal(errConn)
 	}
 	defer func() { _ = session.Close() }()
-	_ = client.Start(ctx)
+	if errStart := client.Start(ctx); errStart != nil {
+		t.Fatal(errStart)
+	}
 	defer func() { _ = client.Stop() }()
 
 	primaryErr := fmt.Errorf("401 unauthorized")
@@ -3429,7 +3433,9 @@ func TestHandleImagegenFallback_NoFallbackCredentials(t *testing.T) {
 		t.Fatal(errConn)
 	}
 	defer func() { _ = session.Close() }()
-	_ = client.Start(ctx)
+	if errStart := client.Start(ctx); errStart != nil {
+		t.Fatal(errStart)
+	}
 	defer func() { _ = client.Stop() }()
 
 	primaryErr := fmt.Errorf("401 unauthorized")
@@ -3499,7 +3505,9 @@ func TestHandleImagegenFallback_FallbackClientCallToolFailure(t *testing.T) {
 	}
 	defer func() { _ = session2.Close() }()
 
-	_ = client.Start(ctx)
+	if errStart := client.Start(ctx); errStart != nil {
+		t.Fatal(errStart)
+	}
 	defer func() { _ = client.Stop() }()
 
 	primaryErr := fmt.Errorf("401 unauthorized")
