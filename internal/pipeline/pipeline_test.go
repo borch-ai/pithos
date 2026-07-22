@@ -3167,3 +3167,147 @@ func TestInteractiveHelpers_EdgeCases(t *testing.T) {
 		}
 	})
 }
+
+type multiTransport struct {
+	t1 mcpsdk.Transport
+	t2 mcpsdk.Transport
+	calls int32
+}
+
+func (m *multiTransport) Connect(ctx context.Context) (mcpsdk.Connection, error) {
+	val := atomic.AddInt32(&m.calls, 1)
+	if val == 1 {
+		return m.t1.Connect(ctx)
+	}
+	return m.t2.Connect(ctx)
+}
+
+func TestBrew_ImagegenFallback(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos-brew-fallback-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	// Write dummy image to be copied
+	dummySourceImage := filepath.Join(tmpDir, "source.png")
+	if writeErr := os.WriteFile(dummySourceImage, []byte("fake-image-bytes"), 0600); writeErr != nil {
+		t.Fatalf("failed to write source image: %v", writeErr)
+	}
+
+	// Setup pipeline initiate
+	optsInit := InitiateOptions{
+		OutputDir:       tmpDir,
+		Theme:           "Theme",
+		TargetPageCount: 1,
+	}
+	mInit, err := Initiate(optsInit)
+	if err != nil {
+		t.Fatalf("failed to initiate book: %v", err)
+	}
+	mInit.Progress.ManuscriptGenerated = true
+	mInit.Progress.Pages = []manifest.PageState{
+		{PageIndex: 1, Status: manifest.StatusPending, Text: "Stanza 1"},
+	}
+	if err = mInit.Save(); err != nil {
+		t.Fatalf("failed to save manifest: %v", err)
+	}
+
+	// Save configuration and restore afterwards
+	origCfg := config.Cfg
+	defer func() { config.Cfg = origCfg }()
+	config.Cfg = &config.Config{
+		API: config.APIConfig{
+			GeminiKey: "fake-gemini-key",
+			OpenAIKey: "fake-openai-key",
+		},
+		MCP: config.MCPConfig{
+			ImageGenPath:        "pw-mcp-imagegen",
+			IllustrationBackend: "openai",
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	clientTransport1, serverTransport1 := mcpsdk.NewInMemoryTransports()
+	clientTransport2, serverTransport2 := mcpsdk.NewInMemoryTransports()
+
+	// Implement custom server session that simulates failure on the first imagegen_generate tool call
+	server := mcpsdk.NewServer(&mcpsdk.Implementation{
+		Name:    "mock-imagegen-server",
+		Version: "1.0.0",
+	}, nil)
+
+	server.AddTool(&mcpsdk.Tool{
+		Name: "imagegen_get_capabilities",
+		InputSchema: map[string]any{
+			"type": "object",
+		},
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		capsJSON := `{"backend":"openai","supports_cref":false,"supports_sref":false,"output_type":"image"}`
+		return &mcpsdk.CallToolResult{
+			Content: []mcpsdk.Content{
+				&mcpsdk.TextContent{Text: capsJSON},
+			},
+		}, nil
+	})
+
+	var callCount int32
+	server.AddTool(&mcpsdk.Tool{
+		Name: "imagegen_generate",
+		InputSchema: map[string]any{
+			"type": "object",
+		},
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		count := atomic.AddInt32(&callCount, 1)
+		if count == 1 {
+			// Fail with unauthorized/401 credential error
+			return &mcpsdk.CallToolResult{
+				IsError: true,
+				Content: []mcpsdk.Content{
+					&mcpsdk.TextContent{Text: "failed to generate image: 401 Unauthorized - Invalid API Key"},
+				},
+			}, nil
+		}
+		// On the retry, return success
+		return handleMockImagegenGenerate(req, dummySourceImage)
+	})
+
+	serverSession1, err := server.Connect(ctx, serverTransport1, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = serverSession1.Close() }()
+
+	serverSession2, err := server.Connect(ctx, serverTransport2, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = serverSession2.Close() }()
+
+	mt := &multiTransport{
+		t1: clientTransport1,
+		t2: clientTransport2,
+	}
+
+	mockLLMClient := &mockLLM{
+		stanzas: []string{"Stanza 1 text"},
+	}
+
+	optsBrew := BrewOptions{
+		OutputDir:    tmpDir,
+		MCPTransport: mt,
+		LLM:          mockLLMClient,
+	}
+
+	err = Brew(ctx, optsBrew)
+	if err != nil {
+		t.Fatalf("Brew failed: %v", err)
+	}
+
+	// Verify that the call count reached 2 (indicating fallback/retry was triggered and succeeded)
+	if count := atomic.LoadInt32(&callCount); count != 2 {
+		t.Errorf("expected imagegen_generate to be called exactly 2 times, got %d", count)
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -40,6 +41,7 @@ type PluginClient struct {
 	session    *mcpsdk.ClientSession
 	transport  mcpsdk.Transport // Injected for unit testing
 	mu         sync.Mutex
+	env        []string
 }
 
 // NewPluginClient creates a new PluginClient using the default paths from config.
@@ -62,6 +64,20 @@ func (pc *PluginClient) SetTransport(t mcpsdk.Transport) {
 	pc.mu.Lock()
 	defer pc.mu.Unlock()
 	pc.transport = t
+}
+
+// SetEnv specifies custom environment variables to pass to the subprocess when started.
+func (pc *PluginClient) SetEnv(env []string) {
+	pc.mu.Lock()
+	defer pc.mu.Unlock()
+	pc.env = env
+}
+
+// GetTransport returns the current transport (primarily for propagating mocks).
+func (pc *PluginClient) GetTransport() mcpsdk.Transport {
+	pc.mu.Lock()
+	defer pc.mu.Unlock()
+	return pc.transport
 }
 
 // ResolveBinaryPath determines the executable path to run for this plugin.
@@ -114,6 +130,9 @@ func (pc *PluginClient) Start(ctx context.Context) error {
 	if transport == nil {
 		//nolint:gosec // G204: Subprocess launched with variable path from config fallback
 		cmd := exec.CommandContext(ctx, binary)
+		if len(pc.env) > 0 {
+			cmd.Env = append(os.Environ(), pc.env...)
+		}
 		transport = &mcpsdk.CommandTransport{
 			Command: cmd,
 		}

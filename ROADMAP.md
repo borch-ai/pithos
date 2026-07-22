@@ -124,7 +124,7 @@ Focus: Remote monitoring, Kiln state manifest integration, testing, and ecosyste
 *   [x] **Task 5.23: Dynamic Image Model Discovery**
     *   Query model capability list dynamically from provider APIs to select the best available model version.
     *   [Implementation Plan](plans/phase_5/task_5_23_dynamic_image_model_discovery.md)
-*   [ ] **Task 5.24: Graceful Image Backend Fallbacks**
+*   [x] **Task 5.24: Graceful Image Backend Fallbacks**
     *   Implement fallback handling from OpenAI to Gemini Imagen (and vice-versa) when image generation fails due to credential or permission errors.
     *   [Implementation Plan](plans/phase_5/task_5_24_graceful_image_backend_fallbacks.md)
 *   [x] **Task 5.25: Opt-out Brainstorming during Initiate**
