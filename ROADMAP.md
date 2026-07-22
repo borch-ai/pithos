@@ -206,7 +206,7 @@ Focus: Remote monitoring, Kiln state manifest integration, testing, and ecosyste
 *   [ ] **Task 5.44: Manifest Versioning & Migration Guardrails**
     *   Introduce schema version tracking in `manifest.json` and automatic structure migrations on load to prevent breaking Kiln or Lamplighter.
     *   [Implementation Plan](plans/phase_5/task_5_44_manifest_migrations.md)
-*   [ ] **Task 5.45: Shell Autocompletion Support (Zsh/Oh-My-Zsh)**
+*   [x] **Task 5.45: Shell Autocompletion Support (Zsh/Oh-My-Zsh)**
     *   Implement Cobra autocompletion subcommands and automate Zsh/Oh-My-Zsh completion script setup via the `setup` command.
     *   [Implementation Plan](plans/phase_5/task_5_45_shell_completion.md)
 *   [x] **Task 5.46: Structured Pipeline Logging via charmbracelet/log**
