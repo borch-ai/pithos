@@ -734,7 +734,215 @@ func registerStyleProfile(ctx context.Context, mcpClient *mcp.PluginClient, styl
 	return styleID, nil
 }
 
-func generateImageRaw(ctx context.Context, mcpClient *mcp.PluginClient, prompt string, styleID string, imageSize string, crefURL string, charWeight *int) (string, string, error) {
+func parseTOMLKeyNotEmpty(tomlContent string, key string) bool {
+	lines := strings.Split(tomlContent, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "#") {
+			continue
+		}
+		if !strings.HasPrefix(line, key) {
+			continue
+		}
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		k := strings.TrimSpace(parts[0])
+		if k != key {
+			continue
+		}
+		v := strings.TrimSpace(parts[1])
+		v = strings.Trim(v, `"'`)
+		if v != "" && v != "YOUR_GEMINI_API_KEY" && v != "YOUR_OPENAI_API_KEY" {
+			return true
+		}
+	}
+	return false
+}
+
+func checkEnvCredentials(backend string) bool {
+	switch backend {
+	case "google":
+		return os.Getenv("POWERWORD_GEMINI_API_KEY") != "" ||
+			os.Getenv("GEMINI_API_KEY") != "" ||
+			os.Getenv("GOOGLE_API_KEY") != "" ||
+			os.Getenv("POWERWORD_API_KEYS_GEMINI") != "" ||
+			os.Getenv("POWERWORD_PLUGINS_IMAGEGEN_GOOGLE_API_KEY") != ""
+	case "openai":
+		return os.Getenv("POWERWORD_OPENAI_API_KEY") != "" ||
+			os.Getenv("OPENAI_API_KEY") != "" ||
+			os.Getenv("POWERWORD_API_KEYS_OPENAI") != "" ||
+			os.Getenv("POWERWORD_PLUGINS_IMAGEGEN_OPENAI_API_KEY") != ""
+	default:
+		return false
+	}
+}
+
+func checkConfigCredentials(backend string) bool {
+	if config.Cfg == nil {
+		return false
+	}
+	switch backend {
+	case "google":
+		return config.Cfg.API.GeminiKey != ""
+	case "openai":
+		return config.Cfg.API.OpenAIKey != ""
+	default:
+		return false
+	}
+}
+
+func checkConfigFileCredential(backend string, path string) bool {
+	fi, err := os.Stat(path)
+	if err != nil || fi.IsDir() {
+		return false
+	}
+	//nolint:gosec // local config file read
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	content := string(data)
+	switch backend {
+	case "google":
+		return parseTOMLKeyNotEmpty(content, "gemini") ||
+			parseTOMLKeyNotEmpty(content, "google") ||
+			parseTOMLKeyNotEmpty(content, "google_api_key")
+	case "openai":
+		return parseTOMLKeyNotEmpty(content, "openai") ||
+			parseTOMLKeyNotEmpty(content, "openai_api_key")
+	default:
+		return false
+	}
+}
+
+func searchParentDirsForCredential(backend string, startDir string) bool {
+	curr := startDir
+	for {
+		for _, name := range []string{"powerword.toml", ".powerword.toml"} {
+			path := filepath.Join(curr, name)
+			if checkConfigFileCredential(backend, path) {
+				return true
+			}
+		}
+		parent := filepath.Dir(curr)
+		if parent == curr {
+			break
+		}
+		curr = parent
+	}
+	return false
+}
+
+func checkFileCredentials(backend string, outputDir string) bool {
+	dirsToSearch := []string{outputDir}
+	if cwd, err := os.Getwd(); err == nil {
+		dirsToSearch = append(dirsToSearch, cwd)
+	}
+
+	for _, startDir := range dirsToSearch {
+		if startDir == "" {
+			continue
+		}
+		if searchParentDirsForCredential(backend, startDir) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasPowerwordCredential(backend string, outputDir string) bool {
+	return checkEnvCredentials(backend) ||
+		checkConfigCredentials(backend) ||
+		checkFileCredentials(backend, outputDir)
+}
+
+func handleImagegenFallback(ctx context.Context, mcpClient *mcp.PluginClient, primaryErr error, generateArgs map[string]interface{}, outputDir string) (string, string, error) {
+	errMsg := strings.ToLower(primaryErr.Error())
+	isAuthOrEligibleError := strings.Contains(errMsg, "401") ||
+		strings.Contains(errMsg, "403") ||
+		strings.Contains(errMsg, "unauthorized") ||
+		strings.Contains(errMsg, "forbidden") ||
+		strings.Contains(errMsg, "permission denied") ||
+		strings.Contains(errMsg, "permissiondenied") ||
+		strings.Contains(errMsg, "api key") ||
+		strings.Contains(errMsg, "model does not exist") ||
+		strings.Contains(errMsg, "not configured") ||
+		strings.Contains(errMsg, "model not found")
+
+	if !isAuthOrEligibleError {
+		return "", "", primaryErr
+	}
+
+	capJSON, capErr := mcpClient.CallTool(ctx, "imagegen_get_capabilities", map[string]interface{}{})
+	if capErr != nil {
+		return "", "", primaryErr
+	}
+
+	var caps imagegenCapabilities
+	if err := json.Unmarshal([]byte(capJSON), &caps); err != nil || caps.Backend == "" {
+		return "", "", primaryErr
+	}
+
+	activeBackend := strings.ToLower(caps.Backend)
+	var fallbackBackend string
+
+	switch activeBackend {
+	case "openai", "midjourney":
+		fallbackBackend = "google"
+	case "google", "imagen", "veo":
+		fallbackBackend = "openai"
+	}
+
+	if fallbackBackend == "" || !hasPowerwordCredential(fallbackBackend, outputDir) {
+		return "", "", primaryErr
+	}
+
+	logger.Warn("Primary imagegen backend failed with credential/model error. Attempting fallback...",
+		"primary", activeBackend,
+		"fallback", fallbackBackend,
+		"error", primaryErr)
+
+	fallbackClient := mcp.NewPluginClient(mcp.PluginImageGen)
+	if t := mcpClient.GetTransport(); t != nil {
+		fallbackClient.SetTransport(t)
+	}
+
+	fallbackClient.SetEnv([]string{
+		fmt.Sprintf("POWERWORD_IMAGEGEN_BACKEND=%s", fallbackBackend),
+	})
+
+	if errStart := fallbackClient.Start(ctx); errStart != nil {
+		logger.Error("Failed to start fallback client", "error", errStart)
+		return "", "", primaryErr
+	}
+	defer func() { _ = fallbackClient.Stop() }()
+
+	resTextFallback, errFallback := fallbackClient.CallTool(ctx, "imagegen_generate", generateArgs)
+	if errFallback != nil {
+		return "", "", errFallback
+	}
+
+	var jsonRes struct {
+		ImagePath string `json:"image_path"`
+		Model     string `json:"model"`
+	}
+	if errJson := json.Unmarshal([]byte(resTextFallback), &jsonRes); errJson == nil && jsonRes.ImagePath != "" {
+		if jsonRes.Model == "" {
+			jsonRes.Model = fallbackBackend
+		}
+		return jsonRes.ImagePath, jsonRes.Model, nil
+	}
+
+	prefix := "Successfully generated image and saved to: "
+	if strings.HasPrefix(resTextFallback, prefix) {
+		return strings.TrimPrefix(resTextFallback, prefix), fallbackBackend, nil
+	}
+	return "", "", fmt.Errorf("unexpected imagegen response format: %q", resTextFallback)
+}
+
+func generateImageRaw(ctx context.Context, mcpClient *mcp.PluginClient, prompt string, styleID string, imageSize string, crefURL string, charWeight *int, outputDir string) (string, string, error) {
 	if imageSize == "" {
 		imageSize = "1024x1024"
 	}
@@ -754,7 +962,7 @@ func generateImageRaw(ctx context.Context, mcpClient *mcp.PluginClient, prompt s
 
 	resText, err := mcpClient.CallTool(ctx, "imagegen_generate", generateArgs)
 	if err != nil {
-		return "", "", err
+		return handleImagegenFallback(ctx, mcpClient, err, generateArgs, outputDir)
 	}
 
 	var jsonRes struct {
@@ -777,7 +985,7 @@ func generateImageRaw(ctx context.Context, mcpClient *mcp.PluginClient, prompt s
 }
 
 func generateSingleImage(ctx context.Context, mcpClient *mcp.PluginClient, pageIndex int, pageText string, styleID string, outputDir string, imageSize string, crefURL string, charWeight *int) (string, string, error) {
-	srcPath, modelName, err := generateImageRaw(ctx, mcpClient, pageText, styleID, imageSize, crefURL, charWeight)
+	srcPath, modelName, err := generateImageRaw(ctx, mcpClient, pageText, styleID, imageSize, crefURL, charWeight, outputDir)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to generate image for page %d: %w", pageIndex, err)
 	}
@@ -1267,7 +1475,7 @@ func bootstrapCharacterReferenceWithClient(ctx context.Context, m *manifest.Mani
 	}
 
 	// Verify that character backend output type is exactly "image"
-	capJSON, err := mcpClient.CallTool(ctx, "imagegen_get_capabilities", nil)
+	capJSON, err := mcpClient.CallTool(ctx, "imagegen_get_capabilities", map[string]interface{}{})
 	if err != nil {
 		return fmt.Errorf("failed to query capabilities for character backend: %w", err)
 	}
@@ -1293,7 +1501,7 @@ func bootstrapCharacterReferenceWithClient(ctx context.Context, m *manifest.Mani
 	imageSize := getBestImageSize(m.BookProperties.TrimSize)
 
 	logger.Info("Generating character seed portrait...")
-	srcPath, modelName, err := generateImageRaw(ctx, mcpClient, seedPrompt, actualStyleID, imageSize, "", nil)
+	srcPath, modelName, err := generateImageRaw(ctx, mcpClient, seedPrompt, actualStyleID, imageSize, "", nil, outputDir)
 	if err != nil {
 		return fmt.Errorf("failed to generate character seed portrait: %w", err)
 	}
@@ -1373,7 +1581,7 @@ type imagegenCapabilities struct {
 }
 
 func checkBackendCapabilities(ctx context.Context, mcpClient *mcp.PluginClient, characterProfile string) error {
-	capJSON, err := mcpClient.CallTool(ctx, "imagegen_get_capabilities", nil)
+	capJSON, err := mcpClient.CallTool(ctx, "imagegen_get_capabilities", map[string]interface{}{})
 	if err != nil {
 		return fmt.Errorf("failed to query imagegen backend capabilities: %w", err)
 	}

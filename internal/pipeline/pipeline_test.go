@@ -20,6 +20,7 @@ import (
 
 	"github.com/borch-ai/pithos/internal/config"
 	"github.com/borch-ai/pithos/internal/manifest"
+	"github.com/borch-ai/pithos/internal/mcp"
 	"github.com/borch-ai/powerword/pkg/telemetry"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -3166,4 +3167,460 @@ func TestInteractiveHelpers_EdgeCases(t *testing.T) {
 			t.Errorf("expected 'No pages selected' message in output buffer, got %q", buf.String())
 		}
 	})
+}
+
+type multiTransport struct {
+	t1    mcpsdk.Transport
+	t2    mcpsdk.Transport
+	calls int32
+}
+
+func (m *multiTransport) Connect(ctx context.Context) (mcpsdk.Connection, error) {
+	val := atomic.AddInt32(&m.calls, 1)
+	if val == 1 {
+		return m.t1.Connect(ctx)
+	}
+	return m.t2.Connect(ctx)
+}
+
+func setupMockImageGenServerWithRetry(t *testing.T, ctx context.Context, serverTransport1, serverTransport2 mcpsdk.Transport, dummySourceImage string, callCount *int32) (func(), error) {
+	t.Helper()
+	server := mcpsdk.NewServer(&mcpsdk.Implementation{
+		Name:    "mock-imagegen-server",
+		Version: "1.0.0",
+	}, nil)
+
+	server.AddTool(&mcpsdk.Tool{
+		Name: "imagegen_get_capabilities",
+		InputSchema: map[string]any{
+			"type": "object",
+		},
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		capsJSON := `{"backend":"openai","supports_cref":false,"supports_sref":false,"output_type":"image"}`
+		return &mcpsdk.CallToolResult{
+			Content: []mcpsdk.Content{
+				&mcpsdk.TextContent{Text: capsJSON},
+			},
+		}, nil
+	})
+
+	server.AddTool(&mcpsdk.Tool{
+		Name: "imagegen_generate",
+		InputSchema: map[string]any{
+			"type": "object",
+		},
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		count := atomic.AddInt32(callCount, 1)
+		if count == 1 {
+			return &mcpsdk.CallToolResult{
+				IsError: true,
+				Content: []mcpsdk.Content{
+					&mcpsdk.TextContent{Text: "failed to generate image: 401 Unauthorized - Invalid API Key"},
+				},
+			}, nil
+		}
+		return handleMockImagegenGenerate(req, dummySourceImage)
+	})
+
+	serverSession1, err := server.Connect(ctx, serverTransport1, nil)
+	if err != nil {
+		return nil, err
+	}
+	serverSession2, err := server.Connect(ctx, serverTransport2, nil)
+	if err != nil {
+		_ = serverSession1.Close()
+		return nil, err
+	}
+
+	cleanup := func() {
+		_ = serverSession1.Close()
+		_ = serverSession2.Close()
+	}
+	return cleanup, nil
+}
+
+func TestBrew_ImagegenFallback(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos-brew-fallback-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	dummySourceImage := filepath.Join(tmpDir, "source.png")
+	if writeErr := os.WriteFile(dummySourceImage, []byte("fake-image-bytes"), 0600); writeErr != nil {
+		t.Fatalf("failed to write source image: %v", writeErr)
+	}
+
+	optsInit := InitiateOptions{
+		OutputDir:       tmpDir,
+		Theme:           "Theme",
+		TargetPageCount: 1,
+	}
+	mInit, err := Initiate(optsInit)
+	if err != nil {
+		t.Fatalf("failed to initiate book: %v", err)
+	}
+	mInit.Progress.ManuscriptGenerated = true
+	mInit.Progress.Pages = []manifest.PageState{
+		{PageIndex: 1, Status: manifest.StatusPending, Text: "Stanza 1"},
+	}
+	if err = mInit.Save(); err != nil {
+		t.Fatalf("failed to save manifest: %v", err)
+	}
+
+	origCfg := config.Cfg
+	defer func() { config.Cfg = origCfg }()
+	config.Cfg = &config.Config{
+		API: config.APIConfig{
+			GeminiKey: "fake-gemini-key",
+			OpenAIKey: "fake-openai-key",
+		},
+		MCP: config.MCPConfig{
+			ImageGenPath:        "pw-mcp-imagegen",
+			IllustrationBackend: "openai",
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	clientTransport1, serverTransport1 := mcpsdk.NewInMemoryTransports()
+	clientTransport2, serverTransport2 := mcpsdk.NewInMemoryTransports()
+
+	var callCount int32
+	cleanup, err := setupMockImageGenServerWithRetry(t, ctx, serverTransport1, serverTransport2, dummySourceImage, &callCount)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	mt := &multiTransport{
+		t1: clientTransport1,
+		t2: clientTransport2,
+	}
+
+	optsBrew := BrewOptions{
+		OutputDir:    tmpDir,
+		MCPTransport: mt,
+		LLM:          &mockLLM{stanzas: []string{"Stanza 1 text"}},
+	}
+
+	err = Brew(ctx, optsBrew)
+	if err != nil {
+		t.Fatalf("Brew failed: %v", err)
+	}
+
+	if count := atomic.LoadInt32(&callCount); count != 2 {
+		t.Errorf("expected imagegen_generate to be called exactly 2 times, got %d", count)
+	}
+}
+
+func TestHandleImagegenFallback_NonAuthError(t *testing.T) {
+	ctx := context.Background()
+	generateArgs := map[string]interface{}{"prompt": "test"}
+
+	client := mcp.NewPluginClient(mcp.PluginImageGen)
+	primaryErr := fmt.Errorf("some generic network timeout")
+	_, _, err := handleImagegenFallback(ctx, client, primaryErr, generateArgs, "")
+	if err != primaryErr {
+		t.Errorf("expected error %v, got %v", primaryErr, err)
+	}
+}
+
+func TestHandleImagegenFallback_CapabilityQueryFailure(t *testing.T) {
+	ctx := context.Background()
+	generateArgs := map[string]interface{}{"prompt": "test"}
+
+	client := mcp.NewPluginClient(mcp.PluginImageGen)
+	clientTransport, serverTransport := mcpsdk.NewInMemoryTransports()
+	client.SetTransport(clientTransport)
+
+	server := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "mock", Version: "1.0.0"}, nil)
+	server.AddTool(&mcpsdk.Tool{
+		Name: "imagegen_get_capabilities",
+		InputSchema: map[string]any{
+			"type": "object",
+		},
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		return nil, fmt.Errorf("cap query failed")
+	})
+	session, errConn := server.Connect(ctx, serverTransport, nil)
+	if errConn != nil {
+		t.Fatal(errConn)
+	}
+	defer func() { _ = session.Close() }()
+	if errStart := client.Start(ctx); errStart != nil {
+		t.Fatal(errStart)
+	}
+	defer func() { _ = client.Stop() }()
+
+	primaryErr := fmt.Errorf("401 unauthorized")
+	_, _, err := handleImagegenFallback(ctx, client, primaryErr, generateArgs, "")
+	if err == nil || !strings.Contains(err.Error(), "401 unauthorized") {
+		t.Errorf("expected primary error, got %v", err)
+	}
+}
+
+func TestHandleImagegenFallback_InvalidCapabilitiesJSON(t *testing.T) {
+	ctx := context.Background()
+	generateArgs := map[string]interface{}{"prompt": "test"}
+
+	client := mcp.NewPluginClient(mcp.PluginImageGen)
+	clientTransport, serverTransport := mcpsdk.NewInMemoryTransports()
+	client.SetTransport(clientTransport)
+
+	server := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "mock", Version: "1.0.0"}, nil)
+	server.AddTool(&mcpsdk.Tool{
+		Name: "imagegen_get_capabilities",
+		InputSchema: map[string]any{
+			"type": "object",
+		},
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		return &mcpsdk.CallToolResult{
+			Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: "invalid-json"}},
+		}, nil
+	})
+	session, errConn := server.Connect(ctx, serverTransport, nil)
+	if errConn != nil {
+		t.Fatal(errConn)
+	}
+	defer func() { _ = session.Close() }()
+	if errStart := client.Start(ctx); errStart != nil {
+		t.Fatal(errStart)
+	}
+	defer func() { _ = client.Stop() }()
+
+	primaryErr := fmt.Errorf("401 unauthorized")
+	_, _, err := handleImagegenFallback(ctx, client, primaryErr, generateArgs, "")
+	if err == nil || !strings.Contains(err.Error(), "401 unauthorized") {
+		t.Errorf("expected primary error, got %v", err)
+	}
+}
+
+func clearTestEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv("POWERWORD_GEMINI_API_KEY", "")
+	t.Setenv("POWERWORD_OPENAI_API_KEY", "")
+	t.Setenv("POWERWORD_API_KEYS_GEMINI", "")
+	t.Setenv("POWERWORD_API_KEYS_OPENAI", "")
+	t.Setenv("POWERWORD_PLUGINS_IMAGEGEN_GOOGLE_API_KEY", "")
+	t.Setenv("POWERWORD_PLUGINS_IMAGEGEN_OPENAI_API_KEY", "")
+	t.Setenv("GEMINI_API_KEY", "")
+	t.Setenv("GOOGLE_API_KEY", "")
+	t.Setenv("OPENAI_API_KEY", "")
+
+	origCfg := config.Cfg
+	config.Cfg = nil
+	t.Cleanup(func() {
+		config.Cfg = origCfg
+	})
+}
+
+func TestHandleImagegenFallback_NoFallbackCredentials(t *testing.T) {
+	ctx := context.Background()
+	generateArgs := map[string]interface{}{"prompt": "test"}
+
+	clearTestEnv(t)
+
+	origCfg := config.Cfg
+	defer func() { config.Cfg = origCfg }()
+	config.Cfg = &config.Config{
+		API: config.APIConfig{
+			GeminiKey: "", // empty
+			OpenAIKey: "", // empty
+		},
+		MCP: config.MCPConfig{
+			ImageGenPath: "pw-mcp-imagegen",
+		},
+	}
+
+	client := mcp.NewPluginClient(mcp.PluginImageGen)
+	clientTransport, serverTransport := mcpsdk.NewInMemoryTransports()
+	client.SetTransport(clientTransport)
+
+	server := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "mock", Version: "1.0.0"}, nil)
+	server.AddTool(&mcpsdk.Tool{
+		Name: "imagegen_get_capabilities",
+		InputSchema: map[string]any{
+			"type": "object",
+		},
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		return &mcpsdk.CallToolResult{
+			Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: `{"backend":"openai"}`}},
+		}, nil
+	})
+	session, errConn := server.Connect(ctx, serverTransport, nil)
+	if errConn != nil {
+		t.Fatal(errConn)
+	}
+	defer func() { _ = session.Close() }()
+	if errStart := client.Start(ctx); errStart != nil {
+		t.Fatal(errStart)
+	}
+	defer func() { _ = client.Stop() }()
+
+	primaryErr := fmt.Errorf("401 unauthorized")
+	_, _, err := handleImagegenFallback(ctx, client, primaryErr, generateArgs, "")
+	if err == nil || !strings.Contains(err.Error(), "401 unauthorized") {
+		t.Errorf("expected primary error, got %v", err)
+	}
+}
+
+func TestHandleImagegenFallback_FallbackClientCallToolFailure(t *testing.T) {
+	ctx := context.Background()
+	generateArgs := map[string]interface{}{"prompt": "test"}
+
+	origCfg := config.Cfg
+	defer func() { config.Cfg = origCfg }()
+	config.Cfg = &config.Config{
+		API: config.APIConfig{
+			GeminiKey: "fake-gemini-key",
+			OpenAIKey: "fake-openai-key",
+		},
+		MCP: config.MCPConfig{
+			ImageGenPath: "pw-mcp-imagegen",
+		},
+	}
+
+	client := mcp.NewPluginClient(mcp.PluginImageGen)
+	clientTransport1, serverTransport1 := mcpsdk.NewInMemoryTransports()
+	clientTransport2, serverTransport2 := mcpsdk.NewInMemoryTransports()
+
+	mt := &multiTransport{
+		t1: clientTransport1,
+		t2: clientTransport2,
+	}
+	client.SetTransport(mt)
+
+	server := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "mock", Version: "1.0.0"}, nil)
+	server.AddTool(&mcpsdk.Tool{
+		Name: "imagegen_get_capabilities",
+		InputSchema: map[string]any{
+			"type": "object",
+		},
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		return &mcpsdk.CallToolResult{
+			Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: `{"backend":"openai"}`}},
+		}, nil
+	})
+
+	fallbackErr := fmt.Errorf("fallback generation failed completely")
+	server.AddTool(&mcpsdk.Tool{
+		Name: "imagegen_generate",
+		InputSchema: map[string]any{
+			"type": "object",
+		},
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		return nil, fallbackErr
+	})
+
+	session1, errConn := server.Connect(ctx, serverTransport1, nil)
+	if errConn != nil {
+		t.Fatal(errConn)
+	}
+	defer func() { _ = session1.Close() }()
+
+	session2, errConn2 := server.Connect(ctx, serverTransport2, nil)
+	if errConn2 != nil {
+		t.Fatal(errConn2)
+	}
+	defer func() { _ = session2.Close() }()
+
+	if errStart := client.Start(ctx); errStart != nil {
+		t.Fatal(errStart)
+	}
+	defer func() { _ = client.Stop() }()
+
+	primaryErr := fmt.Errorf("401 unauthorized")
+	_, _, err := handleImagegenFallback(ctx, client, primaryErr, generateArgs, "")
+	if err == nil || !strings.Contains(err.Error(), fallbackErr.Error()) {
+		t.Errorf("expected fallback error, got %v", err)
+	}
+}
+
+func TestHasPowerwordCredential_EnvironmentVars(t *testing.T) {
+	clearTestEnv(t)
+	t.Setenv("POWERWORD_GEMINI_API_KEY", "env-gemini")
+	t.Setenv("POWERWORD_OPENAI_API_KEY", "env-openai")
+
+	if !hasPowerwordCredential("google", "") {
+		t.Error("expected true for google fallback with POWERWORD_GEMINI_API_KEY")
+	}
+	if !hasPowerwordCredential("openai", "") {
+		t.Error("expected true for openai fallback with POWERWORD_OPENAI_API_KEY")
+	}
+	if hasPowerwordCredential("invalid-backend", "") {
+		t.Error("expected false for unknown/invalid backend name")
+	}
+}
+
+func TestHasPowerwordCredential_ConfigCfg(t *testing.T) {
+	clearTestEnv(t)
+	origCfg := config.Cfg
+	defer func() { config.Cfg = origCfg }()
+	config.Cfg = &config.Config{
+		API: config.APIConfig{
+			GeminiKey: "pithos-gemini-key",
+			OpenAIKey: "pithos-openai-key",
+		},
+	}
+
+	if !hasPowerwordCredential("google", "") {
+		t.Error("expected true for google with config GeminiKey")
+	}
+	if !hasPowerwordCredential("openai", "") {
+		t.Error("expected true for openai with config OpenAIKey")
+	}
+}
+
+func TestHasPowerwordCredential_TOMLParsing(t *testing.T) {
+	clearTestEnv(t)
+	tmpDir, err := os.MkdirTemp("", "has-credential-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	tomlPath := filepath.Join(tmpDir, "powerword.toml")
+	tomlContent := `
+[api_keys]
+gemini = "file-gemini-key"
+openai = "file-openai-key"
+`
+	if err := os.WriteFile(tomlPath, []byte(tomlContent), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	if !hasPowerwordCredential("google", tmpDir) {
+		t.Error("expected true for google via powerword.toml")
+	}
+	if !hasPowerwordCredential("openai", tmpDir) {
+		t.Error("expected true for openai via powerword.toml")
+	}
+}
+
+func TestHasPowerwordCredential_TOMLPlaceholders(t *testing.T) {
+	clearTestEnv(t)
+	tmpDir, err := os.MkdirTemp("", "has-credential-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	tomlPath := filepath.Join(tmpDir, "powerword.toml")
+	tomlContent := `
+[api_keys]
+gemini = "YOUR_GEMINI_API_KEY"
+openai = "YOUR_OPENAI_API_KEY"
+`
+	if err := os.WriteFile(tomlPath, []byte(tomlContent), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	if hasPowerwordCredential("google", tmpDir) {
+		t.Error("expected false for placeholder gemini key")
+	}
+	if hasPowerwordCredential("openai", tmpDir) {
+		t.Error("expected false for placeholder openai key")
+	}
 }
