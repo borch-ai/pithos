@@ -131,7 +131,7 @@ func installZshCompletion(homeDir string, writeCompletion func(path string) erro
 	}
 
 	instruction := fmt.Sprintf("To enable the autocomplete, add the following to your ~/.zshrc:\n\n"+
-		"    fpath=(%s $fpath)\n"+
+		"    fpath=(%q $fpath)\n"+
 		"    autoload -Uz compinit && compinit\n", zshCompletionsDir)
 	return targetPath, instruction, nil
 }

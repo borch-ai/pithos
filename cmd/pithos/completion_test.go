@@ -102,9 +102,10 @@ func TestInstallZshCompletion_StandardZsh(t *testing.T) {
 func TestCompletionCmd_Generate(t *testing.T) {
 	testRoot := rootCmd
 
+	oldOut := testRoot.OutOrStdout()
 	var buf bytes.Buffer
 	testRoot.SetOut(&buf)
-	defer testRoot.SetOut(nil)
+	defer testRoot.SetOut(oldOut)
 
 	zshBytes, err := GenerateZshCompletionBytes(testRoot)
 	if err != nil {
