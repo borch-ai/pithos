@@ -3321,7 +3321,7 @@ func TestHandleImagegenFallback_NonAuthError(t *testing.T) {
 
 	client := mcp.NewPluginClient(mcp.PluginImageGen)
 	primaryErr := fmt.Errorf("some generic network timeout")
-	_, _, err := handleImagegenFallback(ctx, client, primaryErr, generateArgs)
+	_, _, err := handleImagegenFallback(ctx, client, primaryErr, generateArgs, "")
 	if err != primaryErr {
 		t.Errorf("expected error %v, got %v", primaryErr, err)
 	}
@@ -3355,7 +3355,7 @@ func TestHandleImagegenFallback_CapabilityQueryFailure(t *testing.T) {
 	defer func() { _ = client.Stop() }()
 
 	primaryErr := fmt.Errorf("401 unauthorized")
-	_, _, err := handleImagegenFallback(ctx, client, primaryErr, generateArgs)
+	_, _, err := handleImagegenFallback(ctx, client, primaryErr, generateArgs, "")
 	if err == nil || !strings.Contains(err.Error(), "401 unauthorized") {
 		t.Errorf("expected primary error, got %v", err)
 	}
@@ -3391,7 +3391,7 @@ func TestHandleImagegenFallback_InvalidCapabilitiesJSON(t *testing.T) {
 	defer func() { _ = client.Stop() }()
 
 	primaryErr := fmt.Errorf("401 unauthorized")
-	_, _, err := handleImagegenFallback(ctx, client, primaryErr, generateArgs)
+	_, _, err := handleImagegenFallback(ctx, client, primaryErr, generateArgs, "")
 	if err == nil || !strings.Contains(err.Error(), "401 unauthorized") {
 		t.Errorf("expected primary error, got %v", err)
 	}
@@ -3439,7 +3439,7 @@ func TestHandleImagegenFallback_NoFallbackCredentials(t *testing.T) {
 	defer func() { _ = client.Stop() }()
 
 	primaryErr := fmt.Errorf("401 unauthorized")
-	_, _, err := handleImagegenFallback(ctx, client, primaryErr, generateArgs)
+	_, _, err := handleImagegenFallback(ctx, client, primaryErr, generateArgs, "")
 	if err == nil || !strings.Contains(err.Error(), "401 unauthorized") {
 		t.Errorf("expected primary error, got %v", err)
 	}
@@ -3511,8 +3511,91 @@ func TestHandleImagegenFallback_FallbackClientCallToolFailure(t *testing.T) {
 	defer func() { _ = client.Stop() }()
 
 	primaryErr := fmt.Errorf("401 unauthorized")
-	_, _, err := handleImagegenFallback(ctx, client, primaryErr, generateArgs)
+	_, _, err := handleImagegenFallback(ctx, client, primaryErr, generateArgs, "")
 	if err == nil || !strings.Contains(err.Error(), fallbackErr.Error()) {
 		t.Errorf("expected fallback error, got %v", err)
+	}
+}
+
+func TestHasPowerwordCredential_EnvironmentVars(t *testing.T) {
+	t.Setenv("POWERWORD_GEMINI_API_KEY", "env-gemini")
+	t.Setenv("POWERWORD_OPENAI_API_KEY", "env-openai")
+
+	if !hasPowerwordCredential("google", "") {
+		t.Error("expected true for google fallback with POWERWORD_GEMINI_API_KEY")
+	}
+	if !hasPowerwordCredential("openai", "") {
+		t.Error("expected true for openai fallback with POWERWORD_OPENAI_API_KEY")
+	}
+	if hasPowerwordCredential("invalid-backend", "") {
+		t.Error("expected false for unknown/invalid backend name")
+	}
+}
+
+func TestHasPowerwordCredential_ConfigCfg(t *testing.T) {
+	origCfg := config.Cfg
+	defer func() { config.Cfg = origCfg }()
+	config.Cfg = &config.Config{
+		API: config.APIConfig{
+			GeminiKey: "pithos-gemini-key",
+			OpenAIKey: "pithos-openai-key",
+		},
+	}
+
+	if !hasPowerwordCredential("google", "") {
+		t.Error("expected true for google with config GeminiKey")
+	}
+	if !hasPowerwordCredential("openai", "") {
+		t.Error("expected true for openai with config OpenAIKey")
+	}
+}
+
+func TestHasPowerwordCredential_TOMLParsing(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "has-credential-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	tomlPath := filepath.Join(tmpDir, "powerword.toml")
+	tomlContent := `
+[api_keys]
+gemini = "file-gemini-key"
+openai = "file-openai-key"
+`
+	if err := os.WriteFile(tomlPath, []byte(tomlContent), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	if !hasPowerwordCredential("google", tmpDir) {
+		t.Error("expected true for google via powerword.toml")
+	}
+	if !hasPowerwordCredential("openai", tmpDir) {
+		t.Error("expected true for openai via powerword.toml")
+	}
+}
+
+func TestHasPowerwordCredential_TOMLPlaceholders(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "has-credential-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	tomlPath := filepath.Join(tmpDir, "powerword.toml")
+	tomlContent := `
+[api_keys]
+gemini = "YOUR_GEMINI_API_KEY"
+openai = "YOUR_OPENAI_API_KEY"
+`
+	if err := os.WriteFile(tomlPath, []byte(tomlContent), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	if hasPowerwordCredential("google", tmpDir) {
+		t.Error("expected false for placeholder gemini key")
+	}
+	if hasPowerwordCredential("openai", tmpDir) {
+		t.Error("expected false for placeholder openai key")
 	}
 }
