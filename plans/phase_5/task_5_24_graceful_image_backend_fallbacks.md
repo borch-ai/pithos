@@ -3,7 +3,7 @@
 **Status:** Completed
 **Go Version:** 1.26.5
 **Date Completed:** 2026-07-21
-**Unit Test Coverage:** 91.0%
+**Unit Test Coverage:** 91.13%
 
 Implement automatic, graceful fallbacks between image generation backends (e.g., falling back from OpenAI DALL-E to Google Imagen, or vice-versa) when the primary backend encounters credential, permission, or model access errors.
 
