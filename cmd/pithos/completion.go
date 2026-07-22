@@ -86,8 +86,12 @@ PowerShell:
 				return err
 			}
 
-			successStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Bold(true)
-			cmd.Printf("%s Successfully installed completions to %s\n", successStyle.Render("[✔]"), targetPath)
+			successPrefix := "[✔]"
+			if isTTY() {
+				successStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Bold(true)
+				successPrefix = successStyle.Render("[✔]")
+			}
+			cmd.Printf("%s Successfully installed completions to %s\n", successPrefix, targetPath)
 			if instruction != "" {
 				cmd.Println()
 				cmd.Println(instruction)
