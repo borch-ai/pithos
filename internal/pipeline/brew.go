@@ -792,6 +792,7 @@ func handleImagegenFallback(ctx context.Context, mcpClient *mcp.PluginClient, pr
 	})
 
 	if errStart := fallbackClient.Start(ctx); errStart != nil {
+		logger.Error("Failed to start fallback client", "error", errStart)
 		return "", "", primaryErr
 	}
 	defer func() { _ = fallbackClient.Stop() }()
