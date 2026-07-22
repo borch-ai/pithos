@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -55,6 +54,9 @@ PowerShell:
 	DisableFlagsInUseLine: true,
 	ValidArgs:             []string{"bash", "zsh", "fish", "powershell"},
 	Args:                  cobra.MatchAll(cobra.ExactArgs(1), cobra.OnlyValidArgs),
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		return nil
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		shell := args[0]
 
@@ -139,13 +141,4 @@ func installZshCompletion(homeDir string, writeCompletion func(path string) erro
 func init() {
 	completionCmd.Flags().BoolVarP(&completionInstall, "install", "i", false, "Automatically install Zsh completions to standard directories")
 	rootCmd.AddCommand(completionCmd)
-}
-
-// GenerateZshCompletionBytes is a helper function used for testing Zsh completion script generation.
-func GenerateZshCompletionBytes(cmd *cobra.Command) ([]byte, error) {
-	var buf bytes.Buffer
-	if err := cmd.GenZshCompletion(&buf); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
 }

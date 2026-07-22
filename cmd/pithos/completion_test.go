@@ -6,16 +6,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/spf13/cobra"
 )
 
 func TestInstallZshCompletion_OhMyZsh(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "pithos-test-home")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer func() {
-		_ = os.RemoveAll(tempDir)
-	}()
+	tempDir := t.TempDir()
 
 	// Create a mock .oh-my-zsh directory
 	omzDir := filepath.Join(tempDir, ".oh-my-zsh")
@@ -62,13 +58,7 @@ func TestInstallZshCompletion_OhMyZsh(t *testing.T) {
 }
 
 func TestInstallZshCompletion_StandardZsh(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "pithos-test-home")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer func() {
-		_ = os.RemoveAll(tempDir)
-	}()
+	tempDir := t.TempDir()
 
 	writeCalled := false
 	writeFunc := func(path string) error {
@@ -107,7 +97,7 @@ func TestCompletionCmd_Generate(t *testing.T) {
 	testRoot.SetOut(&buf)
 	defer testRoot.SetOut(oldOut)
 
-	zshBytes, err := GenerateZshCompletionBytes(testRoot)
+	zshBytes, err := generateZshCompletionBytes(testRoot)
 	if err != nil {
 		t.Fatalf("failed to generate zsh completion bytes: %v", err)
 	}
@@ -115,4 +105,12 @@ func TestCompletionCmd_Generate(t *testing.T) {
 	if !strings.Contains(string(zshBytes), "#compdef pithos") {
 		t.Errorf("expected zsh completion script to contain '#compdef pithos'")
 	}
+}
+
+func generateZshCompletionBytes(cmd *cobra.Command) ([]byte, error) {
+	var buf bytes.Buffer
+	if err := cmd.GenZshCompletion(&buf); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
