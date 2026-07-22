@@ -1475,7 +1475,7 @@ func bootstrapCharacterReferenceWithClient(ctx context.Context, m *manifest.Mani
 	}
 
 	// Verify that character backend output type is exactly "image"
-	capJSON, err := mcpClient.CallTool(ctx, "imagegen_get_capabilities", nil)
+	capJSON, err := mcpClient.CallTool(ctx, "imagegen_get_capabilities", map[string]interface{}{})
 	if err != nil {
 		return fmt.Errorf("failed to query capabilities for character backend: %w", err)
 	}
@@ -1581,7 +1581,7 @@ type imagegenCapabilities struct {
 }
 
 func checkBackendCapabilities(ctx context.Context, mcpClient *mcp.PluginClient, characterProfile string) error {
-	capJSON, err := mcpClient.CallTool(ctx, "imagegen_get_capabilities", nil)
+	capJSON, err := mcpClient.CallTool(ctx, "imagegen_get_capabilities", map[string]interface{}{})
 	if err != nil {
 		return fmt.Errorf("failed to query imagegen backend capabilities: %w", err)
 	}
