@@ -3401,6 +3401,16 @@ func TestHandleImagegenFallback_NoFallbackCredentials(t *testing.T) {
 	ctx := context.Background()
 	generateArgs := map[string]interface{}{"prompt": "test"}
 
+	t.Setenv("POWERWORD_GEMINI_API_KEY", "")
+	t.Setenv("POWERWORD_OPENAI_API_KEY", "")
+	t.Setenv("POWERWORD_API_KEYS_GEMINI", "")
+	t.Setenv("POWERWORD_API_KEYS_OPENAI", "")
+	t.Setenv("POWERWORD_PLUGINS_IMAGEGEN_GOOGLE_API_KEY", "")
+	t.Setenv("POWERWORD_PLUGINS_IMAGEGEN_OPENAI_API_KEY", "")
+	t.Setenv("GEMINI_API_KEY", "")
+	t.Setenv("GOOGLE_API_KEY", "")
+	t.Setenv("OPENAI_API_KEY", "")
+
 	origCfg := config.Cfg
 	defer func() { config.Cfg = origCfg }()
 	config.Cfg = &config.Config{
