@@ -734,6 +734,91 @@ func registerStyleProfile(ctx context.Context, mcpClient *mcp.PluginClient, styl
 	return styleID, nil
 }
 
+func handleImagegenFallback(ctx context.Context, mcpClient *mcp.PluginClient, primaryErr error, generateArgs map[string]interface{}) (string, string, error) {
+	errMsg := strings.ToLower(primaryErr.Error())
+	isAuthOrEligibleError := strings.Contains(errMsg, "401") ||
+		strings.Contains(errMsg, "unauthorized") ||
+		strings.Contains(errMsg, "api key") ||
+		strings.Contains(errMsg, "model does not exist") ||
+		strings.Contains(errMsg, "not configured") ||
+		strings.Contains(errMsg, "model not found")
+
+	if !isAuthOrEligibleError {
+		return "", "", primaryErr
+	}
+
+	capJSON, capErr := mcpClient.CallTool(ctx, "imagegen_get_capabilities", nil)
+	if capErr != nil {
+		return "", "", primaryErr
+	}
+
+	var caps imagegenCapabilities
+	if err := json.Unmarshal([]byte(capJSON), &caps); err != nil || caps.Backend == "" {
+		return "", "", primaryErr
+	}
+
+	activeBackend := strings.ToLower(caps.Backend)
+	var fallbackBackend string
+	var credentialsSet bool
+
+	switch activeBackend {
+	case "openai", "midjourney":
+		fallbackBackend = "google"
+		credentialsSet = (config.Cfg != nil && config.Cfg.API.GeminiKey != "") ||
+			os.Getenv("GEMINI_API_KEY") != "" ||
+			os.Getenv("GOOGLE_API_KEY") != ""
+	case "google", "imagen", "veo":
+		fallbackBackend = "openai"
+		credentialsSet = (config.Cfg != nil && config.Cfg.API.OpenAIKey != "") ||
+			os.Getenv("OPENAI_API_KEY") != ""
+	}
+
+	if fallbackBackend == "" || !credentialsSet {
+		return "", "", primaryErr
+	}
+
+	logger.Warn("Primary imagegen backend failed with credential/model error. Attempting fallback...",
+		"primary", activeBackend,
+		"fallback", fallbackBackend,
+		"error", primaryErr)
+
+	fallbackClient := mcp.NewPluginClient(mcp.PluginImageGen)
+	if t := mcpClient.GetTransport(); t != nil {
+		fallbackClient.SetTransport(t)
+	}
+
+	fallbackClient.SetEnv([]string{
+		fmt.Sprintf("POWERWORD_IMAGEGEN_BACKEND=%s", fallbackBackend),
+	})
+
+	if errStart := fallbackClient.Start(ctx); errStart != nil {
+		return "", "", primaryErr
+	}
+	defer func() { _ = fallbackClient.Stop() }()
+
+	resTextFallback, errFallback := fallbackClient.CallTool(ctx, "imagegen_generate", generateArgs)
+	if errFallback != nil {
+		return "", "", errFallback
+	}
+
+	var jsonRes struct {
+		ImagePath string `json:"image_path"`
+		Model     string `json:"model"`
+	}
+	if errJson := json.Unmarshal([]byte(resTextFallback), &jsonRes); errJson == nil && jsonRes.ImagePath != "" {
+		if jsonRes.Model == "" {
+			jsonRes.Model = fallbackBackend
+		}
+		return jsonRes.ImagePath, jsonRes.Model, nil
+	}
+
+	prefix := "Successfully generated image and saved to: "
+	if strings.HasPrefix(resTextFallback, prefix) {
+		return strings.TrimPrefix(resTextFallback, prefix), fallbackBackend, nil
+	}
+	return "", "", fmt.Errorf("unexpected imagegen response format: %q", resTextFallback)
+}
+
 func generateImageRaw(ctx context.Context, mcpClient *mcp.PluginClient, prompt string, styleID string, imageSize string, crefURL string, charWeight *int) (string, string, error) {
 	if imageSize == "" {
 		imageSize = "1024x1024"
@@ -754,78 +839,7 @@ func generateImageRaw(ctx context.Context, mcpClient *mcp.PluginClient, prompt s
 
 	resText, err := mcpClient.CallTool(ctx, "imagegen_generate", generateArgs)
 	if err != nil {
-		errMsg := strings.ToLower(err.Error())
-		isAuthOrEligibleError := strings.Contains(errMsg, "401") ||
-			strings.Contains(errMsg, "unauthorized") ||
-			strings.Contains(errMsg, "api key") ||
-			strings.Contains(errMsg, "model does not exist") ||
-			strings.Contains(errMsg, "not configured") ||
-			strings.Contains(errMsg, "model not found")
-
-		if isAuthOrEligibleError {
-			// Query the active backend capabilities
-			capJSON, capErr := mcpClient.CallTool(ctx, "imagegen_get_capabilities", nil)
-			if capErr == nil {
-				var caps imagegenCapabilities
-				if json.Unmarshal([]byte(capJSON), &caps) == nil && caps.Backend != "" {
-					activeBackend := strings.ToLower(caps.Backend)
-					var fallbackBackend string
-					var credentialsSet bool
-
-					if activeBackend == "openai" || activeBackend == "midjourney" {
-						fallbackBackend = "google"
-						credentialsSet = (config.Cfg != nil && config.Cfg.API.GeminiKey != "") ||
-							os.Getenv("GEMINI_API_KEY") != "" ||
-							os.Getenv("GOOGLE_API_KEY") != ""
-					} else if activeBackend == "google" || activeBackend == "imagen" || activeBackend == "veo" {
-						fallbackBackend = "openai"
-						credentialsSet = (config.Cfg != nil && config.Cfg.API.OpenAIKey != "") ||
-							os.Getenv("OPENAI_API_KEY") != ""
-					}
-
-					if fallbackBackend != "" && credentialsSet {
-						logger.Warn("Primary imagegen backend failed with credential/model error. Attempting fallback...",
-							"primary", activeBackend,
-							"fallback", fallbackBackend,
-							"error", err)
-
-						// Spin up a temporary PluginClient for the fallback backend
-						fallbackClient := mcp.NewPluginClient(mcp.PluginImageGen)
-						if t := mcpClient.GetTransport(); t != nil {
-							fallbackClient.SetTransport(t)
-						}
-
-						fallbackClient.SetEnv([]string{
-							fmt.Sprintf("POWERWORD_IMAGEGEN_BACKEND=%s", fallbackBackend),
-						})
-
-						if errStart := fallbackClient.Start(ctx); errStart == nil {
-							defer func() { _ = fallbackClient.Stop() }()
-
-							resTextFallback, errFallback := fallbackClient.CallTool(ctx, "imagegen_generate", generateArgs)
-							if errFallback == nil {
-								var jsonRes struct {
-									ImagePath string `json:"image_path"`
-									Model     string `json:"model"`
-								}
-								if errJson := json.Unmarshal([]byte(resTextFallback), &jsonRes); errJson == nil && jsonRes.ImagePath != "" {
-									if jsonRes.Model == "" {
-										jsonRes.Model = fallbackBackend
-									}
-									return jsonRes.ImagePath, jsonRes.Model, nil
-								}
-								prefix := "Successfully generated image and saved to: "
-								if strings.HasPrefix(resTextFallback, prefix) {
-									return strings.TrimPrefix(resTextFallback, prefix), fallbackBackend, nil
-								}
-								return "", "", fmt.Errorf("unexpected imagegen response format: %q", resTextFallback)
-							}
-						}
-					}
-				}
-			}
-		}
-		return "", "", err
+		return handleImagegenFallback(ctx, mcpClient, err, generateArgs)
 	}
 
 	var jsonRes struct {
