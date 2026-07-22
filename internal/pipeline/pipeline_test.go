@@ -3315,192 +3315,196 @@ func TestBrew_ImagegenFallback(t *testing.T) {
 	}
 }
 
-func TestHandleImagegenFallback_Errors(t *testing.T) {
+func TestHandleImagegenFallback_NonAuthError(t *testing.T) {
 	ctx := context.Background()
 	generateArgs := map[string]interface{}{"prompt": "test"}
 
-	// 1. Primary error is not auth/eligible error
-	t.Run("non-auth error", func(t *testing.T) {
-		client := mcp.NewPluginClient(mcp.PluginImageGen)
-		primaryErr := fmt.Errorf("some generic network timeout")
-		_, _, err := handleImagegenFallback(ctx, client, primaryErr, generateArgs)
-		if err != primaryErr {
-			t.Errorf("expected error %v, got %v", primaryErr, err)
-		}
+	client := mcp.NewPluginClient(mcp.PluginImageGen)
+	primaryErr := fmt.Errorf("some generic network timeout")
+	_, _, err := handleImagegenFallback(ctx, client, primaryErr, generateArgs)
+	if err != primaryErr {
+		t.Errorf("expected error %v, got %v", primaryErr, err)
+	}
+}
+
+func TestHandleImagegenFallback_CapabilityQueryFailure(t *testing.T) {
+	ctx := context.Background()
+	generateArgs := map[string]interface{}{"prompt": "test"}
+
+	client := mcp.NewPluginClient(mcp.PluginImageGen)
+	clientTransport, serverTransport := mcpsdk.NewInMemoryTransports()
+	client.SetTransport(clientTransport)
+
+	server := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "mock", Version: "1.0.0"}, nil)
+	server.AddTool(&mcpsdk.Tool{
+		Name: "imagegen_get_capabilities",
+		InputSchema: map[string]any{
+			"type": "object",
+		},
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		return nil, fmt.Errorf("cap query failed")
+	})
+	session, errConn := server.Connect(ctx, serverTransport, nil)
+	if errConn != nil {
+		t.Fatal(errConn)
+	}
+	defer func() { _ = session.Close() }()
+	_ = client.Start(ctx)
+	defer func() { _ = client.Stop() }()
+
+	primaryErr := fmt.Errorf("401 unauthorized")
+	_, _, err := handleImagegenFallback(ctx, client, primaryErr, generateArgs)
+	if err == nil || !strings.Contains(err.Error(), "401 unauthorized") {
+		t.Errorf("expected primary error, got %v", err)
+	}
+}
+
+func TestHandleImagegenFallback_InvalidCapabilitiesJSON(t *testing.T) {
+	ctx := context.Background()
+	generateArgs := map[string]interface{}{"prompt": "test"}
+
+	client := mcp.NewPluginClient(mcp.PluginImageGen)
+	clientTransport, serverTransport := mcpsdk.NewInMemoryTransports()
+	client.SetTransport(clientTransport)
+
+	server := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "mock", Version: "1.0.0"}, nil)
+	server.AddTool(&mcpsdk.Tool{
+		Name: "imagegen_get_capabilities",
+		InputSchema: map[string]any{
+			"type": "object",
+		},
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		return &mcpsdk.CallToolResult{
+			Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: "invalid-json"}},
+		}, nil
+	})
+	session, errConn := server.Connect(ctx, serverTransport, nil)
+	if errConn != nil {
+		t.Fatal(errConn)
+	}
+	defer func() { _ = session.Close() }()
+	_ = client.Start(ctx)
+	defer func() { _ = client.Stop() }()
+
+	primaryErr := fmt.Errorf("401 unauthorized")
+	_, _, err := handleImagegenFallback(ctx, client, primaryErr, generateArgs)
+	if err == nil || !strings.Contains(err.Error(), "401 unauthorized") {
+		t.Errorf("expected primary error, got %v", err)
+	}
+}
+
+func TestHandleImagegenFallback_NoFallbackCredentials(t *testing.T) {
+	ctx := context.Background()
+	generateArgs := map[string]interface{}{"prompt": "test"}
+
+	origCfg := config.Cfg
+	defer func() { config.Cfg = origCfg }()
+	config.Cfg = &config.Config{
+		API: config.APIConfig{
+			GeminiKey: "", // empty
+			OpenAIKey: "", // empty
+		},
+		MCP: config.MCPConfig{
+			ImageGenPath: "pw-mcp-imagegen",
+		},
+	}
+
+	client := mcp.NewPluginClient(mcp.PluginImageGen)
+	clientTransport, serverTransport := mcpsdk.NewInMemoryTransports()
+	client.SetTransport(clientTransport)
+
+	server := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "mock", Version: "1.0.0"}, nil)
+	server.AddTool(&mcpsdk.Tool{
+		Name: "imagegen_get_capabilities",
+		InputSchema: map[string]any{
+			"type": "object",
+		},
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		return &mcpsdk.CallToolResult{
+			Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: `{"backend":"openai"}`}},
+		}, nil
+	})
+	session, errConn := server.Connect(ctx, serverTransport, nil)
+	if errConn != nil {
+		t.Fatal(errConn)
+	}
+	defer func() { _ = session.Close() }()
+	_ = client.Start(ctx)
+	defer func() { _ = client.Stop() }()
+
+	primaryErr := fmt.Errorf("401 unauthorized")
+	_, _, err := handleImagegenFallback(ctx, client, primaryErr, generateArgs)
+	if err == nil || !strings.Contains(err.Error(), "401 unauthorized") {
+		t.Errorf("expected primary error, got %v", err)
+	}
+}
+
+func TestHandleImagegenFallback_FallbackClientCallToolFailure(t *testing.T) {
+	ctx := context.Background()
+	generateArgs := map[string]interface{}{"prompt": "test"}
+
+	origCfg := config.Cfg
+	defer func() { config.Cfg = origCfg }()
+	config.Cfg = &config.Config{
+		API: config.APIConfig{
+			GeminiKey: "fake-gemini-key",
+			OpenAIKey: "fake-openai-key",
+		},
+		MCP: config.MCPConfig{
+			ImageGenPath: "pw-mcp-imagegen",
+		},
+	}
+
+	client := mcp.NewPluginClient(mcp.PluginImageGen)
+	clientTransport1, serverTransport1 := mcpsdk.NewInMemoryTransports()
+	clientTransport2, serverTransport2 := mcpsdk.NewInMemoryTransports()
+
+	mt := &multiTransport{
+		t1: clientTransport1,
+		t2: clientTransport2,
+	}
+	client.SetTransport(mt)
+
+	server := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "mock", Version: "1.0.0"}, nil)
+	server.AddTool(&mcpsdk.Tool{
+		Name: "imagegen_get_capabilities",
+		InputSchema: map[string]any{
+			"type": "object",
+		},
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		return &mcpsdk.CallToolResult{
+			Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: `{"backend":"openai"}`}},
+		}, nil
 	})
 
-	// 2. Capability query returns error
-	t.Run("capability query failure", func(t *testing.T) {
-		client := mcp.NewPluginClient(mcp.PluginImageGen)
-		clientTransport, serverTransport := mcpsdk.NewInMemoryTransports()
-		client.SetTransport(clientTransport)
-
-		server := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "mock", Version: "1.0.0"}, nil)
-		server.AddTool(&mcpsdk.Tool{
-			Name: "imagegen_get_capabilities",
-			InputSchema: map[string]any{
-				"type": "object",
-			},
-		}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
-			return nil, fmt.Errorf("cap query failed")
-		})
-		session, errConn := server.Connect(ctx, serverTransport, nil)
-		if errConn != nil {
-			t.Fatal(errConn)
-		}
-		defer func() { _ = session.Close() }()
-		_ = client.Start(ctx)
-		defer func() { _ = client.Stop() }()
-
-		primaryErr := fmt.Errorf("401 unauthorized")
-		_, _, err := handleImagegenFallback(ctx, client, primaryErr, generateArgs)
-		if err == nil || !strings.Contains(err.Error(), "401 unauthorized") {
-			t.Errorf("expected primary error, got %v", err)
-		}
+	fallbackErr := fmt.Errorf("fallback generation failed completely")
+	server.AddTool(&mcpsdk.Tool{
+		Name: "imagegen_generate",
+		InputSchema: map[string]any{
+			"type": "object",
+		},
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		return nil, fallbackErr
 	})
 
-	// 3. Capabilities JSON is invalid
-	t.Run("invalid capabilities JSON", func(t *testing.T) {
-		client := mcp.NewPluginClient(mcp.PluginImageGen)
-		clientTransport, serverTransport := mcpsdk.NewInMemoryTransports()
-		client.SetTransport(clientTransport)
+	session1, errConn := server.Connect(ctx, serverTransport1, nil)
+	if errConn != nil {
+		t.Fatal(errConn)
+	}
+	defer func() { _ = session1.Close() }()
 
-		server := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "mock", Version: "1.0.0"}, nil)
-		server.AddTool(&mcpsdk.Tool{
-			Name: "imagegen_get_capabilities",
-			InputSchema: map[string]any{
-				"type": "object",
-			},
-		}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
-			return &mcpsdk.CallToolResult{
-				Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: "invalid-json"}},
-			}, nil
-		})
-		session, errConn := server.Connect(ctx, serverTransport, nil)
-		if errConn != nil {
-			t.Fatal(errConn)
-		}
-		defer func() { _ = session.Close() }()
-		_ = client.Start(ctx)
-		defer func() { _ = client.Stop() }()
+	session2, errConn2 := server.Connect(ctx, serverTransport2, nil)
+	if errConn2 != nil {
+		t.Fatal(errConn2)
+	}
+	defer func() { _ = session2.Close() }()
 
-		primaryErr := fmt.Errorf("401 unauthorized")
-		_, _, err := handleImagegenFallback(ctx, client, primaryErr, generateArgs)
-		if err == nil || !strings.Contains(err.Error(), "401 unauthorized") {
-			t.Errorf("expected primary error, got %v", err)
-		}
-	})
+	_ = client.Start(ctx)
+	defer func() { _ = client.Stop() }()
 
-	// 4. Fallback credentials not configured
-	t.Run("no fallback credentials", func(t *testing.T) {
-		origCfg := config.Cfg
-		defer func() { config.Cfg = origCfg }()
-		config.Cfg = &config.Config{
-			API: config.APIConfig{
-				GeminiKey: "", // empty
-				OpenAIKey: "", // empty
-			},
-			MCP: config.MCPConfig{
-				ImageGenPath: "pw-mcp-imagegen",
-			},
-		}
-
-		client := mcp.NewPluginClient(mcp.PluginImageGen)
-		clientTransport, serverTransport := mcpsdk.NewInMemoryTransports()
-		client.SetTransport(clientTransport)
-
-		server := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "mock", Version: "1.0.0"}, nil)
-		server.AddTool(&mcpsdk.Tool{
-			Name: "imagegen_get_capabilities",
-			InputSchema: map[string]any{
-				"type": "object",
-			},
-		}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
-			return &mcpsdk.CallToolResult{
-				Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: `{"backend":"openai"}`}},
-			}, nil
-		})
-		session, errConn := server.Connect(ctx, serverTransport, nil)
-		if errConn != nil {
-			t.Fatal(errConn)
-		}
-		defer func() { _ = session.Close() }()
-		_ = client.Start(ctx)
-		defer func() { _ = client.Stop() }()
-
-		primaryErr := fmt.Errorf("401 unauthorized")
-		_, _, err := handleImagegenFallback(ctx, client, primaryErr, generateArgs)
-		if err == nil || !strings.Contains(err.Error(), "401 unauthorized") {
-			t.Errorf("expected primary error, got %v", err)
-		}
-	})
-
-	// 5. Fallback client CallTool fails
-	t.Run("fallback client CallTool failure", func(t *testing.T) {
-		origCfg := config.Cfg
-		defer func() { config.Cfg = origCfg }()
-		config.Cfg = &config.Config{
-			API: config.APIConfig{
-				GeminiKey: "fake-gemini-key",
-				OpenAIKey: "fake-openai-key",
-			},
-			MCP: config.MCPConfig{
-				ImageGenPath: "pw-mcp-imagegen",
-			},
-		}
-
-		client := mcp.NewPluginClient(mcp.PluginImageGen)
-		clientTransport1, serverTransport1 := mcpsdk.NewInMemoryTransports()
-		clientTransport2, serverTransport2 := mcpsdk.NewInMemoryTransports()
-
-		mt := &multiTransport{
-			t1: clientTransport1,
-			t2: clientTransport2,
-		}
-		client.SetTransport(mt)
-
-		server := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "mock", Version: "1.0.0"}, nil)
-		server.AddTool(&mcpsdk.Tool{
-			Name: "imagegen_get_capabilities",
-			InputSchema: map[string]any{
-				"type": "object",
-			},
-		}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
-			return &mcpsdk.CallToolResult{
-				Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: `{"backend":"openai"}`}},
-			}, nil
-		})
-
-		// Fallback imagegen_generate tool call will fail with a different error
-		fallbackErr := fmt.Errorf("fallback generation failed completely")
-		server.AddTool(&mcpsdk.Tool{
-			Name: "imagegen_generate",
-			InputSchema: map[string]any{
-				"type": "object",
-			},
-		}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
-			return nil, fallbackErr
-		})
-
-		session1, errConn := server.Connect(ctx, serverTransport1, nil)
-		if errConn != nil {
-			t.Fatal(errConn)
-		}
-		defer func() { _ = session1.Close() }()
-
-		session2, errConn2 := server.Connect(ctx, serverTransport2, nil)
-		if errConn2 != nil {
-			t.Fatal(errConn2)
-		}
-		defer func() { _ = session2.Close() }()
-
-		_ = client.Start(ctx)
-		defer func() { _ = client.Stop() }()
-
-		primaryErr := fmt.Errorf("401 unauthorized")
-		_, _, err := handleImagegenFallback(ctx, client, primaryErr, generateArgs)
-		if err == nil || !strings.Contains(err.Error(), fallbackErr.Error()) {
-			t.Errorf("expected fallback error, got %v", err)
-		}
-	})
+	primaryErr := fmt.Errorf("401 unauthorized")
+	_, _, err := handleImagegenFallback(ctx, client, primaryErr, generateArgs)
+	if err == nil || !strings.Contains(err.Error(), fallbackErr.Error()) {
+		t.Errorf("expected fallback error, got %v", err)
+	}
 }
