@@ -54,9 +54,6 @@ PowerShell:
 	DisableFlagsInUseLine: true,
 	ValidArgs:             []string{"bash", "zsh", "fish", "powershell"},
 	Args:                  cobra.MatchAll(cobra.ExactArgs(1), cobra.OnlyValidArgs),
-	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		return nil
-	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		shell := args[0]
 
