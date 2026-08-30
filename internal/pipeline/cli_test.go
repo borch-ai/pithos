@@ -268,3 +268,52 @@ func TestCLI_Initiate_Overwrite(t *testing.T) {
 		t.Errorf("expected theme 'test3' after overwrite, got %q", m.BookProperties.Theme)
 	}
 }
+
+func TestCLI_Completion(t *testing.T) {
+	getPithosBinary(t)
+
+	tempDir := t.TempDir()
+	homeDir := filepath.Join(tempDir, "home")
+	if err := os.MkdirAll(homeDir, 0700); err != nil {
+		t.Fatalf("failed to create home dir: %v", err)
+	}
+
+	// Create mock .oh-my-zsh directory under home
+	omzDir := filepath.Join(homeDir, ".oh-my-zsh")
+	if err := os.MkdirAll(omzDir, 0700); err != nil {
+		t.Fatalf("failed to create mock OMZ directory: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// 1. Test stdout printing
+	cmd := newPithosCmd(ctx, homeDir, "completion", "zsh")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("pithos completion zsh failed: %v\nOutput: %s", err, string(out))
+	}
+
+	if !strings.Contains(string(out), "#compdef pithos") {
+		t.Errorf("expected zsh completion script to contain '#compdef pithos', got: %s", string(out))
+	}
+
+	// 2. Test auto-install flag
+	cmdInstall := newPithosCmd(ctx, homeDir, "completion", "zsh", "--install")
+	outInstall, err := cmdInstall.CombinedOutput()
+	if err != nil {
+		t.Fatalf("pithos completion zsh --install failed: %v\nOutput: %s", err, string(outInstall))
+	}
+
+	expectedPath := filepath.Join(omzDir, "completions", "_pithos")
+	if _, statErr := os.Stat(expectedPath); statErr != nil {
+		t.Errorf("expected completion file to be installed at %q, but got error: %v", expectedPath, statErr)
+	}
+
+	// 3. Test invalid shell returns error
+	cmdInvalid := newPithosCmd(ctx, homeDir, "completion", "invalid-shell-name")
+	outInvalid, err := cmdInvalid.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected failure for invalid shell name, but command succeeded\nOutput: %s", string(outInvalid))
+	}
+}
