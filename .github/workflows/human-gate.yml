@@ -1,7 +1,7 @@
 name: Human Approval Gate
 
 on:
-  pull_request_target:
+  pull_request:
     types: [opened, edited, reopened, synchronize, labeled, unlabeled]
 
 permissions:
@@ -13,15 +13,13 @@ jobs:
     name: Require Human Approval Label
     runs-on: ubuntu-latest
     steps:
-      - name: Check for approved-by-human label
-        env:
-          LABELS: ${{ toJson(github.event.pull_request.labels.*.name) }}
+      - name: Verify approved-by-human label presence
+        if: "!contains(github.event.pull_request.labels.*.name, 'approved-by-human')"
         run: |
-          if echo "$LABELS" | grep -q '"approved-by-human"'; then
-            echo "✅ 'approved-by-human' label found. Human approval verified."
-            exit 0
-          else
-            echo "❌ Missing required 'approved-by-human' label."
-            echo "Please review the PR and apply the 'approved-by-human' label on GitHub to allow merging."
-            exit 1
-          fi
+          echo "❌ Missing required 'approved-by-human' label."
+          echo "Please review the PR and apply the 'approved-by-human' label on GitHub to allow merging."
+          exit 1
+      - name: Approval verified
+        if: "contains(github.event.pull_request.labels.*.name, 'approved-by-human')"
+        run: |
+          echo "✅ 'approved-by-human' label found. Human approval verified."
