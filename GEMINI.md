@@ -114,8 +114,10 @@ temperature = 0.3
     1.  Pause (schedule a 30-second timer) to check for Copilot Code Review comments.
     2.  If no comments are found and the total wait time has not exceeded a 7-minute timeout, repeat the 30-second check loop.
     3.  Once comments are found, apply necessary refactors, push the fixes, and restart the check loop for the new commit.
-*   **Review Loop Iteration Requirement:** You are forbidden from declaring a task complete or requesting user merge approval until a full polling loop has been completed on the latest commit with either zero new comments returned or all comments addressed.
-*   **Update Implementation Plan:** Before declaring a task complete, update the corresponding plan in the `plans/` directory to reflect the final choices, configuration schemas, testing updates, and final Go version used.
+*   **Review Loop Iteration Requirement:** You are forbidden from declaring a task complete until a full polling loop has been completed on the latest commit with either zero new comments returned or all comments addressed.
+*   **No Autonomous Merging or Admin Overrides:** AI agents must **never** execute `gh pr merge` or merge Pull Requests autonomously. AI agents are strictly forbidden from using `--admin` flags or bypassing GitHub branch protection policies and human review requirements.
+*   **Mandatory Human Review Hand-off:** Once all CI checks, coverage requirements, and automated review loops pass cleanly, the AI agent must pause and present the Pull Request link to the human user for explicit review and manual merge.
+*   **Update Implementation Plan:** Before requesting human merge review, update the corresponding plan in the `plans/` directory to reflect the final choices, configuration schemas, testing updates, and final Go version used.
 
 ---
 
