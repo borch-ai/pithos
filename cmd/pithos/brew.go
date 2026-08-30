@@ -20,6 +20,7 @@ var (
 	brewSilent      bool
 	brewSelect      bool
 	brewBudget      float64
+	brewTUI         bool
 )
 
 var brewCmd = &cobra.Command{
@@ -57,6 +58,7 @@ var brewCmd = &cobra.Command{
 			Style:       brewStyle,
 			Concurrency: brewConcurrency,
 			Review:      brewReview,
+			TUI:         brewTUI,
 			Pages:       pages,
 			Select:      brewSelect,
 			Silent:      brewSilent,
@@ -85,6 +87,7 @@ func init() {
 	brewCmd.Flags().BoolVar(&brewSelect, "select", false, "Interactively select pages to regenerate")
 	brewCmd.Flags().BoolVar(&brewSilent, "silent", false, "Silence automatic opening of web preview in the browser and disable interactive prompts (causing budget warnings to automatically abort)")
 	brewCmd.Flags().Float64Var(&brewBudget, "budget", 0.0, "Budget limit in USD for this run (setting to 0.0 or omitting falls back to configured budget limits)")
+	brewCmd.Flags().BoolVar(&brewTUI, "tui", false, "Launch interactive Bubbletea TUI dashboard for manuscript review")
 
 	rootCmd.AddCommand(brewCmd)
 }
