@@ -240,7 +240,7 @@ Focus: Enhancing the developer and author experience with rich TUI (Terminal Use
 *   [x] **Task 6.19: Interactive Web-Based Book Preview (HTML/CSS)** (Formerly Task 5.19)
     *   Generate a static web-based preview folder containing an interactive flipbook player to visually review books locally in any browser.
 
-*   [ ] **Task 6.1: Bubbletea TUI-Based Interactive Review Loop**
+*   [x] **Task 6.1: Bubbletea TUI-Based Interactive Review Loop**
     *   Replace the raw file-editing loop with an interactive terminal review dashboard, enabling users to edit stanzas, customize prompts, and trigger select regeneration.
     *   [Implementation Plan](plans/phase_6/task_6_1_bubbletea_tui_review.md)
 *   [ ] **Task 6.2: Multi-Model Illustration Variations & Selection**

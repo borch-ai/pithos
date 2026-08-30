@@ -52,6 +52,7 @@ install: patch-gomod
 
 test: patch-gomod
 	@echo "Running tests..."
+	@rm -f coverage.out
 	$(GOTEST) -v -race -coverprofile=coverage.out -coverpkg=./internal/... ./...
 
 test-integration: patch-gomod

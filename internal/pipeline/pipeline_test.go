@@ -3624,3 +3624,65 @@ openai = "YOUR_OPENAI_API_KEY"
 		t.Error("expected false for placeholder openai key")
 	}
 }
+
+func TestBrew_ReviewFlow_TUI(t *testing.T) {
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+
+	m := &manifest.Manifest{
+		BookProperties: manifest.BookProperties{
+			Theme:            "TUI Review Test",
+			Style:            "TUI Style",
+			CharacterProfile: "TUI Cat",
+		},
+		Progress: manifest.Progress{
+			Pages: []manifest.PageState{
+				{
+					PageIndex:          1,
+					Text:               "Line 1\nLine 2",
+					IllustrationPrompt: "Illustration prompt 1",
+					Status:             manifest.StatusCompleted,
+				},
+			},
+		},
+	}
+
+	manifestPath := filepath.Join(tmpDir, "manifest.json")
+	if err := m.SaveTo(manifestPath); err != nil {
+		t.Fatalf("failed to save manifest: %v", err)
+	}
+
+	manuscriptPath := filepath.Join(tmpDir, "manuscript.md")
+
+	// 1. Run handleReviewCheckpoint with TUI = true and user quitting ('q')
+	var bufQuit strings.Builder
+	optsQuit := BrewOptions{
+		OutputDir: tmpDir,
+		Review:    true,
+		TUI:       true,
+		Silent:    true,
+		In:        strings.NewReader("q"),
+		Out:       &bufQuit,
+	}
+
+	err := handleReviewCheckpoint(ctx, optsQuit, m, manuscriptPath)
+	if err == nil || !errors.Is(err, ErrReviewPause) {
+		t.Fatalf("expected ErrReviewPause when quitting TUI, got %v", err)
+	}
+
+	// 2. Run handleReviewCheckpoint with TUI = true and user approving ('a')
+	var bufApprove strings.Builder
+	optsApprove := BrewOptions{
+		OutputDir: tmpDir,
+		Review:    true,
+		TUI:       true,
+		Silent:    true,
+		In:        strings.NewReader("a"),
+		Out:       &bufApprove,
+	}
+
+	err = handleReviewCheckpoint(ctx, optsApprove, m, manuscriptPath)
+	if err != nil {
+		t.Fatalf("expected nil error when approving TUI, got %v", err)
+	}
+}

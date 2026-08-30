@@ -37,6 +37,7 @@ type BrewOptions struct {
 	Style             string
 	Concurrency       int
 	Review            bool
+	TUI               bool
 	Pages             []int
 	Select            bool
 	Silent            bool
@@ -226,28 +227,72 @@ func handleReviewCheckpoint(ctx context.Context, opts BrewOptions, m *manifest.M
 	if !opts.Review {
 		return nil
 	}
+	if err := ensureManuscriptExported(opts.OutputDir, m, manuscriptPath); err != nil {
+		return err
+	}
+
+	triggerWebPreview(ctx, opts, m)
+
+	if opts.TUI {
+		return handleTUIReviewCheckpoint(opts, m)
+	}
+
+	return fmt.Errorf("%w: manuscript is available at %s. Edit the file, then run brew without --review to generate illustrations", ErrReviewPause, manuscriptPath)
+}
+
+func ensureManuscriptExported(outputDir string, m *manifest.Manifest, manuscriptPath string) error {
 	_, statErr := os.Stat(manuscriptPath)
 	if statErr != nil && !os.IsNotExist(statErr) {
 		return fmt.Errorf("failed to check manuscript.md status for review: %w", statErr)
 	}
 	if os.IsNotExist(statErr) {
-		if exportErr := exportManuscriptToMarkdown(opts.OutputDir, m.BookProperties.Style, m.BookProperties.CharacterProfile, m.Progress.Pages); exportErr != nil {
-			return exportErr
-		}
+		return exportManuscriptToMarkdown(outputDir, m.BookProperties.Style, m.BookProperties.CharacterProfile, m.Progress.Pages)
 	}
+	return nil
+}
 
+func triggerWebPreview(ctx context.Context, opts BrewOptions, m *manifest.Manifest) {
 	if previewErr := GenerateWebPreview(opts.OutputDir, m); previewErr != nil {
 		logger.Warn("Failed to generate web preview", "error", previewErr)
-	} else {
-		previewPath := filepath.Join(opts.OutputDir, "web_preview", "preview.html")
-		urlStr := formatFileURL(previewPath)
-		logger.Info("Web preview generated", "url", urlStr)
-		if !opts.Silent {
-			triggerBrowserOpen(ctx, urlStr)
+		return
+	}
+	previewPath := filepath.Join(opts.OutputDir, "web_preview", "preview.html")
+	urlStr := formatFileURL(previewPath)
+	logger.Info("Web preview generated", "url", urlStr)
+	if !opts.Silent {
+		triggerBrowserOpen(ctx, urlStr)
+	}
+}
+
+func handleTUIReviewCheckpoint(opts BrewOptions, m *manifest.Manifest) error {
+	syncCB := func(updatedManifest *manifest.Manifest) error {
+		manifestPath := filepath.Join(opts.OutputDir, "manifest.json")
+		if saveErr := updatedManifest.SaveTo(manifestPath); saveErr != nil {
+			return saveErr
 		}
+		if exportErr := exportManuscriptToMarkdown(opts.OutputDir, updatedManifest.BookProperties.Style, updatedManifest.BookProperties.CharacterProfile, updatedManifest.Progress.Pages); exportErr != nil {
+			return exportErr
+		}
+		if previewErr := GenerateWebPreview(opts.OutputDir, updatedManifest); previewErr != nil {
+			logger.Warn("Failed to update web preview during TUI sync", "error", previewErr)
+		}
+		return nil
 	}
 
-	return fmt.Errorf("%w: manuscript is available at %s. Edit the file, then run brew without --review to generate illustrations", ErrReviewPause, manuscriptPath)
+	approved, err := ui.RunReviewTUI(ui.ReviewTUIConfig{
+		Manifest:     m,
+		OutputDir:    opts.OutputDir,
+		SyncCallback: syncCB,
+		InStream:     opts.In,
+		OutStream:    opts.Out,
+	})
+	if err != nil {
+		return fmt.Errorf("TUI review error: %w", err)
+	}
+	if !approved {
+		return fmt.Errorf("%w: manuscript review paused in TUI", ErrReviewPause)
+	}
+	return nil
 }
 
 func getLLMClient(llmOverride LLMClient, httpClient *http.Client) (LLMClient, error) {
