@@ -37,7 +37,7 @@ func getPithosBinary(t *testing.T) string {
 		}
 		TestPithosBinaryPath = filepath.Join(tmpDir, binName)
 
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 		defer cancel()
 
 		absBinaryPath, err := filepath.Abs(TestPithosBinaryPath)
