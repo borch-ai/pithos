@@ -3,7 +3,7 @@
 **Status:** Completed
 **Date Completed:** 2026-07-22
 **Unit Test Coverage:** 91.0%
-**Go Version:** 1.26.5
+**Go Version:** 1.26.6
 
 This task implements autocomplete generation for the `pithos` CLI using Cobra's built-in autocompletion capabilities, and provides automatic installation scripts targeting Zsh and Oh-My-Zsh environments.
 
