@@ -474,3 +474,59 @@ func TestLoadManifest_NilFields(t *testing.T) {
 		t.Errorf("expected default CharacterWeight 100, got %d", loaded.BookProperties.CharacterWeight)
 	}
 }
+
+func TestManifestSchemaVersionAndMigration(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	// 1. NewManifest sets CurrentSchemaVersion
+	mNew := NewManifest(filepath.Join(tmpDir, "new_manifest.json"))
+	if mNew.SchemaVersion != CurrentSchemaVersion {
+		t.Errorf("expected NewManifest SchemaVersion to be %d, got %d", CurrentSchemaVersion, mNew.SchemaVersion)
+	}
+
+	// 2. Unversioned legacy manifest automatically migrates to CurrentSchemaVersion and saves to disk
+	legacyPath := filepath.Join(tmpDir, "legacy_manifest.json")
+	legacyJSON := `{
+		"book_properties": {"theme": "Legacy Parody"},
+		"progress": {"manuscript_generated": true}
+	}`
+	if writeErr := os.WriteFile(legacyPath, []byte(legacyJSON), 0600); writeErr != nil {
+		t.Fatalf("failed to write legacy manifest: %v", writeErr)
+	}
+
+	loadedLegacy, err := LoadManifest(legacyPath)
+	if err != nil {
+		t.Fatalf("failed to load legacy manifest: %v", err)
+	}
+
+	if loadedLegacy.SchemaVersion != CurrentSchemaVersion {
+		t.Errorf("expected loaded legacy manifest SchemaVersion to be %d, got %d", CurrentSchemaVersion, loadedLegacy.SchemaVersion)
+	}
+
+	// Check file on disk to confirm automatic save after migration
+	//nolint:gosec // ReadFile path is constructed in local CLI test environment
+	diskData, err := os.ReadFile(legacyPath)
+	if err != nil {
+		t.Fatalf("failed to read migrated file from disk: %v", err)
+	}
+	var rawMap map[string]interface{}
+	if parseErr := json.Unmarshal(diskData, &rawMap); parseErr != nil {
+		t.Fatalf("failed to parse migrated json from disk: %v", parseErr)
+	}
+	if ver, ok := rawMap["schema_version"].(float64); !ok || int(ver) != CurrentSchemaVersion {
+		t.Errorf("expected disk json schema_version to be %d, got %v", CurrentSchemaVersion, rawMap["schema_version"])
+	}
+
+	// 3. Manifest already at CurrentSchemaVersion loads cleanly
+	loadedV2, err := LoadManifest(legacyPath)
+	if err != nil {
+		t.Fatalf("failed reloading v2 manifest: %v", err)
+	}
+	if loadedV2.SchemaVersion != CurrentSchemaVersion {
+		t.Errorf("expected SchemaVersion %d, got %d", CurrentSchemaVersion, loadedV2.SchemaVersion)
+	}
+}

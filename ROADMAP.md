@@ -203,7 +203,7 @@ Focus: Remote monitoring, Kiln state manifest integration, testing, and ecosyste
     *   Implement a dedicated `pithos character` subcommand to generate/regenerate the main character reference seed portrait based on the manifest profile.
     *   Integrate visual seed validation and cloud storage upload prior to executing brew page illustration jobs.
     *   [Implementation Plan](plans/phase_5/task_5_41_character_seed_review.md)
-*   [ ] **Task 5.44: Manifest Versioning & Migration Guardrails**
+*   [x] **Task 5.44: Manifest Versioning & Migration Guardrails**
     *   Introduce schema version tracking in `manifest.json` and automatic structure migrations on load to prevent breaking Kiln or Lamplighter.
     *   [Implementation Plan](plans/phase_5/task_5_44_manifest_migrations.md)
 *   [x] **Task 5.45: Shell Autocompletion Support (Zsh/Oh-My-Zsh)**

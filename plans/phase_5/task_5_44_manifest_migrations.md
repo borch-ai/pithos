@@ -1,6 +1,6 @@
 # plan: Task 5.44: Manifest Versioning & Migration Guardrails
 
-**Status:** Proposed
+**Status:** Complete
 **Go Version:** 1.26.4
 
 This task introduces explicit schema version tracking in `manifest.json` and automatic structure migrations on load. This prevents changes to Pithos manifest formats from breaking active integrations with Kiln or Lamplighter.
