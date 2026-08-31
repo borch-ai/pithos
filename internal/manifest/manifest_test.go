@@ -529,4 +529,17 @@ func TestManifestSchemaVersionAndMigration(t *testing.T) {
 	if loadedV2.SchemaVersion != CurrentSchemaVersion {
 		t.Errorf("expected SchemaVersion %d, got %d", CurrentSchemaVersion, loadedV2.SchemaVersion)
 	}
+
+	// 4. Manifest with newer schema version than supported fails to load to prevent data corruption
+	futurePath := filepath.Join(tmpDir, "future_manifest.json")
+	futureJSON := `{
+		"schema_version": 99,
+		"book_properties": {"theme": "Future Parody"}
+	}`
+	if writeErr := os.WriteFile(futurePath, []byte(futureJSON), 0600); writeErr != nil {
+		t.Fatalf("failed to write future manifest: %v", writeErr)
+	}
+	if _, futureErr := LoadManifest(futurePath); futureErr == nil {
+		t.Error("expected error loading manifest with future schema version, got nil")
+	}
 }

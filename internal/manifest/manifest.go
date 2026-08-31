@@ -183,15 +183,23 @@ func LoadManifest(path string) (*Manifest, error) {
 		m.SchemaVersion = 1
 	}
 
+	if m.SchemaVersion > CurrentSchemaVersion {
+		return nil, fmt.Errorf("manifest schema version %d is newer than supported version %d", m.SchemaVersion, CurrentSchemaVersion)
+	}
+
 	// Apply migrations sequentially if schema version is behind CurrentSchemaVersion.
 	migrated := false
 	for m.SchemaVersion < CurrentSchemaVersion {
-		migFn, ok := migrations[m.SchemaVersion]
+		currentVer := m.SchemaVersion
+		migFn, ok := migrations[currentVer]
 		if !ok {
-			return nil, fmt.Errorf("no migration path registered for manifest schema version %d", m.SchemaVersion)
+			return nil, fmt.Errorf("no migration path registered for manifest schema version %d", currentVer)
 		}
 		if err := migFn(&m); err != nil {
-			return nil, fmt.Errorf("failed migrating manifest from schema version %d: %w", m.SchemaVersion, err)
+			return nil, fmt.Errorf("failed migrating manifest from schema version %d: %w", currentVer, err)
+		}
+		if m.SchemaVersion <= currentVer {
+			return nil, fmt.Errorf("migration from schema version %d did not advance schema version (remained %d)", currentVer, m.SchemaVersion)
 		}
 		migrated = true
 	}
