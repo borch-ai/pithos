@@ -111,10 +111,11 @@ temperature = 0.3
 *   **PR Required for Mainline Changes:** Direct pushes to the remote `main` branch are blocked. AI agents and human contributors must **never** push changes directly to `main`. All updates must go through a Pull Request.
 *   **Pull Requests Can Only Be Squash Merged:** To keep git history clean, all pull requests must be squash-merged back to `main`.
 *   **Review Loop with Timer:** After opening or updating a Pull Request:
-    1.  Pause (schedule a 30-second timer) to check for Copilot Code Review comments.
+    1.  Pause (schedule a 30-second timer) to check for Copilot Code Review comments and review threads.
     2.  If no comments are found and the total wait time has not exceeded a 7-minute timeout, repeat the 30-second check loop.
-    3.  Once comments are found, apply necessary refactors, push the fixes, and restart the check loop for the new commit.
-*   **Review Loop Iteration Requirement:** You are forbidden from declaring a task complete until a full polling loop has been completed on the latest commit with either zero new comments returned or all comments addressed.
+    3.  Once comments are found, apply necessary refactors, push the fixes, post reply comments to thread IDs, and restart the check loop for the new commit.
+*   **GraphQL Review Thread Resolution Requirement:** When processing review feedback, use `gh api graphql` to query `reviewThreads`. Verify that all review threads are marked `isResolved: true` (or execute `resolveReviewThread` mutation after addressing fixes) before concluding the review loop.
+*   **Review Loop Iteration Requirement:** You are forbidden from declaring a task complete until a full polling loop has been completed on the latest commit with zero unresolved review threads and all CI status checks passing cleanly.
 *   **No Autonomous Merging or Admin Overrides:** AI agents must **never** execute `gh pr merge` or merge Pull Requests autonomously. AI agents are strictly forbidden from using `--admin` flags or bypassing GitHub branch protection policies and human review requirements.
 *   **Mandatory Human Review Hand-off:** Once all CI checks, coverage requirements, and automated review loops pass cleanly, the AI agent must pause and present the Pull Request link to the human user for explicit review and manual merge.
 *   **Update Implementation Plan:** Before requesting human merge review, update the corresponding plan in the `plans/` directory to reflect the final choices, configuration schemas, testing updates, and final Go version used.
