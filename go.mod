@@ -15,7 +15,7 @@ require (
 	github.com/sashabaranov/go-openai v1.42.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
-	google.golang.org/api v0.294.0
+	google.golang.org/api v0.295.0
 )
 
 require (
