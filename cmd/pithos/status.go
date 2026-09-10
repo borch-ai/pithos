@@ -1,7 +1,9 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/borch-ai/pithos/internal/config"
@@ -10,10 +12,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var statusDir string
+
 var statusCmd = &cobra.Command{
-	Use:   "status <book>",
+	Use:   "status [book]",
 	Short: "Show detailed diagnostic status for a book workspace",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if config.Cfg == nil {
 			return fmt.Errorf("configuration is not loaded")
@@ -22,8 +26,23 @@ var statusCmd = &cobra.Command{
 			return fmt.Errorf("workspaces root is empty in config")
 		}
 
-		bookName := args[0]
-		ws, err := pipeline.GetWorkspaceStatus(config.Cfg.WorkspacesRoot, bookName)
+		target := statusDir
+		if target == "" {
+			if len(args) == 0 {
+				return errors.New("must specify book name as argument or via --dir flag")
+			}
+			target = args[0]
+		}
+
+		workspaceRoot := config.Cfg.WorkspacesRoot
+		bookName := target
+		if strings.ContainsAny(target, "/\\") || filepath.IsAbs(target) {
+			resolved := pipeline.ResolveBookPath(target)
+			workspaceRoot = filepath.Dir(resolved)
+			bookName = filepath.Base(resolved)
+		}
+
+		ws, err := pipeline.GetWorkspaceStatus(workspaceRoot, bookName)
 		if err != nil {
 			return err
 		}
@@ -59,5 +78,6 @@ var statusCmd = &cobra.Command{
 }
 
 func init() {
+	statusCmd.Flags().StringVarP(&statusDir, "dir", "d", "", "Workspace directory path")
 	rootCmd.AddCommand(statusCmd)
 }

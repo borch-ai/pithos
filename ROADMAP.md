@@ -226,7 +226,7 @@ Focus: Remote monitoring, Kiln state manifest integration, testing, and ecosyste
 *   [x] **Task 5.51: Adopt Aeolian's GitHub Workflow Hygiene in Pithos**
     *   Synchronize GitHub actions, daily dependabot sweeps, markdown linting, branch naming rules, and PR template validation with Aeolian standards.
     *   [Implementation Plan](plans/phase_5/task_5_51_github_workflow_hygiene.md)
-*   [ ] **Task 5.52: CLI Flag Normalization & Directory Alias (`--dir` / `-d`)**
+*   [x] **Task 5.52: CLI Flag Normalization & Directory Alias (`--dir` / `-d`)**
     *   Standardize all workspace-targeting commands (`initiate`, `brew`, `assemble`, `preview`, `status`, `clean`, `character`) to accept `--dir` and `-d` flags to align with the `pw-mcp-pithos` contract.
     *   [Implementation Plan](plans/phase_5/task_5_52_cli_flag_normalization.md)
 *   [ ] **Task 5.53: Headless & Batch Execution Mode (`--headless` / `--non-interactive`)**

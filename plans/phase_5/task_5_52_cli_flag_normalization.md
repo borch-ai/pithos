@@ -1,7 +1,9 @@
 # plan: Task 5.52: CLI Flag Normalization & Directory Alias (`--dir` / `-d`)
 
-**Status:** Open
-**Go Version:** 1.26+
+**Status:** Completed
+**Date Completed:** 2026-09-10
+**Unit Test Coverage:** 91.2%
+**Go Version:** 1.26.6
 
 ## Overview
 
