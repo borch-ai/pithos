@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -38,12 +37,9 @@ var cleanCmd = &cobra.Command{
 			return fmt.Errorf("--all and --reset-failed are mutually exclusive")
 		}
 
-		target := cleanDir
-		if target == "" {
-			if len(args) == 0 {
-				return errors.New("must specify book name as argument or via --dir flag")
-			}
-			target = args[0]
+		target, err := resolvePositionalOrDir(cmd, cleanDir, args)
+		if err != nil {
+			return err
 		}
 
 		workspaceRoot := config.Cfg.WorkspacesRoot
@@ -54,7 +50,7 @@ var cleanCmd = &cobra.Command{
 			bookName = filepath.Base(resolved)
 		}
 
-		err := pipeline.CleanWorkspace(workspaceRoot, bookName, cleanOrphans, cleanResetFailed, cleanAll)
+		err = pipeline.CleanWorkspace(workspaceRoot, bookName, cleanOrphans, cleanResetFailed, cleanAll)
 		if err != nil {
 			return fmt.Errorf("failed to clean workspace %q: %w", bookName, err)
 		}

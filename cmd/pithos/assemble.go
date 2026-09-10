@@ -23,10 +23,7 @@ var assembleCmd = &cobra.Command{
 	Use:   "assemble",
 	Short: "Calculates book geometry and generates the layout manifest",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		inputDir := assembleInput
-		if cmd.Flags().Changed("dir") {
-			inputDir = assembleDir
-		}
+		inputDir := resolveDirectoryFlag(cmd, assembleDir, assembleInput)
 
 		opts := pipeline.AssembleOptions{
 			InputDir:  inputDir,

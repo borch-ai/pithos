@@ -53,10 +53,7 @@ var brewCmd = &cobra.Command{
 			}
 		}
 
-		outputDir := brewOutput
-		if cmd.Flags().Changed("dir") {
-			outputDir = brewDir
-		}
+		outputDir := resolveDirectoryFlag(cmd, brewDir, brewOutput)
 
 		opts := pipeline.BrewOptions{
 			OutputDir:   outputDir,

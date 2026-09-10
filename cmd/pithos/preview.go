@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"path/filepath"
 
@@ -25,12 +24,9 @@ var previewCmd = &cobra.Command{
 			return fmt.Errorf("configuration is not loaded")
 		}
 
-		target := previewDir
-		if target == "" {
-			if len(args) == 0 {
-				return errors.New("must specify book name as argument or via --dir flag")
-			}
-			target = args[0]
+		target, err := resolvePositionalOrDir(cmd, previewDir, args)
+		if err != nil {
+			return err
 		}
 		bookDir := pipeline.ResolveBookPath(target)
 

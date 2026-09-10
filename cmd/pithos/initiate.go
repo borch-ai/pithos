@@ -85,11 +85,8 @@ var initiateCmd = &cobra.Command{
 			initiatePages = val
 		}
 
-		outputDir := initiateOutput
+		outputDir := resolveDirectoryFlag(cmd, initiateDir, initiateOutput)
 		dirExplicitlySet := cmd.Flags().Changed("dir") || cmd.Flags().Changed("output")
-		if cmd.Flags().Changed("dir") {
-			outputDir = initiateDir
-		}
 
 		if !dirExplicitlySet {
 			// User did not provide --dir or --output, resolve unique output dir under books/book

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -26,12 +25,9 @@ var statusCmd = &cobra.Command{
 			return fmt.Errorf("workspaces root is empty in config")
 		}
 
-		target := statusDir
-		if target == "" {
-			if len(args) == 0 {
-				return errors.New("must specify book name as argument or via --dir flag")
-			}
-			target = args[0]
+		target, err := resolvePositionalOrDir(cmd, statusDir, args)
+		if err != nil {
+			return err
 		}
 
 		workspaceRoot := config.Cfg.WorkspacesRoot

@@ -14,10 +14,7 @@ var characterCmd = &cobra.Command{
 	Use:   "character",
 	Short: "Generates or regenerates the visual character seed portrait using the configured image model",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		outputDir := characterOutput
-		if cmd.Flags().Changed("dir") {
-			outputDir = characterDir
-		}
+		outputDir := resolveDirectoryFlag(cmd, characterDir, characterOutput)
 		opts := pipeline.CharacterOptions{
 			OutputDir: outputDir,
 			DryRun:    rootDryRun,
