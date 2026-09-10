@@ -392,6 +392,32 @@ func TestExecution_RejectBothPositionalAndDir(t *testing.T) {
 	}
 }
 
+func TestIsBareSlug(t *testing.T) {
+	tests := []struct {
+		input string
+		want  bool
+	}{
+		{"", false},
+		{"bare-slug", true},
+		{"books", true},
+		{"my-book-123", true},
+		{"~", false},
+		{"~/book", false},
+		{"./books", false},
+		{"books/book", false},
+		{"/abs/path", false},
+		{"..", false},
+		{"../books", false},
+		{"dir\\book", false},
+	}
+
+	for _, tt := range tests {
+		if got := isBareSlug(tt.input); got != tt.want {
+			t.Errorf("isBareSlug(%q) = %v, want %v", tt.input, got, tt.want)
+		}
+	}
+}
+
 func TestResolveWorkspaceAndBook(t *testing.T) {
 	// Bare book name
 	wsRoot, bName := resolveWorkspaceAndBook("bare-slug")
@@ -400,6 +426,24 @@ func TestResolveWorkspaceAndBook(t *testing.T) {
 	}
 	if wsRoot == "" {
 		t.Errorf("expected non-empty wsRoot for bare slug")
+	}
+
+	// Bare book name "books" must preserve bare-slug semantics under WorkspacesRoot
+	wsRootBooks, bNameBooks := resolveWorkspaceAndBook("books")
+	if bNameBooks != "books" {
+		t.Errorf("expected bookName 'books', got %q", bNameBooks)
+	}
+	if wsRootBooks != wsRoot {
+		t.Errorf("expected wsRoot for bare slug 'books' (%q) to match wsRoot for 'bare-slug' (%q)", wsRootBooks, wsRoot)
+	}
+
+	// Explicit path "./books" should NOT be treated as a bare slug
+	wsRootDotBooks, bNameDotBooks := resolveWorkspaceAndBook("./books")
+	if bNameDotBooks != "books" {
+		t.Errorf("expected bookName 'books', got %q", bNameDotBooks)
+	}
+	if wsRootDotBooks == wsRoot && wsRoot != "." {
+		t.Errorf("expected './books' to resolve relative to current dir, got %q", wsRootDotBooks)
 	}
 
 	// Absolute path

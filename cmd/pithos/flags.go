@@ -3,7 +3,9 @@ package main
 import (
 	"errors"
 	"path/filepath"
+	"strings"
 
+	"github.com/borch-ai/pithos/internal/config"
 	"github.com/borch-ai/pithos/internal/pipeline"
 	"github.com/spf13/cobra"
 )
@@ -31,9 +33,34 @@ func resolvePositionalOrDir(cmd *cobra.Command, dirVal string, args []string) (s
 	return args[0], nil
 }
 
+// isBareSlug returns true if target is a bare book name without directory separators
+// or special path prefixes (such as '~', '.', or absolute paths).
+func isBareSlug(target string) bool {
+	if target == "" {
+		return false
+	}
+	if strings.ContainsAny(target, "/\\") || filepath.IsAbs(target) {
+		return false
+	}
+	if strings.HasPrefix(target, "~") || strings.HasPrefix(target, ".") {
+		return false
+	}
+	return true
+}
+
 // resolveWorkspaceAndBook resolves target path or slug using pipeline.ResolveBookPath
 // and splits it into workspaceRoot and bookName.
+// For bare slugs (e.g. "my-book" or "books"), it preserves bare-slug semantics under WorkspacesRoot.
 func resolveWorkspaceAndBook(target string) (workspaceRoot string, bookName string) {
+	if isBareSlug(target) {
+		root := ""
+		if config.Cfg != nil && config.Cfg.WorkspacesRoot != "" {
+			root = config.Cfg.WorkspacesRoot
+		} else {
+			root = pipeline.ResolveBookPath(".")
+		}
+		return root, target
+	}
 	resolved := pipeline.ResolveBookPath(target)
 	return filepath.Dir(resolved), filepath.Base(resolved)
 }
