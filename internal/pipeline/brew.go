@@ -425,7 +425,13 @@ func generateManuscript(ctx context.Context, m *manifest.Manifest, opts BrewOpti
 			return fmt.Errorf("manuscript text generation failed: %w", genErr)
 		}
 
-		if m.BookProperties.Title == "" || m.BookProperties.CoverPrompt == "" {
+		needCoverDesign := m.BookProperties.Title == "" ||
+			m.BookProperties.Subtitle == "" ||
+			m.BookProperties.Author == "" ||
+			m.BookProperties.BackCoverBlurb == "" ||
+			m.BookProperties.CoverPrompt == ""
+
+		if needCoverDesign {
 			coverDesign, coverUsage, cErr := llmClient.GenerateCoverDesign(ctx, theme, m.BookProperties.Style, m.BookProperties.CharacterProfile)
 			if cErr == nil && coverDesign != nil {
 				if m.BookProperties.Title == "" {
@@ -1874,6 +1880,9 @@ func estimateCost(m *manifest.Manifest, opts *BrewOptions) (float64, float64) {
 	expectedLlmCost := 0.0
 	if !m.Progress.ManuscriptGenerated {
 		expectedLlmCost = 0.01
+		if m.BookProperties.Title == "" || m.BookProperties.Subtitle == "" || m.BookProperties.Author == "" || m.BookProperties.BackCoverBlurb == "" || m.BookProperties.CoverPrompt == "" {
+			expectedLlmCost += 0.005
+		}
 	}
 
 	return expectedImageCost, expectedLlmCost

@@ -312,11 +312,14 @@ func compileCoverPDF(ctx context.Context, opts AssembleOptions, m *manifest.Mani
 		"title":            title,
 		"subtitle":         subtitle,
 		"author":           author,
+		"back_cover_blurb": m.BookProperties.BackCoverBlurb,
 		"page_count":       pageCount,
 		"output_path":      outputPath,
 		"trim_size":        trimSize,
 		"paper_type":       paperType,
 		"binding_type":     format,
+		"bleed":            fmt.Sprintf("%.3fin", m.KDPLayout.Bleed),
+		"spine_width":      fmt.Sprintf("%.3fin", m.KDPLayout.SpineWidth),
 	}
 
 	resText, err := mcpClient.CallTool(ctx, "compile_cover", args)
