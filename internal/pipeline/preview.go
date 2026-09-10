@@ -1294,33 +1294,57 @@ const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
     const guideContainer = document.createElement('div');
     guideContainer.className = 'print-guide';
 
-    // KDP Bleed Cut Line (outer boundary ~0.125" / 14px)
+    // Calculate wrap dimensions from manifest geometry or fallback to trim + spine + bleed
+    const kdp = bookData.kdpLayout || {};
+    const bleedVal = (typeof kdp.bleed === 'number' && kdp.bleed >= 0) ? kdp.bleed : bleedInches;
+    const marginVal = (typeof kdp.margin_size === 'number' && kdp.margin_size > 0) ? kdp.margin_size : safetyOutside;
+    const spineVal = (typeof kdp.spine_width === 'number' && kdp.spine_width > 0) ? kdp.spine_width : 0.15;
+
+    const wrapW = (typeof kdp.cover_width_inches === 'number' && kdp.cover_width_inches > 0)
+      ? kdp.cover_width_inches
+      : (2 * trimWidth + spineVal + (2 * bleedVal));
+    const wrapH = (typeof kdp.cover_height_inches === 'number' && kdp.cover_height_inches > 0)
+      ? kdp.cover_height_inches
+      : (trimHeight + (2 * bleedVal));
+
+    // Percentages based on actual manifest geometry
+    const cutTopPct = (bleedVal / wrapH) * 100;
+    const cutBottomPct = (bleedVal / wrapH) * 100;
+    const cutLeftPct = (bleedVal / wrapW) * 100;
+    const cutRightPct = (bleedVal / wrapW) * 100;
+
+    // KDP Bleed Cut Line
     const cutLine = document.createElement('div');
     cutLine.className = 'cut-line';
-    cutLine.style.top = '14px';
-    cutLine.style.bottom = '14px';
-    cutLine.style.left = '14px';
-    cutLine.style.right = '14px';
+    cutLine.style.top = cutTopPct.toFixed(2) + '%';
+    cutLine.style.bottom = cutBottomPct.toFixed(2) + '%';
+    cutLine.style.left = cutLeftPct.toFixed(2) + '%';
+    cutLine.style.right = cutRightPct.toFixed(2) + '%';
 
     const cutLabel = document.createElement('div');
     cutLabel.className = 'guide-label cut';
-    cutLabel.textContent = 'KDP WRAP CUT LINE';
+    cutLabel.textContent = 'KDP WRAP CUT LINE (' + bleedVal.toFixed(3) + '")';
     cutLabel.style.left = '4px';
     cutLabel.style.top = '4px';
     cutLine.appendChild(cutLabel);
     guideContainer.appendChild(cutLine);
 
-    // KDP Safe Zone Line
+    // KDP Safe Zone Line (inside bleed by marginVal)
+    const safeTopPct = ((bleedVal + marginVal) / wrapH) * 100;
+    const safeBottomPct = ((bleedVal + marginVal) / wrapH) * 100;
+    const safeLeftPct = ((bleedVal + marginVal) / wrapW) * 100;
+    const safeRightPct = ((bleedVal + marginVal) / wrapW) * 100;
+
     const safetyLine = document.createElement('div');
     safetyLine.className = 'safety-line';
-    safetyLine.style.top = '28px';
-    safetyLine.style.bottom = '28px';
-    safetyLine.style.left = '28px';
-    safetyLine.style.right = '28px';
+    safetyLine.style.top = safeTopPct.toFixed(2) + '%';
+    safetyLine.style.bottom = safeBottomPct.toFixed(2) + '%';
+    safetyLine.style.left = safeLeftPct.toFixed(2) + '%';
+    safetyLine.style.right = safeRightPct.toFixed(2) + '%';
 
     const safetyLabel = document.createElement('div');
     safetyLabel.className = 'guide-label safety';
-    safetyLabel.textContent = 'SAFE ZONE';
+    safetyLabel.textContent = 'SAFE ZONE (' + marginVal.toFixed(3) + '" MARGIN)';
     safetyLabel.style.right = '4px';
     safetyLabel.style.bottom = '4px';
     safetyLine.appendChild(safetyLabel);
