@@ -59,13 +59,20 @@ type previewPage struct {
 }
 
 type previewData struct {
-	Theme            string             `json:"theme"`
-	Style            string             `json:"style"`
-	CharacterProfile string             `json:"characterProfile"`
-	TrimSize         string             `json:"trimSize,omitempty"`
-	Format           string             `json:"format,omitempty"`
-	KDPLayout        manifest.KDPLayout `json:"kdpLayout"`
-	Pages            []previewPage      `json:"pages"`
+	Title               string             `json:"title,omitempty"`
+	Subtitle            string             `json:"subtitle,omitempty"`
+	Author              string             `json:"author,omitempty"`
+	BackCoverBlurb      string             `json:"backCoverBlurb,omitempty"`
+	CoverPrompt         string             `json:"coverPrompt,omitempty"`
+	CoverImagePath      string             `json:"coverImagePath,omitempty"`
+	CoverImageGenerated bool               `json:"coverImageGenerated"`
+	Theme               string             `json:"theme"`
+	Style               string             `json:"style"`
+	CharacterProfile    string             `json:"characterProfile"`
+	TrimSize            string             `json:"trimSize,omitempty"`
+	Format              string             `json:"format,omitempty"`
+	KDPLayout           manifest.KDPLayout `json:"kdpLayout"`
+	Pages               []previewPage      `json:"pages"`
 }
 
 func generateDataJS(m *manifest.Manifest) (string, string, error) {
@@ -88,14 +95,26 @@ func generateDataJS(m *manifest.Manifest) (string, string, error) {
 		}
 	}
 
+	var coverImgPath string
+	if m.Progress.CoverImagePath != "" {
+		coverImgPath = "../" + m.Progress.CoverImagePath
+	}
+
 	data := previewData{
-		Theme:            m.BookProperties.Theme,
-		Style:            m.BookProperties.Style,
-		CharacterProfile: m.BookProperties.CharacterProfile,
-		TrimSize:         m.BookProperties.TrimSize,
-		Format:           m.BookProperties.Format,
-		KDPLayout:        m.KDPLayout,
-		Pages:            pages,
+		Title:               m.BookProperties.Title,
+		Subtitle:            m.BookProperties.Subtitle,
+		Author:              m.BookProperties.Author,
+		BackCoverBlurb:      m.BookProperties.BackCoverBlurb,
+		CoverPrompt:         m.BookProperties.CoverPrompt,
+		CoverImagePath:      coverImgPath,
+		CoverImageGenerated: m.Progress.CoverImageGenerated,
+		Theme:               m.BookProperties.Theme,
+		Style:               m.BookProperties.Style,
+		CharacterProfile:    m.BookProperties.CharacterProfile,
+		TrimSize:            m.BookProperties.TrimSize,
+		Format:              m.BookProperties.Format,
+		KDPLayout:           m.KDPLayout,
+		Pages:               pages,
 	}
 
 	jsonData, err := json.MarshalIndent(data, "", "  ")
@@ -128,6 +147,14 @@ const htmlTemplate = `<!DOCTYPE html>
 
       <div class="meta-section">
         <h3>Book Parameters</h3>
+        <div class="meta-card">
+          <label>Title</label>
+          <div id="meta-title" class="meta-value">-</div>
+        </div>
+        <div class="meta-card">
+          <label>Author</label>
+          <div id="meta-author" class="meta-value">-</div>
+        </div>
         <div class="meta-card">
           <label>Theme</label>
           <div id="meta-theme" class="meta-value">-</div>
@@ -168,6 +195,9 @@ const htmlTemplate = `<!DOCTYPE html>
           <h1 id="book-title">Interactive Book Preview</h1>
         </div>
         <div class="controls-area">
+          <button id="toggle-cover-wrap" class="btn btn-secondary">
+            <span class="icon">📕</span> Cover Wrap
+          </button>
           <button id="toggle-guides" class="btn btn-secondary">
             <span class="icon">📐</span> Show Print Guides
           </button>
@@ -183,6 +213,10 @@ const htmlTemplate = `<!DOCTYPE html>
         
         <div class="page-container" id="page-container">
           <!-- Rendered Pages will go here -->
+        </div>
+
+        <div class="cover-wrap-container hidden" id="cover-wrap-container">
+          <!-- Rendered Cover Wrap will go here -->
         </div>
 
         <button id="next-btn" class="nav-arrow nav-next" aria-label="Next page">›</button>
@@ -795,6 +829,127 @@ body {
   font-weight: 600;
   color: #c9d1d9;
 }
+
+/* Cover Wrap Styling */
+.cover-wrap-container {
+  display: flex;
+  width: 900px;
+  height: 550px;
+  max-width: 95%;
+  max-height: 90%;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7);
+  border: 1px solid #30363d;
+  background-color: #161b22;
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.cover-wrap-container.hidden {
+  display: none !important;
+}
+
+.cover-wrap-back {
+  flex: 1;
+  background: #12141c;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+  border-right: 1px dashed #30363d;
+}
+
+.cover-wrap-blurb {
+  font-family: Georgia, serif;
+  font-size: 15px;
+  line-height: 1.6;
+  color: #e6edf3;
+  margin-top: 24px;
+}
+
+.cover-wrap-barcode {
+  width: 140px;
+  height: 80px;
+  border: 1px dashed #484f58;
+  background: #0d1117;
+  color: #8b949e;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  align-self: flex-start;
+  border-radius: 4px;
+}
+
+.cover-wrap-spine {
+  width: 40px;
+  background: #0d1117;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  border-right: 1px dashed #30363d;
+}
+
+.cover-wrap-spine-text {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  transform: rotate(180deg);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: #c9d1d9;
+  white-space: nowrap;
+}
+
+.cover-wrap-front {
+  flex: 1;
+  position: relative;
+  background-size: cover;
+  background-position: center;
+  background-color: #1a1e29;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 32px;
+}
+
+.cover-wrap-front-overlay {
+  background: linear-gradient(0deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.5) 70%, transparent 100%);
+  padding: 20px;
+  border-radius: 8px;
+  backdrop-filter: blur(4px);
+}
+
+.cover-wrap-front-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #f0f6fc;
+  margin-bottom: 4px;
+}
+
+.cover-wrap-front-subtitle {
+  font-size: 13px;
+  font-style: italic;
+  color: #8b949e;
+  margin-bottom: 12px;
+}
+
+.cover-wrap-front-author {
+  font-size: 14px;
+  font-weight: 600;
+  color: #58a6ff;
+}
+
+.cover-item {
+  color: #818cf8 !important;
+  font-weight: 600;
+  border-left: 2px solid #818cf8;
+  margin-bottom: 8px;
+}
 `
 
 const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
@@ -816,13 +971,22 @@ const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
   const metaStyle = document.getElementById('meta-style');
   const metaCharacter = document.getElementById('meta-character');
   const bookTitle = document.getElementById('book-title');
+  const metaTitle = document.getElementById('meta-title');
+  const metaAuthor = document.getElementById('meta-author');
 
+  if (metaTitle) metaTitle.textContent = bookData.title || 'Not Set';
+  if (metaAuthor) metaAuthor.textContent = bookData.author || 'Not Set';
   metaTheme.textContent = bookData.theme || 'Not Set';
   metaTrim.textContent = bookData.trimSize || 'Not Set';
   metaFormat.textContent = bookData.format || 'Not Set';
   metaStyle.textContent = bookData.style || 'Not Set';
   metaCharacter.textContent = bookData.characterProfile || 'Not Set';
-  bookTitle.textContent = (bookData.theme ? bookData.theme + ' - Preview' : 'Interactive Book Preview');
+
+  if (bookData.title) {
+    bookTitle.textContent = bookData.title + (bookData.subtitle ? ' - ' + bookData.subtitle : '');
+  } else {
+    bookTitle.textContent = (bookData.theme ? bookData.theme + ' - Preview' : 'Interactive Book Preview');
+  }
 
   // 2. Build pages and list elements
   const pageContainer = document.getElementById('page-container');
@@ -1063,9 +1227,109 @@ const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
     pageContainer.appendChild(pageEl);
   });
 
+  // Cover Wrap Rendering & Toggle Setup
+  const toggleCoverBtn = document.getElementById('toggle-cover-wrap');
+  const coverWrapContainer = document.getElementById('cover-wrap-container');
+  const navPrev = document.getElementById('prev-btn');
+  const navNext = document.getElementById('next-btn');
+  let showCoverWrap = false;
+
+  function renderCoverWrap() {
+    if (!coverWrapContainer) return;
+    coverWrapContainer.innerHTML = '';
+
+    const backEl = document.createElement('div');
+    backEl.className = 'cover-wrap-back';
+    const blurbEl = document.createElement('div');
+    blurbEl.className = 'cover-wrap-blurb';
+    blurbEl.textContent = bookData.backCoverBlurb || (bookData.theme ? 'A parodic tale about ' + bookData.theme : '');
+    backEl.appendChild(blurbEl);
+
+    const barcodeEl = document.createElement('div');
+    barcodeEl.className = 'cover-wrap-barcode';
+    barcodeEl.textContent = 'BARCODE / ISBN AREA';
+    backEl.appendChild(barcodeEl);
+
+    const spineEl = document.createElement('div');
+    spineEl.className = 'cover-wrap-spine';
+    const spineText = document.createElement('span');
+    spineText.className = 'cover-wrap-spine-text';
+    spineText.textContent = bookData.title || '';
+    spineEl.appendChild(spineText);
+
+    const frontEl = document.createElement('div');
+    frontEl.className = 'cover-wrap-front';
+    if (bookData.coverImagePath) {
+      frontEl.style.backgroundImage = "url('" + bookData.coverImagePath + "')";
+    }
+
+    const overlay = document.createElement('div');
+    overlay.className = 'cover-wrap-front-overlay';
+    const titleEl = document.createElement('div');
+    titleEl.className = 'cover-wrap-front-title';
+    titleEl.textContent = bookData.title || bookData.theme || 'Untitled Parody';
+    overlay.appendChild(titleEl);
+
+    if (bookData.subtitle) {
+      const subEl = document.createElement('div');
+      subEl.className = 'cover-wrap-front-subtitle';
+      subEl.textContent = bookData.subtitle;
+      overlay.appendChild(subEl);
+    }
+
+    const authorEl = document.createElement('div');
+    authorEl.className = 'cover-wrap-front-author';
+    authorEl.textContent = 'By ' + (bookData.author || 'Anonymous');
+    overlay.appendChild(authorEl);
+
+    frontEl.appendChild(overlay);
+
+    coverWrapContainer.appendChild(backEl);
+    coverWrapContainer.appendChild(spineEl);
+    coverWrapContainer.appendChild(frontEl);
+  }
+
+  renderCoverWrap();
+
+  if (toggleCoverBtn) {
+    toggleCoverBtn.addEventListener('click', () => {
+      showCoverWrap = !showCoverWrap;
+      const pageCounter = document.getElementById('page-counter');
+      if (showCoverWrap) {
+        pageContainer.classList.add('hidden');
+        coverWrapContainer.classList.remove('hidden');
+        if (navPrev) navPrev.style.display = 'none';
+        if (navNext) navNext.style.display = 'none';
+        if (pageCounter) pageCounter.textContent = 'Cover Wrap Spread';
+        toggleCoverBtn.classList.add('active');
+        toggleCoverBtn.innerHTML = '<span class="icon">📖</span> Book Pages';
+      } else {
+        pageContainer.classList.remove('hidden');
+        coverWrapContainer.classList.add('hidden');
+        if (navPrev) navPrev.style.display = '';
+        if (navNext) navNext.style.display = '';
+        updateDOMState();
+        toggleCoverBtn.classList.remove('active');
+        toggleCoverBtn.innerHTML = '<span class="icon">📕</span> Cover Wrap';
+      }
+    });
+  }
+
+  if (bookData.coverImagePath || bookData.coverImageGenerated || bookData.title) {
+    const coverLi = document.createElement('li');
+    coverLi.className = 'cover-item';
+    coverLi.textContent = '📕 Cover: ' + (bookData.title || 'Cover Wrap');
+    coverLi.addEventListener('click', () => {
+      if (!showCoverWrap && toggleCoverBtn) {
+        toggleCoverBtn.click();
+      }
+    });
+    pagesList.insertBefore(coverLi, pagesList.firstChild);
+  }
+
   // Navigation Logic
   function updateDOMState() {
-    const listItems = pagesList.querySelectorAll('li');
+    const listItems = pagesList.querySelectorAll('li:not(.cover-item)');
     const pageElements = pageContainer.querySelectorAll('.page');
 
     pageElements.forEach((el, idx) => {
@@ -1104,6 +1368,10 @@ const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
   }
 
   function nextPage() {
+    if (showCoverWrap && toggleCoverBtn) {
+      toggleCoverBtn.click();
+      return;
+    }
     if (activeIndex < pages.length - 1) {
       activeIndex++;
       try {
@@ -1114,6 +1382,10 @@ const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
   }
 
   function prevPage() {
+    if (showCoverWrap && toggleCoverBtn) {
+      toggleCoverBtn.click();
+      return;
+    }
     if (activeIndex > 0) {
       activeIndex--;
       try {
@@ -1125,6 +1397,9 @@ const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
 
   // Jump to specific page
   function jumpToPage(index) {
+    if (showCoverWrap && toggleCoverBtn) {
+      toggleCoverBtn.click();
+    }
     if (index >= 0 && index < pages.length) {
       activeIndex = index;
       try {

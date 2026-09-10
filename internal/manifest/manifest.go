@@ -35,6 +35,11 @@ type PageState struct {
 
 // BookProperties holds high-level configurations of the book.
 type BookProperties struct {
+	Title                 string `json:"title,omitempty"`
+	Subtitle              string `json:"subtitle,omitempty"`
+	Author                string `json:"author,omitempty"`
+	BackCoverBlurb        string `json:"back_cover_blurb,omitempty"`
+	CoverPrompt           string `json:"cover_prompt,omitempty"`
 	Theme                 string `json:"theme"`
 	Style                 string `json:"style"`
 	CharacterProfile      string `json:"character_profile"`

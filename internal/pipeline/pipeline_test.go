@@ -26,12 +26,14 @@ import (
 )
 
 type mockLLM struct {
-	stanzas     []string
-	prompts     []string
-	style       string
-	charProfile string
-	usage       telemetry.TokenUsage
-	err         error
+	stanzas        []string
+	prompts        []string
+	style          string
+	charProfile    string
+	coverDesign    *CoverDesign
+	usage          telemetry.TokenUsage
+	err            error
+	coverDesignErr error
 }
 
 type geminiResponse struct {
@@ -89,6 +91,25 @@ func (m *mockLLM) GenerateStanzas(ctx context.Context, theme string, count int, 
 		}
 	}
 	return m.stanzas, prompts, m.usage, nil
+}
+
+func (m *mockLLM) GenerateCoverDesign(ctx context.Context, theme, style, characterProfile string) (*CoverDesign, telemetry.TokenUsage, error) {
+	if m.coverDesignErr != nil {
+		return nil, telemetry.TokenUsage{}, m.coverDesignErr
+	}
+	if m.err != nil {
+		return nil, telemetry.TokenUsage{}, m.err
+	}
+	if m.coverDesign != nil {
+		return m.coverDesign, m.usage, nil
+	}
+	return &CoverDesign{
+		Title:          "Mock Parody Title",
+		Subtitle:       "A Mock Subtitle",
+		Author:         "Mock Author",
+		BackCoverBlurb: "A mock back cover blurb about existential dread.",
+		CoverPrompt:    "Mock cover illustration prompt",
+	}, m.usage, nil
 }
 
 func (m *mockLLM) Ping(ctx context.Context) error {
@@ -579,13 +600,13 @@ func TestBrew_EndToEnd_Mocked(t *testing.T) {
 	}
 
 	// Verify telemetry updates
-	if m.Telemetry.ImageGenerations != 3 {
-		t.Errorf("expected 3 image generations, got %d", m.Telemetry.ImageGenerations)
+	if m.Telemetry.ImageGenerations != 4 {
+		t.Errorf("expected 4 image generations, got %d", m.Telemetry.ImageGenerations)
 	}
 	mu := m.Telemetry.ModelUsages["unknown"]
 	if mu == nil {
 		t.Error("expected unknown model usages telemetry to exist")
-	} else if mu.InputTokens != 1000 || mu.OutputTokens != 2000 || mu.CachedTokens != 500 {
+	} else if mu.InputTokens != 2000 || mu.OutputTokens != 4000 || mu.CachedTokens != 1000 {
 		t.Errorf("unexpected token usage: %+v", mu)
 	}
 
@@ -597,6 +618,15 @@ func TestBrew_EndToEnd_Mocked(t *testing.T) {
 	// Verify that files were copied
 	if _, statErr := os.Stat(filepath.Join(tmpDir, "images", "page_1.png")); os.IsNotExist(statErr) {
 		t.Error("page_1.png image file does not exist")
+	}
+	if !m.Progress.CoverImageGenerated || m.Progress.CoverImagePath != "images/cover.png" {
+		t.Errorf("expected cover image generated at images/cover.png, got %v (%s)", m.Progress.CoverImageGenerated, m.Progress.CoverImagePath)
+	}
+	if _, statErr := os.Stat(filepath.Join(tmpDir, "images", "cover.png")); os.IsNotExist(statErr) {
+		t.Error("cover.png image file does not exist")
+	}
+	if m.BookProperties.Title != "Mock Parody Title" {
+		t.Errorf("expected title 'Mock Parody Title', got %q", m.BookProperties.Title)
 	}
 }
 
@@ -1330,6 +1360,10 @@ func TestBrew_NoIllustrationsNeeded(t *testing.T) {
 	m.Progress.Pages = []manifest.PageState{
 		{PageIndex: 1, Status: manifest.StatusCompleted, ImagePath: "images/page_1.png", Text: "Stanza 1"},
 	}
+	m.Progress.CoverImageGenerated = true
+	m.Progress.CoverImagePath = "images/cover.png"
+	_ = os.MkdirAll(filepath.Join(tmpDir, "images"), 0750)
+	_ = os.WriteFile(filepath.Join(tmpDir, "images", "cover.png"), []byte("dummy"), 0600)
 	if saveErr := m.Save(); saveErr != nil {
 		t.Fatalf("failed to save manifest: %v", saveErr)
 	}
@@ -1427,26 +1461,26 @@ func TestBrew_TelemetryCustomPricing(t *testing.T) {
 		t.Fatalf("failed to load manifest: %v", err)
 	}
 
-	if m.Telemetry.ImageGenerations != 2 {
-		t.Errorf("expected 2 image generations, got %d", m.Telemetry.ImageGenerations)
+	if m.Telemetry.ImageGenerations != 3 {
+		t.Errorf("expected 3 image generations, got %d", m.Telemetry.ImageGenerations)
 	}
 
 	mu := m.Telemetry.ModelUsages["unknown"]
 	if mu == nil {
 		t.Error("expected unknown model usages telemetry to exist")
-	} else if mu.InputTokens != 1000 || mu.OutputTokens != 2000 || mu.CachedTokens != 500 {
+	} else if mu.InputTokens != 2000 || mu.OutputTokens != 4000 || mu.CachedTokens != 1000 {
 		t.Errorf("unexpected token usage: %+v", mu)
 	}
 
 	// Expected total cost calculation:
-	// LLM cost for unknown model:
-	// input billed = (1000 - 500) = 500 tokens * $1.00 / 1M = $0.00050
-	// output = 2000 tokens * $2.00 / 1M = $0.00400
-	// cached = 500 tokens * $0.50 / 1M = $0.00025
-	// total LLM = $0.00475
-	// Imagegen cost: 2 images * $0.10 = $0.20
-	// Total cost expected = $0.20475
-	expectedCost := 0.20475
+	// LLM cost for unknown model (stanzas + cover design):
+	// input billed = (2000 - 1000) = 1000 tokens * $1.00 / 1M = $0.00100
+	// output = 4000 tokens * $2.00 / 1M = $0.00800
+	// cached = 1000 tokens * $0.50 / 1M = $0.00050
+	// total LLM = $0.00950
+	// Imagegen cost: 3 images (2 pages + 1 cover) * $0.10 = $0.30
+	// Total cost expected = $0.30950
+	expectedCost := 0.30950
 	if math.Abs(m.Telemetry.TotalCostUSD-expectedCost) > 1e-6 {
 		t.Errorf("expected TotalCostUSD %f, got %f", expectedCost, m.Telemetry.TotalCostUSD)
 	}
@@ -2509,9 +2543,9 @@ func TestBrew_CharacterInvariantInjection(t *testing.T) {
 	}
 
 	// Verify imagegen requests had prepended prompts and correct weights
-	// There should be 3 requests: 1 for character seed generation, 2 for pages
-	if len(imageGenRequests) != 3 {
-		t.Fatalf("expected 3 image generation requests (1 seed + 2 pages), got %d", len(imageGenRequests))
+	// There should be 4 requests: 1 for character seed generation, 2 for pages, 1 for cover
+	if len(imageGenRequests) != 4 {
+		t.Fatalf("expected 4 image generation requests (1 seed + 2 pages + 1 cover), got %d", len(imageGenRequests))
 	}
 
 	// First request is seed portrait: prompt should be "Detailed visual seed character portrait: mock-char-profile"
@@ -2549,6 +2583,15 @@ func TestBrew_CharacterInvariantInjection(t *testing.T) {
 	}
 	if page2Req.CharacterWeight == nil || *page2Req.CharacterWeight != 50 {
 		t.Errorf("expected page 2 weight 50, got %v", page2Req.CharacterWeight)
+	}
+
+	// Fourth request is cover: cref set, weight set to global default (50)
+	coverReq := imageGenRequests[3]
+	if coverReq.CrefURL != "http://example.com/character_seed.png" {
+		t.Errorf("unexpected cover cref URL: %q", coverReq.CrefURL)
+	}
+	if coverReq.CharacterWeight == nil || *coverReq.CharacterWeight != 50 {
+		t.Errorf("expected cover weight 50, got %v", coverReq.CharacterWeight)
 	}
 }
 
@@ -3310,8 +3353,8 @@ func TestBrew_ImagegenFallback(t *testing.T) {
 		t.Fatalf("Brew failed: %v", err)
 	}
 
-	if count := atomic.LoadInt32(&callCount); count != 2 {
-		t.Errorf("expected imagegen_generate to be called exactly 2 times, got %d", count)
+	if count := atomic.LoadInt32(&callCount); count != 3 {
+		t.Errorf("expected imagegen_generate to be called exactly 3 times (1 retry for page + 1 for cover), got %d", count)
 	}
 }
 
@@ -3684,5 +3727,101 @@ func TestBrew_ReviewFlow_TUI(t *testing.T) {
 	err = handleReviewCheckpoint(ctx, optsApprove, m, manuscriptPath)
 	if err != nil {
 		t.Fatalf("expected nil error when approving TUI, got %v", err)
+	}
+}
+
+func TestGenerateCoverImageWithClient_Branches(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	tmpDir := t.TempDir()
+	m := &manifest.Manifest{
+		BookProperties: manifest.BookProperties{
+			Title:            "Existential Dread",
+			CharacterProfile: "A cynical coder",
+			Style:            "Noir",
+		},
+	}
+
+	// 1. Budget exceeded error
+	lowBudgetOpts := BrewOptions{
+		OutputDir: tmpDir,
+		Budget:    0.01,
+	}
+	errBudget := generateCoverImageWithClient(ctx, m, lowBudgetOpts, nil, "pithos-style")
+	if errBudget == nil || !strings.Contains(errBudget.Error(), "budget limit exceeded") {
+		t.Fatalf("expected budget limit exceeded error, got: %v", errBudget)
+	}
+
+	// 2. Imagegen raw failure
+	clientTransportErr, serverTransportErr := mcpsdk.NewInMemoryTransports()
+	errServer := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "mock-err-img", Version: "1.0.0"}, nil)
+	errServer.AddTool(&mcpsdk.Tool{
+		Name:        "imagegen_generate",
+		InputSchema: map[string]any{"type": "object"},
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		return nil, fmt.Errorf("simulated generation failure")
+	})
+	sessionErr, _ := errServer.Connect(ctx, serverTransportErr, nil)
+	defer func() { _ = sessionErr.Close() }()
+
+	mcpClientErr := mcp.NewPluginClient(mcp.PluginImageGen)
+	mcpClientErr.SetTransport(clientTransportErr)
+	if err := mcpClientErr.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = mcpClientErr.Stop() }()
+
+	failOpts := BrewOptions{
+		OutputDir: tmpDir,
+		Budget:    5.00,
+	}
+	errGen := generateCoverImageWithClient(ctx, m, failOpts, mcpClientErr, "pithos-style")
+	if errGen == nil || !strings.Contains(errGen.Error(), "failed to generate cover image") {
+		t.Fatalf("expected failed to generate cover image error, got: %v", errGen)
+	}
+
+	// 3. Success with prompt defaulting
+	dummySource := filepath.Join(tmpDir, "source.png")
+	_ = os.WriteFile(dummySource, []byte("fake-png"), 0600)
+
+	clientTransportOk, serverTransportOk := mcpsdk.NewInMemoryTransports()
+	_, cleanupOk := setupMockImageGenServer(t, ctx, serverTransportOk, dummySource)
+	defer cleanupOk()
+
+	mcpClientOk := mcp.NewPluginClient(mcp.PluginImageGen)
+	mcpClientOk.SetTransport(clientTransportOk)
+	if err := mcpClientOk.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = mcpClientOk.Stop() }()
+
+	mSuccess := &manifest.Manifest{
+		BookProperties: manifest.BookProperties{
+			Title:            "The Great Sprint",
+			CharacterProfile: "Burnt-out Dev",
+			Style:            "Dr. Seuss Dark Parody",
+		},
+	}
+	mSuccess.SetFilePath(filepath.Join(tmpDir, "manifest.json"))
+	// Initialize git repo in tmpDir for Checkpoint
+	_ = Checkpoint(ctx, tmpDir, "Init repo")
+
+	okOpts := BrewOptions{
+		OutputDir: tmpDir,
+		Budget:    5.00,
+	}
+	errOk := generateCoverImageWithClient(ctx, mSuccess, okOpts, mcpClientOk, "pithos-style")
+	if errOk != nil {
+		t.Fatalf("unexpected error during cover generation: %v", errOk)
+	}
+	if !mSuccess.Progress.CoverImageGenerated {
+		t.Error("expected CoverImageGenerated to be true")
+	}
+	if mSuccess.Progress.CoverImagePath != "images/cover.png" {
+		t.Errorf("expected CoverImagePath images/cover.png, got %q", mSuccess.Progress.CoverImagePath)
+	}
+	if _, statErr := os.Stat(filepath.Join(tmpDir, "images", "cover.png")); statErr != nil {
+		t.Errorf("expected cover.png to exist: %v", statErr)
 	}
 }

@@ -18,6 +18,8 @@ import (
 // InitiateOptions contains configuration fields for initializing a book workspace.
 type InitiateOptions struct {
 	OutputDir           string
+	Title               string
+	Author              string
 	Theme               string
 	Style               string
 	Format              string
@@ -70,6 +72,8 @@ func Initiate(opts InitiateOptions) (*manifest.Manifest, error) {
 	manifestPath := filepath.Join(opts.OutputDir, "manifest.json")
 	m := manifest.NewManifest(manifestPath)
 	m.BookProperties = manifest.BookProperties{
+		Title:           opts.Title,
+		Author:          opts.Author,
 		Theme:           opts.Theme,
 		Style:           opts.Style,
 		Format:          opts.Format,

@@ -15,10 +15,11 @@ import (
 	"google.golang.org/api/option"
 )
 
-// LLMClient defines the interface for generating stanzas using an LLM.
+// LLMClient defines the interface for generating stanzas and book content using an LLM.
 type LLMClient interface {
 	GenerateVisualGuides(ctx context.Context, theme string) (string, string, telemetry.TokenUsage, error)
 	GenerateStanzas(ctx context.Context, theme string, count int, style string, characterProfile string) ([]string, []string, telemetry.TokenUsage, error)
+	GenerateCoverDesign(ctx context.Context, theme, style, characterProfile string) (*CoverDesign, telemetry.TokenUsage, error)
 	Ping(ctx context.Context) error
 }
 
@@ -163,6 +164,77 @@ func (a *PowerwordClientAdapter) GenerateStanzas(ctx context.Context, theme stri
 	}
 
 	return finalResp.Stanzas, finalResp.IllustrationPrompts, usage, nil
+}
+
+// CoverDesign holds the parodic book title, subtitle, author, back-cover blurb, and cover art prompt.
+type CoverDesign struct {
+	Title          string `json:"title"`
+	Subtitle       string `json:"subtitle"`
+	Author         string `json:"author"`
+	BackCoverBlurb string `json:"back_cover_blurb"`
+	CoverPrompt    string `json:"cover_prompt"`
+}
+
+// GenerateCoverDesign generates parodic book title, subtitle, satirical author pseudonym, back-cover blurb, and cover art prompt.
+func (a *PowerwordClientAdapter) GenerateCoverDesign(ctx context.Context, theme, style, characterProfile string) (*CoverDesign, telemetry.TokenUsage, error) {
+	if a == nil || a.client == nil {
+		return nil, telemetry.TokenUsage{}, errors.New("underlying powerword client is nil")
+	}
+	prompt := fmt.Sprintf(
+		"You are a master of satirical and dark children's books. "+
+			"Based on the theme %q, global art style %q, and character profile %q, "+
+			"generate a complete cover package for the book.\n"+
+			"Return the output in JSON format with the following keys:\n"+
+			"1. 'title': A punchy, hilarious, or darkly existential children's book title.\n"+
+			"2. 'subtitle': A satirical subtitle or tagline.\n"+
+			"3. 'author': A humorous or parodic author pseudonym.\n"+
+			"4. 'back_cover_blurb': A short, funny, existential back cover blurb (2-4 sentences).\n"+
+			"5. 'cover_prompt': A detailed illustration prompt for the front cover art, featuring the character(s) in an iconic front-cover composition matching the art style.",
+		theme, style, characterProfile,
+	)
+
+	messages := []llm.Message{
+		{
+			Role:    llm.RoleUser,
+			Content: prompt,
+		},
+	}
+
+	msg, err := a.client.Generate(ctx, messages, nil, llm.WithResponseSchema(CoverDesign{}))
+	if err != nil {
+		return nil, telemetry.TokenUsage{}, fmt.Errorf("llm generate cover design error: %w", err)
+	}
+
+	if msg == nil || msg.Content == "" {
+		return nil, telemetry.TokenUsage{}, errors.New("empty response from llm client for cover design")
+	}
+
+	cleanedContent := cleanJSONText(msg.Content)
+
+	var finalResp CoverDesign
+	if err := json.Unmarshal([]byte(cleanedContent), &finalResp); err != nil {
+		return nil, telemetry.TokenUsage{}, fmt.Errorf("failed to parse cover design json from llm response: %w (raw content: %s)", err, truncateString(msg.Content, 200))
+	}
+
+	var usage telemetry.TokenUsage
+	if msg.Usage != nil {
+		usage = *msg.Usage
+	}
+
+	finalResp.Title = strings.TrimSpace(finalResp.Title)
+	finalResp.Subtitle = strings.TrimSpace(finalResp.Subtitle)
+	finalResp.Author = strings.TrimSpace(finalResp.Author)
+	finalResp.BackCoverBlurb = strings.TrimSpace(finalResp.BackCoverBlurb)
+	finalResp.CoverPrompt = strings.TrimSpace(finalResp.CoverPrompt)
+
+	if finalResp.Title == "" {
+		return nil, telemetry.TokenUsage{}, errors.New("llm returned an empty title")
+	}
+	if finalResp.CoverPrompt == "" {
+		return nil, telemetry.TokenUsage{}, errors.New("llm returned an empty cover_prompt")
+	}
+
+	return &finalResp, usage, nil
 }
 
 func cleanJSONText(text string) string {

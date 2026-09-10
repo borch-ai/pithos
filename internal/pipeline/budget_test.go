@@ -336,7 +336,7 @@ func TestBudget_NilConfig(t *testing.T) {
 		LLM:       mockLLMClient,
 		DryRun:    true,
 		Silent:    true,
-		Budget:    0.05,
+		Budget:    0.10,
 	}
 
 	oldIsTTY := isTTY

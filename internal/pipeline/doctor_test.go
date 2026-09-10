@@ -40,7 +40,7 @@ func (m *mockMcpClient) CallTool(ctx context.Context, toolName string, args map[
 		if m.capText != "" {
 			return m.capText, nil
 		}
-		return `{"backend":"google","supports_cref":false,"supports_sref":false}`, nil
+		return `{"backend":"veo","supports_cref":true,"supports_sref":true}`, nil
 	}
 	return "", nil
 }
@@ -475,6 +475,7 @@ func TestDoctor_ImageGenCapabilitiesInvalidJSON(t *testing.T) {
 }
 
 func TestDoctor_PDFCheckHandshakeWarning(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	origCfg := config.Cfg
 	defer func() { config.Cfg = origCfg }()
 

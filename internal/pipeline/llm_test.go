@@ -320,3 +320,97 @@ func TestCleanJSONText(t *testing.T) {
 		})
 	}
 }
+
+func TestPowerwordClientAdapter_GenerateCoverDesign_Success(t *testing.T) {
+	mockMsg := &llm.Message{
+		Role: llm.RoleAssistant,
+		Content: `{
+			"title": "The Sisyphus Sprint",
+			"subtitle": "A Tale of Agile Nihilism",
+			"author": "Dr. Cynic",
+			"back_cover_blurb": "Roll the standup boulder up the hill forever.",
+			"cover_prompt": "Digital painting of a developer pushing a Jira ticket up a mountain"
+		}`,
+		Usage: &telemetry.TokenUsage{
+			InputTokens:  120,
+			OutputTokens: 80,
+			CachedTokens: 20,
+		},
+	}
+
+	mockClient := &mockPWClient{response: mockMsg}
+	adapter := &PowerwordClientAdapter{client: mockClient, modelName: "test-model"}
+
+	design, usage, err := adapter.GenerateCoverDesign(context.Background(), "agile burnout", "digital painting", "tired engineer")
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	if design.Title != "The Sisyphus Sprint" {
+		t.Errorf("expected title %q, got %q", "The Sisyphus Sprint", design.Title)
+	}
+	if design.Subtitle != "A Tale of Agile Nihilism" {
+		t.Errorf("expected subtitle %q, got %q", "A Tale of Agile Nihilism", design.Subtitle)
+	}
+	if design.Author != "Dr. Cynic" {
+		t.Errorf("expected author %q, got %q", "Dr. Cynic", design.Author)
+	}
+	if design.BackCoverBlurb != "Roll the standup boulder up the hill forever." {
+		t.Errorf("expected blurb %q, got %q", "Roll the standup boulder up the hill forever.", design.BackCoverBlurb)
+	}
+	if design.CoverPrompt != "Digital painting of a developer pushing a Jira ticket up a mountain" {
+		t.Errorf("expected cover prompt %q, got %q", "Digital painting of a developer pushing a Jira ticket up a mountain", design.CoverPrompt)
+	}
+	if usage.InputTokens != 120 || usage.OutputTokens != 80 {
+		t.Errorf("unexpected usage: %+v", usage)
+	}
+}
+
+func TestPowerwordClientAdapter_GenerateCoverDesign_Errors(t *testing.T) {
+	// 1. Nil client
+	var nilAdapter *PowerwordClientAdapter
+	_, _, err := nilAdapter.GenerateCoverDesign(context.Background(), "theme", "style", "char")
+	if err == nil {
+		t.Error("expected error for nil adapter")
+	}
+
+	// 2. Client returns error
+	mockClientErr := &mockPWClient{err: errors.New("network failure")}
+	adapterErr := &PowerwordClientAdapter{client: mockClientErr, modelName: "test"}
+	_, _, err = adapterErr.GenerateCoverDesign(context.Background(), "theme", "style", "char")
+	if err == nil {
+		t.Error("expected error from client error")
+	}
+
+	// 3. Empty response content
+	mockEmpty := &mockPWClient{response: &llm.Message{Content: ""}}
+	adapterEmpty := &PowerwordClientAdapter{client: mockEmpty, modelName: "test"}
+	_, _, err = adapterEmpty.GenerateCoverDesign(context.Background(), "theme", "style", "char")
+	if err == nil {
+		t.Error("expected error for empty content")
+	}
+
+	// 4. Invalid JSON
+	mockInvalid := &mockPWClient{response: &llm.Message{Content: "not json"}}
+	adapterInvalid := &PowerwordClientAdapter{client: mockInvalid, modelName: "test"}
+	_, _, err = adapterInvalid.GenerateCoverDesign(context.Background(), "theme", "style", "char")
+	if err == nil {
+		t.Error("expected error for invalid json")
+	}
+
+	// 5. Empty title
+	mockNoTitle := &mockPWClient{response: &llm.Message{Content: `{"title": "  ", "cover_prompt": "prompt"}`}}
+	adapterNoTitle := &PowerwordClientAdapter{client: mockNoTitle, modelName: "test"}
+	_, _, err = adapterNoTitle.GenerateCoverDesign(context.Background(), "theme", "style", "char")
+	if err == nil || !strings.Contains(err.Error(), "empty title") {
+		t.Errorf("expected empty title error, got: %v", err)
+	}
+
+	// 6. Empty cover_prompt
+	mockNoPrompt := &mockPWClient{response: &llm.Message{Content: `{"title": "Title", "cover_prompt": "   "}`}}
+	adapterNoPrompt := &PowerwordClientAdapter{client: mockNoPrompt, modelName: "test"}
+	_, _, err = adapterNoPrompt.GenerateCoverDesign(context.Background(), "theme", "style", "char")
+	if err == nil || !strings.Contains(err.Error(), "empty cover_prompt") {
+		t.Errorf("expected empty cover_prompt error, got: %v", err)
+	}
+}
