@@ -18,19 +18,19 @@ func resolveDirectoryFlag(cmd *cobra.Command, dirVal, legacyVal string) string {
 	return legacyVal
 }
 
-// resolvePositionalOrDir resolves the target workspace from either a positional argument or --dir flag.
+// resolvePositionalOrDir resolves the target workspace and indicates whether it was supplied via a positional argument.
 // If both are specified, it returns an error to prevent accidental execution on the wrong target.
-func resolvePositionalOrDir(cmd *cobra.Command, dirVal string, args []string) (string, error) {
+func resolvePositionalOrDir(cmd *cobra.Command, dirVal string, args []string) (target string, isPositional bool, err error) {
 	if cmd.Flags().Changed("dir") && len(args) > 0 {
-		return "", errors.New("cannot specify both book name as positional argument and --dir flag")
+		return "", false, errors.New("cannot specify both book name as positional argument and --dir flag")
 	}
 	if dirVal != "" {
-		return dirVal, nil
+		return dirVal, false, nil
 	}
 	if len(args) == 0 {
-		return "", errors.New("must specify book name as argument or via --dir flag")
+		return "", false, errors.New("must specify book name as argument or via --dir flag")
 	}
-	return args[0], nil
+	return args[0], true, nil
 }
 
 // isBareSlug returns true if target is a bare book name without directory separators
@@ -50,9 +50,12 @@ func isBareSlug(target string) bool {
 
 // resolveWorkspaceAndBook resolves target path or slug using pipeline.ResolveBookPath
 // and splits it into workspaceRoot and bookName.
-// For bare slugs (e.g. "my-book" or "books"), it preserves bare-slug semantics under WorkspacesRoot.
-func resolveWorkspaceAndBook(target string) (workspaceRoot string, bookName string) {
-	if isBareSlug(target) {
+// If isPositional is true and target is a bare slug (e.g. "books" or "my-book"),
+// it preserves legacy bare-slug semantics under WorkspacesRoot.
+// If target was explicitly supplied via --dir (isPositional == false),
+// it routes through pipeline.ResolveBookPath, maintaining consistency with all other commands.
+func resolveWorkspaceAndBook(target string, isPositional bool) (workspaceRoot string, bookName string) {
+	if isPositional && isBareSlug(target) {
 		root := ""
 		if config.Cfg != nil && config.Cfg.WorkspacesRoot != "" {
 			root = config.Cfg.WorkspacesRoot

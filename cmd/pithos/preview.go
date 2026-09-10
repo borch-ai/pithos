@@ -24,7 +24,7 @@ var previewCmd = &cobra.Command{
 			return fmt.Errorf("configuration is not loaded")
 		}
 
-		target, err := resolvePositionalOrDir(cmd, previewDir, args)
+		target, _, err := resolvePositionalOrDir(cmd, previewDir, args)
 		if err != nil {
 			return err
 		}

@@ -305,9 +305,9 @@ func TestResolvePositionalOrDir(t *testing.T) {
 		if err := cmd.ParseFlags([]string{}); err != nil {
 			t.Fatalf("ParseFlags failed: %v", err)
 		}
-		res, err := resolvePositionalOrDir(cmd, dir, []string{"my-book"})
-		if err != nil || res != "my-book" {
-			t.Errorf("expected 'my-book', got %q, err: %v", res, err)
+		res, isPos, err := resolvePositionalOrDir(cmd, dir, []string{"my-book"})
+		if err != nil || res != "my-book" || !isPos {
+			t.Errorf("expected ('my-book', true), got (%q, %v), err: %v", res, isPos, err)
 		}
 	})
 
@@ -318,9 +318,9 @@ func TestResolvePositionalOrDir(t *testing.T) {
 		if err := cmd.ParseFlags([]string{"--dir", "flag-book"}); err != nil {
 			t.Fatalf("ParseFlags failed: %v", err)
 		}
-		res, err := resolvePositionalOrDir(cmd, dir, nil)
-		if err != nil || res != "flag-book" {
-			t.Errorf("expected 'flag-book', got %q, err: %v", res, err)
+		res, isPos, err := resolvePositionalOrDir(cmd, dir, nil)
+		if err != nil || res != "flag-book" || isPos {
+			t.Errorf("expected ('flag-book', false), got (%q, %v), err: %v", res, isPos, err)
 		}
 	})
 
@@ -331,7 +331,7 @@ func TestResolvePositionalOrDir(t *testing.T) {
 		if err := cmd.ParseFlags([]string{}); err != nil {
 			t.Fatalf("ParseFlags failed: %v", err)
 		}
-		_, err := resolvePositionalOrDir(cmd, dir, nil)
+		_, _, err := resolvePositionalOrDir(cmd, dir, nil)
 		if err == nil || !strings.Contains(err.Error(), "must specify book name") {
 			t.Errorf("expected missing book name error, got %v", err)
 		}
@@ -344,7 +344,7 @@ func TestResolvePositionalOrDir(t *testing.T) {
 		if err := cmd.ParseFlags([]string{"--dir", "flag-book"}); err != nil {
 			t.Fatalf("ParseFlags failed: %v", err)
 		}
-		_, err := resolvePositionalOrDir(cmd, dir, []string{"positional-book"})
+		_, _, err := resolvePositionalOrDir(cmd, dir, []string{"positional-book"})
 		if err == nil || !strings.Contains(err.Error(), "cannot specify both") {
 			t.Errorf("expected mutual exclusion error, got %v", err)
 		}
@@ -419,8 +419,8 @@ func TestIsBareSlug(t *testing.T) {
 }
 
 func TestResolveWorkspaceAndBook(t *testing.T) {
-	// Bare book name
-	wsRoot, bName := resolveWorkspaceAndBook("bare-slug")
+	// Bare book name (positional)
+	wsRoot, bName := resolveWorkspaceAndBook("bare-slug", true)
 	if bName != "bare-slug" {
 		t.Errorf("expected bookName 'bare-slug', got %q", bName)
 	}
@@ -428,27 +428,36 @@ func TestResolveWorkspaceAndBook(t *testing.T) {
 		t.Errorf("expected non-empty wsRoot for bare slug")
 	}
 
-	// Bare book name "books" must preserve bare-slug semantics under WorkspacesRoot
-	wsRootBooks, bNameBooks := resolveWorkspaceAndBook("books")
-	if bNameBooks != "books" {
-		t.Errorf("expected bookName 'books', got %q", bNameBooks)
+	// Positional bare book name "books" must preserve bare-slug semantics under WorkspacesRoot
+	wsRootBooksPos, bNameBooksPos := resolveWorkspaceAndBook("books", true)
+	if bNameBooksPos != "books" {
+		t.Errorf("expected bookName 'books', got %q", bNameBooksPos)
 	}
-	if wsRootBooks != wsRoot {
-		t.Errorf("expected wsRoot for bare slug 'books' (%q) to match wsRoot for 'bare-slug' (%q)", wsRootBooks, wsRoot)
+	if wsRootBooksPos != wsRoot {
+		t.Errorf("expected wsRoot for positional 'books' (%q) to match wsRoot for 'bare-slug' (%q)", wsRootBooksPos, wsRoot)
 	}
 
-	// Explicit path "./books" should NOT be treated as a bare slug
-	wsRootDotBooks, bNameDotBooks := resolveWorkspaceAndBook("./books")
+	// Explicit --dir "books" (isPositional == false) must route through ResolveBookPath as a path
+	wsRootBooksFlag, bNameBooksFlag := resolveWorkspaceAndBook("books", false)
+	if bNameBooksFlag != "books" {
+		t.Errorf("expected bookName 'books', got %q", bNameBooksFlag)
+	}
+	if wsRootBooksFlag != "." {
+		t.Errorf("expected wsRoot for --dir 'books' to be '.', got %q", wsRootBooksFlag)
+	}
+
+	// Explicit path "./books" should NOT be treated as a bare slug in either mode
+	wsRootDotBooks, bNameDotBooks := resolveWorkspaceAndBook("./books", true)
 	if bNameDotBooks != "books" {
 		t.Errorf("expected bookName 'books', got %q", bNameDotBooks)
 	}
-	if wsRootDotBooks == wsRoot && wsRoot != "." {
-		t.Errorf("expected './books' to resolve relative to current dir, got %q", wsRootDotBooks)
+	if wsRootDotBooks != "." {
+		t.Errorf("expected './books' to resolve relative to current dir '.', got %q", wsRootDotBooks)
 	}
 
 	// Absolute path
 	absPath := "/tmp/test-workspaces/my-book"
-	wsRoot, bName = resolveWorkspaceAndBook(absPath)
+	wsRoot, bName = resolveWorkspaceAndBook(absPath, false)
 	if bName != "my-book" {
 		t.Errorf("expected bookName 'my-book', got %q", bName)
 	}
@@ -457,7 +466,7 @@ func TestResolveWorkspaceAndBook(t *testing.T) {
 	}
 
 	// Tilde path
-	wsRoot, bName = resolveWorkspaceAndBook("~/tilde-book")
+	wsRoot, bName = resolveWorkspaceAndBook("~/tilde-book", false)
 	if bName != "tilde-book" {
 		t.Errorf("expected bookName 'tilde-book', got %q", bName)
 	}
@@ -466,7 +475,7 @@ func TestResolveWorkspaceAndBook(t *testing.T) {
 	}
 
 	// Books relative prefix
-	wsRoot, bName = resolveWorkspaceAndBook("books/relative-book")
+	wsRoot, bName = resolveWorkspaceAndBook("books/relative-book", false)
 	if bName != "relative-book" {
 		t.Errorf("expected bookName 'relative-book', got %q", bName)
 	}

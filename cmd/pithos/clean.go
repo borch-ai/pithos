@@ -35,12 +35,12 @@ var cleanCmd = &cobra.Command{
 			return fmt.Errorf("--all and --reset-failed are mutually exclusive")
 		}
 
-		target, err := resolvePositionalOrDir(cmd, cleanDir, args)
+		target, isPositional, err := resolvePositionalOrDir(cmd, cleanDir, args)
 		if err != nil {
 			return err
 		}
 
-		workspaceRoot, bookName := resolveWorkspaceAndBook(target)
+		workspaceRoot, bookName := resolveWorkspaceAndBook(target, isPositional)
 
 		err = pipeline.CleanWorkspace(workspaceRoot, bookName, cleanOrphans, cleanResetFailed, cleanAll)
 		if err != nil {

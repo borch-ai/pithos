@@ -24,12 +24,12 @@ var statusCmd = &cobra.Command{
 			return fmt.Errorf("workspaces root is empty in config")
 		}
 
-		target, err := resolvePositionalOrDir(cmd, statusDir, args)
+		target, isPositional, err := resolvePositionalOrDir(cmd, statusDir, args)
 		if err != nil {
 			return err
 		}
 
-		workspaceRoot, bookName := resolveWorkspaceAndBook(target)
+		workspaceRoot, bookName := resolveWorkspaceAndBook(target, isPositional)
 
 		ws, err := pipeline.GetWorkspaceStatus(workspaceRoot, bookName)
 		if err != nil {
