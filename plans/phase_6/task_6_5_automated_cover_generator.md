@@ -5,31 +5,84 @@
 
 Automated parodic book cover generation by creating a unified workflow that queries the LLM for cover art ideas, generates a high-resolution cover illustration matching the style guide, compiles KDP geometry specifications (margins, bleed, spine width), and produces a print-ready PDF cover wrap.
 
-## Summary of Implementation
+## User Review Required
 
-1. **LLM Cover Design Generation**:
-   - Added `CoverDesign` struct containing `Title`, `Subtitle`, `Author`, `BackCoverBlurb`, and `CoverPrompt`.
-   - Added `GenerateCoverDesign` to `LLMClient` interface and implemented structured JSON extraction in `PowerwordClientAdapter`.
-   - Integrated optional `--title` and `--author` CLI flags in `cmd/pithos initiate` and `InitiateOptions` to allow explicit overrides.
-   - In `generateManuscript` (`brew`), automatically generates missing title, subtitle, author, back-cover blurb, and cover illustration prompt via the LLM adapter (or deterministic mocks for simulated/dry-run modes).
+> [!NOTE]
+> All Task 6.5 implementation requirements have been implemented and verified. Unit test coverage meets the strict 91% requirement (achieved 91.3%), and linter checks pass cleanly with 0 issues.
 
-2. **Cover Art Generation in Brew**:
-   - Extended `generateIllustrations` in `internal/pipeline/brew.go` with `needCover` logic.
-   - When cover generation is needed, generates `images/cover.png` using the active MCP `PluginImageGen` client and registered style profile.
-   - Reuses active MCP client sessions, preventing redundant socket reconnections or EOF errors on in-memory test transports.
-   - Fully supports `--dry-run` simulation mode with dummy PNG generation and telemetry tracking.
+## Proposed Changes
 
-3. **KDP Full Cover Wrap PDF Compilation in Assemble**:
-   - Added `compileCoverPDF` in `internal/pipeline/assemble.go` invoking the `compile_cover` tool on `pw-mcp-typst`.
-   - Passes KDP spine width, bleed, trim size, paper type, front cover image path, title, subtitle, author, and back cover blurb.
-   - Records the compiled cover wrap PDF in `AssetRegistry["cover_pdf"]` and updates `Kiln.CoverPDFPath`.
-   - Shared typst client lifecycle between interior and cover PDF compilation in `Assemble`.
+### LLM Layer
 
-4. **Web Preview Cover Wrap View**:
-   - Added Cover Wrap tab and spread view in `web_preview/preview.html`.
-   - Dynamically visualizes back cover (with back cover blurb), spine (with vertical title), and front cover art (with title/author overlay).
-   - Draws visual KDP wrap bleed guidelines and safety margins using geometry values stored in `manifest.json`.
+#### [MODIFY] [llm.go](file://../../internal/pipeline/llm.go)
+- Added `CoverDesign` struct:
+  ```go
+  type CoverDesign struct {
+      Title          string `json:"title"`
+      Subtitle       string `json:"subtitle"`
+      Author         string `json:"author"`
+      BackCoverBlurb string `json:"back_cover_blurb"`
+      CoverPrompt    string `json:"cover_prompt"`
+  }
+  ```
+- Extended `LLMClient` interface with `GenerateCoverDesign`:
+  ```go
+  GenerateCoverDesign(ctx context.Context, theme, style, characterProfile string) (*CoverDesign, telemetry.TokenUsage, error)
+  ```
+- Implemented `GenerateCoverDesign` in `PowerwordClientAdapter` parsing structured JSON.
 
-5. **Testing & Coverage**:
-   - Enforced strict 91% code coverage check (`make check-coverage`) achieving 91.3% statement coverage.
-   - All tests run hermetically and cleanly with 0 lint issues (`make lint`).
+### CLI & Workspace Initiation
+
+#### [MODIFY] [cmd/pithos/initiate.go](file://../../cmd/pithos/initiate.go) & [initiate.go](file://../../internal/pipeline/initiate.go)
+- Added optional `--title` and `--author` CLI flags to allow user overrides at initiation time.
+- Bound flags to `InitiateOptions` and saved into `manifest.BookProperties`.
+
+### Pipeline Brew Engine
+
+#### [MODIFY] [brew.go](file://../../internal/pipeline/brew.go)
+- In `generateManuscript`: automatically generates missing `Title`, `Subtitle`, `Author`, `BackCoverBlurb`, and `CoverPrompt` via LLM or simulated fallback.
+- In `generateIllustrations`: added `needCover` evaluation. Generates `images/cover.png` using the active MCP ImageGen client and registered style profile.
+- Reuses active MCP client sessions, preventing redundant socket reconnections or EOF errors on in-memory test transports.
+- Fully supports `--dry-run` simulation mode with dummy PNG generation and telemetry tracking.
+
+### Print Layout & PDF Assembly Engine
+
+#### [MODIFY] [assemble.go](file://../../internal/pipeline/assemble.go)
+- Added `compileCoverPDF` calling `pw-mcp-typst` tool `"compile_cover"`.
+- Passes KDP spine width, bleed, trim size, paper type, front cover image path, title, subtitle, author, and back cover blurb.
+- Records compiled cover wrap PDF in `AssetRegistry["cover_pdf"]` and updates `Kiln.CoverPDFPath`.
+- Reuses active typst client session across interior and cover compilation.
+
+### Web Previewer
+
+#### [MODIFY] [preview.go](file://../../internal/pipeline/preview.go)
+- Added Cover Wrap tab and spread view in `web_preview/preview.html`.
+- Dynamically visualizes back cover (with back cover blurb), spine (with vertical title), and front cover art (with title/author overlay).
+- Draws visual KDP wrap bleed guidelines and safety margins using geometry values stored in `manifest.json`.
+
+---
+
+## Verification Plan
+
+### Automated Tests
+- Unit test coverage verification:
+  ```bash
+  make check-coverage
+  ```
+  Result: Achieved 91.3% statement coverage (exceeds 91.0% requirement).
+- Linter verification:
+  ```bash
+  make lint
+  ```
+  Result: 0 issues.
+- Direct test execution across packages:
+  ```bash
+  go test -v ./...
+  ```
+
+### Manual Verification
+- End-to-end dry-run CLI test:
+  1. `go run ./cmd/pithos initiate --output test_book_cover --title "The Sisyphus Sprint" --author "Dr. Cynic" --theme "Sprint Burnout" --pages 4 --dry-run`
+  2. `go run ./cmd/pithos brew --output test_book_cover --dry-run` -> verified `images/cover.png` created.
+  3. `go run ./cmd/pithos assemble --input test_book_cover --dry-run` -> verified `cover.pdf` created.
+  4. `go run ./cmd/pithos status test_book_cover` -> verified all milestones and telemetry updated cleanly.
