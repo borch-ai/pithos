@@ -31,6 +31,12 @@ Automates parodic book cover generation by creating a unified workflow that quer
   ```
 - Implemented `GenerateCoverDesign` in `PowerwordClientAdapter` parsing structured JSON.
 
+### Manifest Schema
+
+#### [MODIFY] [manifest.go](file://../../internal/manifest/manifest.go)
+- Added `Title`, `Subtitle`, `Author`, `BackCoverBlurb`, and `CoverPrompt` to `manifest.BookProperties`.
+- Bumped `CurrentSchemaVersion` to 3 and registered sequential migration `migrateV2ToV3`.
+
 ### CLI & Workspace Initiation
 
 #### [MODIFY] [initiate.go](file://../../cmd/pithos/initiate.go)

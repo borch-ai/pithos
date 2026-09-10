@@ -885,7 +885,7 @@ body {
 }
 
 .cover-wrap-spine {
-  width: 40px;
+  min-width: 24px;
   background: #0d1117;
   display: flex;
   align-items: center;
@@ -1250,8 +1250,22 @@ const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
     barcodeEl.textContent = 'BARCODE / ISBN AREA';
     backEl.appendChild(barcodeEl);
 
+    const kdp = bookData.kdpLayout || {};
+    const bleedVal = (typeof kdp.bleed === 'number' && kdp.bleed >= 0) ? kdp.bleed : bleedInches;
+    const spineVal = (typeof kdp.spine_width === 'number' && kdp.spine_width > 0) ? kdp.spine_width : 0.15;
+    const wrapW = (typeof kdp.wrap_width_inches === 'number' && kdp.wrap_width_inches > 0)
+      ? kdp.wrap_width_inches
+      : ((typeof kdp.cover_width_inches === 'number' && kdp.cover_width_inches > 0)
+        ? kdp.cover_width_inches
+        : (2 * trimWidth + spineVal + (2 * bleedVal)));
+
     const spineEl = document.createElement('div');
     spineEl.className = 'cover-wrap-spine';
+    if (wrapW > 0 && spineVal > 0) {
+      const spinePct = (spineVal / wrapW) * 100;
+      spineEl.style.width = spinePct.toFixed(2) + '%';
+      spineEl.style.flex = 'none';
+    }
     const spineText = document.createElement('span');
     spineText.className = 'cover-wrap-spine-text';
     spineText.textContent = bookData.title || '';
@@ -1300,9 +1314,11 @@ const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
     const marginVal = (typeof kdp.margin_size === 'number' && kdp.margin_size > 0) ? kdp.margin_size : safetyOutside;
     const spineVal = (typeof kdp.spine_width === 'number' && kdp.spine_width > 0) ? kdp.spine_width : 0.15;
 
-    const wrapW = (typeof kdp.cover_width_inches === 'number' && kdp.cover_width_inches > 0)
-      ? kdp.cover_width_inches
-      : (2 * trimWidth + spineVal + (2 * bleedVal));
+    const wrapW = (typeof kdp.wrap_width_inches === 'number' && kdp.wrap_width_inches > 0)
+      ? kdp.wrap_width_inches
+      : ((typeof kdp.cover_width_inches === 'number' && kdp.cover_width_inches > 0)
+        ? kdp.cover_width_inches
+        : (2 * trimWidth + spineVal + (2 * bleedVal)));
     const wrapH = (typeof kdp.cover_height_inches === 'number' && kdp.cover_height_inches > 0)
       ? kdp.cover_height_inches
       : (trimHeight + (2 * bleedVal));

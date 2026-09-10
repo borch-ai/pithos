@@ -475,6 +475,7 @@ func TestLoadManifest_NilFields(t *testing.T) {
 	}
 }
 
+//nolint:funlen // Test covers multiple sequential migration test cases
 func TestManifestSchemaVersionAndMigration(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "pithos-test-*")
 	if err != nil {
@@ -521,13 +522,30 @@ func TestManifestSchemaVersionAndMigration(t *testing.T) {
 		t.Errorf("expected disk json schema_version to be %d, got %v", CurrentSchemaVersion, rawMap["schema_version"])
 	}
 
-	// 3. Manifest already at CurrentSchemaVersion loads cleanly
-	loadedV2, err := LoadManifest(legacyPath)
-	if err != nil {
-		t.Fatalf("failed reloading v2 manifest: %v", err)
+	// 3. Manifest with schema version 2 migrates to CurrentSchemaVersion
+	v2Path := filepath.Join(tmpDir, "v2_manifest.json")
+	v2JSON := `{
+		"schema_version": 2,
+		"book_properties": {"theme": "V2 Parody"}
+	}`
+	if writeErr := os.WriteFile(v2Path, []byte(v2JSON), 0600); writeErr != nil {
+		t.Fatalf("failed to write v2 manifest: %v", writeErr)
 	}
-	if loadedV2.SchemaVersion != CurrentSchemaVersion {
-		t.Errorf("expected SchemaVersion %d, got %d", CurrentSchemaVersion, loadedV2.SchemaVersion)
+	loadedV2Migrated, err := LoadManifest(v2Path)
+	if err != nil {
+		t.Fatalf("failed to load v2 manifest: %v", err)
+	}
+	if loadedV2Migrated.SchemaVersion != CurrentSchemaVersion {
+		t.Errorf("expected loaded v2 manifest SchemaVersion to be %d, got %d", CurrentSchemaVersion, loadedV2Migrated.SchemaVersion)
+	}
+
+	// 4. Manifest already at CurrentSchemaVersion loads cleanly
+	loadedCurrent, err := LoadManifest(legacyPath)
+	if err != nil {
+		t.Fatalf("failed reloading current manifest: %v", err)
+	}
+	if loadedCurrent.SchemaVersion != CurrentSchemaVersion {
+		t.Errorf("expected SchemaVersion %d, got %d", CurrentSchemaVersion, loadedCurrent.SchemaVersion)
 	}
 
 	// 4. Manifest with newer schema version than supported fails to load to prevent data corruption
