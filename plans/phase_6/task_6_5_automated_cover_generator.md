@@ -33,7 +33,8 @@ Automated parodic book cover generation by creating a unified workflow that quer
 
 ### CLI & Workspace Initiation
 
-#### [MODIFY] [cmd/pithos/initiate.go](file://../../cmd/pithos/initiate.go) & [initiate.go](file://../../internal/pipeline/initiate.go)
+#### [MODIFY] [initiate.go](file://../../cmd/pithos/initiate.go)
+#### [MODIFY] [initiate.go](file://../../internal/pipeline/initiate.go)
 - Added optional `--title` and `--author` CLI flags to allow user overrides at initiation time.
 - Bound flags to `InitiateOptions` and saved into `manifest.BookProperties`.
 
