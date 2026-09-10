@@ -442,3 +442,50 @@ func TestFormatFileURL(t *testing.T) {
 		t.Errorf("expected file:///, got %s", u)
 	}
 }
+
+func TestBudget_DryRunCover_OverBudget(t *testing.T) {
+	origCfg := config.Cfg
+	defer func() { config.Cfg = origCfg }()
+
+	tmpDir, err := os.MkdirTemp("", "pithos-budget-dryrun-cover-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	createTestBook(t, tmpDir, 1)
+
+	manifestPath := filepath.Join(tmpDir, "manifest.json")
+	m, err := manifest.LoadManifest(manifestPath)
+	if err != nil {
+		t.Fatalf("failed to load manifest: %v", err)
+	}
+	m.Progress.ManuscriptGenerated = true
+	m.Progress.CoverImageGenerated = false
+	m.Progress.Pages = []manifest.PageState{
+		{PageIndex: 1, Status: manifest.StatusCompleted, ImagePath: "images/page_1.png"},
+	}
+
+	pricing := map[string]telemetry.ModelPricing{
+		"imagegen": {Input: 40000.00}, // $0.04
+	}
+	m.RecordImageGeneration(pricing)
+	if err = m.Save(); err != nil {
+		t.Fatalf("failed to save manifest: %v", err)
+	}
+
+	opts := BrewOptions{
+		OutputDir: tmpDir,
+		DryRun:    true,
+		Budget:    0.02, // Lower than actual cost $0.04
+	}
+
+	ctx := context.Background()
+	err = generateIllustrations(ctx, m, opts)
+	if err == nil {
+		t.Fatalf("expected budget exceeded during execution, got nil")
+	}
+	if !strings.Contains(err.Error(), "budget exceeded during execution") {
+		t.Errorf("expected budget exceeded during execution error, got: %v", err)
+	}
+}

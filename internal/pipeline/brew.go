@@ -575,6 +575,19 @@ func generateIllustrations(ctx context.Context, m *manifest.Manifest, opts BrewO
 		}
 
 		if needCover {
+			actualCost := m.GetTotalCost()
+			budget := 5.00
+			if opts.Budget > 0 {
+				budget = opts.Budget
+			} else if config.Cfg != nil {
+				if cfgMax := config.Cfg.GetMaxCostUSD(); cfgMax > 0 {
+					budget = cfgMax
+				}
+			}
+			if actualCost > budget {
+				return fmt.Errorf("budget exceeded during execution: actual cost $%.4f exceeds budget limit $%.4f", actualCost, budget)
+			}
+
 			destPath := filepath.Join(opts.OutputDir, "images", "cover.png")
 			if err := writeDummyPNG(destPath); err != nil {
 				return fmt.Errorf("failed to write simulated cover PNG: %w", err)

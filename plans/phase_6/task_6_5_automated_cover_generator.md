@@ -8,7 +8,7 @@ Automates parodic book cover generation by creating a unified workflow that quer
 ## User Review Required
 
 > [!NOTE]
-> All Task 6.5 implementation requirements have been implemented and verified. Unit test coverage meets the strict 91% requirement (achieved 91.3%), and linter checks pass cleanly with 0 issues.
+> All Task 6.5 implementation requirements have been implemented and verified. Unit test coverage meets the strict 91% requirement (achieved 91.2%), and linter checks pass cleanly with 0 issues.
 
 ## Proposed Changes
 
@@ -70,7 +70,7 @@ Automates parodic book cover generation by creating a unified workflow that quer
   ```bash
   make check-coverage
   ```
-  Result: Achieved 91.3% statement coverage (exceeds 91.0% requirement).
+  Result: Achieved 91.2% statement coverage (exceeds 91.0% requirement).
 - Linter verification:
   ```bash
   make lint
