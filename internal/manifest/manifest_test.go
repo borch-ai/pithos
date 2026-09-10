@@ -542,4 +542,17 @@ func TestManifestSchemaVersionAndMigration(t *testing.T) {
 	if _, futureErr := LoadManifest(futurePath); futureErr == nil {
 		t.Error("expected error loading manifest with future schema version, got nil")
 	}
+
+	// 5. Manifest with invalid negative schema version fails to load
+	negativePath := filepath.Join(tmpDir, "negative_manifest.json")
+	negativeJSON := `{
+		"schema_version": -1,
+		"book_properties": {"theme": "Invalid Version Parody"}
+	}`
+	if writeErr := os.WriteFile(negativePath, []byte(negativeJSON), 0600); writeErr != nil {
+		t.Fatalf("failed to write negative manifest: %v", writeErr)
+	}
+	if _, negErr := LoadManifest(negativePath); negErr == nil {
+		t.Error("expected error loading manifest with negative schema version, got nil")
+	}
 }

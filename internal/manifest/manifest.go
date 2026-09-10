@@ -121,6 +121,11 @@ var migrations = map[int]migrationFunc{
 
 func migrateV1ToV2(m *Manifest) error {
 	m.SchemaVersion = 2
+	return nil
+}
+
+// normalizeDefaults ensures maps and slices are allocated and default properties are set.
+func (m *Manifest) normalizeDefaults() {
 	if m.AssetRegistry == nil {
 		m.AssetRegistry = make(map[string]string)
 	}
@@ -139,7 +144,39 @@ func migrateV1ToV2(m *Manifest) error {
 	if m.BookProperties.CharacterWeight == 0 {
 		m.BookProperties.CharacterWeight = 100
 	}
-	return nil
+}
+
+// applyMigrations sequentially validates and executes registered migrations until CurrentSchemaVersion.
+func applyMigrations(m *Manifest) (bool, error) {
+	if m.SchemaVersion < 0 {
+		return false, fmt.Errorf("invalid manifest schema version %d", m.SchemaVersion)
+	}
+
+	// Unversioned legacy manifests (schema_version missing or 0) are recognized as version 1.
+	if m.SchemaVersion == 0 {
+		m.SchemaVersion = 1
+	}
+
+	if m.SchemaVersion > CurrentSchemaVersion {
+		return false, fmt.Errorf("manifest schema version %d is newer than supported version %d", m.SchemaVersion, CurrentSchemaVersion)
+	}
+
+	migrated := false
+	for m.SchemaVersion < CurrentSchemaVersion {
+		currentVer := m.SchemaVersion
+		migFn, ok := migrations[currentVer]
+		if !ok {
+			return false, fmt.Errorf("no migration path registered for manifest schema version %d", currentVer)
+		}
+		if err := migFn(m); err != nil {
+			return false, fmt.Errorf("failed migrating manifest from schema version %d: %w", currentVer, err)
+		}
+		if m.SchemaVersion <= currentVer {
+			return false, fmt.Errorf("migration from schema version %d did not advance schema version (remained %d)", currentVer, m.SchemaVersion)
+		}
+		migrated = true
+	}
+	return migrated, nil
 }
 
 // NewManifest instantiates a new Manifest with initialized fields.
@@ -147,19 +184,8 @@ func NewManifest(path string) *Manifest {
 	m := &Manifest{
 		filePath:      path,
 		SchemaVersion: CurrentSchemaVersion,
-		AssetRegistry: make(map[string]string),
-		Progress: Progress{
-			Pages: make([]PageState, 0),
-		},
-		Telemetry: TelemetryMetrics{
-			ModelUsages: make(map[string]*telemetry.ModelUsage),
-		},
-		Kiln: KilnSync{
-			Version:    1,
-			Milestones: make([]string, 0),
-		},
 	}
-	m.BookProperties.CharacterWeight = 100
+	m.normalizeDefaults()
 	return m
 }
 
@@ -172,56 +198,18 @@ func LoadManifest(path string) (*Manifest, error) {
 	}
 
 	var m Manifest
-	if err := json.Unmarshal(data, &m); err != nil {
-		return nil, fmt.Errorf("failed to parse manifest json: %w", err)
+	if parseErr := json.Unmarshal(data, &m); parseErr != nil {
+		return nil, fmt.Errorf("failed to parse manifest json: %w", parseErr)
 	}
 
 	m.filePath = path
 
-	// Unversioned legacy manifests (schema_version missing or 0) are recognized as version 1.
-	if m.SchemaVersion == 0 {
-		m.SchemaVersion = 1
+	migrated, err := applyMigrations(&m)
+	if err != nil {
+		return nil, err
 	}
 
-	if m.SchemaVersion > CurrentSchemaVersion {
-		return nil, fmt.Errorf("manifest schema version %d is newer than supported version %d", m.SchemaVersion, CurrentSchemaVersion)
-	}
-
-	// Apply migrations sequentially if schema version is behind CurrentSchemaVersion.
-	migrated := false
-	for m.SchemaVersion < CurrentSchemaVersion {
-		currentVer := m.SchemaVersion
-		migFn, ok := migrations[currentVer]
-		if !ok {
-			return nil, fmt.Errorf("no migration path registered for manifest schema version %d", currentVer)
-		}
-		if err := migFn(&m); err != nil {
-			return nil, fmt.Errorf("failed migrating manifest from schema version %d: %w", currentVer, err)
-		}
-		if m.SchemaVersion <= currentVer {
-			return nil, fmt.Errorf("migration from schema version %d did not advance schema version (remained %d)", currentVer, m.SchemaVersion)
-		}
-		migrated = true
-	}
-
-	if m.AssetRegistry == nil {
-		m.AssetRegistry = make(map[string]string)
-	}
-	if m.Progress.Pages == nil {
-		m.Progress.Pages = make([]PageState, 0)
-	}
-	if m.Telemetry.ModelUsages == nil {
-		m.Telemetry.ModelUsages = make(map[string]*telemetry.ModelUsage)
-	}
-	if m.Kiln.Milestones == nil {
-		m.Kiln.Milestones = make([]string, 0)
-	}
-	if m.Kiln.Version == 0 {
-		m.Kiln.Version = 1
-	}
-	if m.BookProperties.CharacterWeight == 0 {
-		m.BookProperties.CharacterWeight = 100
-	}
+	m.normalizeDefaults()
 
 	// If migrations were executed, persist upgraded manifest to disk automatically.
 	if migrated {

@@ -17,16 +17,19 @@ This task introduces explicit schema version tracking in `manifest.json` and aut
 #### [MODIFY] [manifest.go](file://../../internal/manifest/manifest.go)
 - Add a root-level `SchemaVersion int json:"schema_version"` to the `Manifest` struct.
 - Define a package constant `CurrentSchemaVersion = 2`.
-- Implement a series of migration functions:
+- Implement a series of migration functions keyed by source schema version:
   ```go
-  var migrations = []func(*Manifest) error{
-      migrateV1ToV2,
+  type migrationFunc func(m *Manifest) error
+
+  var migrations = map[int]migrationFunc{
+      1: migrateV1ToV2,
   }
   ```
-  - `migrateV1ToV2` might populate default layout settings or ensure newly introduced fields (like trim size options or telemetries) are cleanly structured.
+  - `migrateV1ToV2` advances `m.SchemaVersion = 2`.
 - Update `LoadManifest`:
-  - Upon unmarshalling, check `m.SchemaVersion`.
-  - If `m.SchemaVersion < CurrentSchemaVersion`, run outstanding migrations in order.
+  - Validate schema version bounds (reject negative versions and versions newer than `CurrentSchemaVersion`).
+  - Upon unmarshalling, check `m.SchemaVersion` (defaulting legacy 0 to 1).
+  - If `m.SchemaVersion < CurrentSchemaVersion`, sequentially execute registered migration functions, asserting version advancement.
   - Automatically save the migrated manifest back to disk.
 
 ---
