@@ -157,7 +157,9 @@ func TestCharacterCmd_DirFlagParsing(t *testing.T) {
 
 func TestExecution_PreviewMissingArgs(t *testing.T) {
 	previewDir = ""
-	_ = previewCmd.Flags().Set("dir", "")
+	if err := previewCmd.Flags().Set("dir", ""); err != nil {
+		t.Fatalf("failed to reset dir flag on previewCmd: %v", err)
+	}
 	rootCmd.SetArgs([]string{"preview"})
 	var buf bytes.Buffer
 	rootCmd.SetOut(&buf)
@@ -174,7 +176,9 @@ func TestExecution_PreviewMissingArgs(t *testing.T) {
 
 func TestExecution_StatusMissingArgs(t *testing.T) {
 	statusDir = ""
-	_ = statusCmd.Flags().Set("dir", "")
+	if err := statusCmd.Flags().Set("dir", ""); err != nil {
+		t.Fatalf("failed to reset dir flag on statusCmd: %v", err)
+	}
 	rootCmd.SetArgs([]string{"status"})
 	var buf bytes.Buffer
 	rootCmd.SetOut(&buf)
@@ -191,7 +195,9 @@ func TestExecution_StatusMissingArgs(t *testing.T) {
 
 func TestExecution_CleanMissingArgs(t *testing.T) {
 	cleanDir = ""
-	_ = cleanCmd.Flags().Set("dir", "")
+	if err := cleanCmd.Flags().Set("dir", ""); err != nil {
+		t.Fatalf("failed to reset dir flag on cleanCmd: %v", err)
+	}
 	rootCmd.SetArgs([]string{"clean", "--orphans"})
 	var buf bytes.Buffer
 	rootCmd.SetOut(&buf)
@@ -208,7 +214,9 @@ func TestExecution_CleanMissingArgs(t *testing.T) {
 
 func TestPrecedence_DirOverLegacyFlags(t *testing.T) {
 	// Test initiate: both --output and --dir
-	_ = initiateCmd.ParseFlags([]string{"--output", "legacy-out", "--dir", "precedence-dir"})
+	if err := initiateCmd.ParseFlags([]string{"--output", "legacy-out", "--dir", "precedence-dir"}); err != nil {
+		t.Fatalf("failed to parse flags for initiateCmd: %v", err)
+	}
 	outDir := initiateOutput
 	if initiateCmd.Flags().Changed("dir") {
 		outDir = initiateDir
@@ -218,7 +226,9 @@ func TestPrecedence_DirOverLegacyFlags(t *testing.T) {
 	}
 
 	// Test brew: both --output and --dir
-	_ = brewCmd.ParseFlags([]string{"--output", "legacy-brew", "--dir", "precedence-brew"})
+	if err := brewCmd.ParseFlags([]string{"--output", "legacy-brew", "--dir", "precedence-brew"}); err != nil {
+		t.Fatalf("failed to parse flags for brewCmd: %v", err)
+	}
 	bDir := brewOutput
 	if brewCmd.Flags().Changed("dir") {
 		bDir = brewDir
@@ -228,7 +238,9 @@ func TestPrecedence_DirOverLegacyFlags(t *testing.T) {
 	}
 
 	// Test assemble: both --input and --dir
-	_ = assembleCmd.ParseFlags([]string{"--input", "legacy-assemble", "--dir", "precedence-assemble"})
+	if err := assembleCmd.ParseFlags([]string{"--input", "legacy-assemble", "--dir", "precedence-assemble"}); err != nil {
+		t.Fatalf("failed to parse flags for assembleCmd: %v", err)
+	}
 	aDir := assembleInput
 	if assembleCmd.Flags().Changed("dir") {
 		aDir = assembleDir
@@ -238,7 +250,9 @@ func TestPrecedence_DirOverLegacyFlags(t *testing.T) {
 	}
 
 	// Test character: both --output and --dir
-	_ = characterCmd.ParseFlags([]string{"--output", "legacy-char", "--dir", "precedence-char"})
+	if err := characterCmd.ParseFlags([]string{"--output", "legacy-char", "--dir", "precedence-char"}); err != nil {
+		t.Fatalf("failed to parse flags for characterCmd: %v", err)
+	}
 	cDir := characterOutput
 	if characterCmd.Flags().Changed("dir") {
 		cDir = characterDir
