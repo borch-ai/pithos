@@ -10,7 +10,7 @@ Implement an automated packaging and integrity verification command (`pithos pac
 Currently, Pithos generates interior PDF files (`interior.pdf`) and cover wrap PDFs (`cover.pdf`) inside the workspace's `build/` directory. However, production deployment requires:
 1. **Preflight Certification**: Confirming that `pw-mcp-pdfcheck` preflight verification passed with zero critical errors before assets are packaged.
 2. **Checksum Integrity**: Generating SHA-256 cryptographic hashes for all deliverable assets to prevent corrupt or incomplete uploads.
-3. **Packaging Artifact**: Bundling `interior.pdf`, `cover.pdf`, a sanitized export of `manifest.json`, and `checksums.sha256` into a compressed distribution archive (`dist/<slug>-release.zip`).
+3. **Packaging Artifact**: Bundling `interior.pdf`, `cover.pdf`, a sanitized export of `manifest.json`, and `checksums.sha256` into a compressed distribution archive (`dist/<slug>-print-ready.zip`).
 
 ## User Review Required
 

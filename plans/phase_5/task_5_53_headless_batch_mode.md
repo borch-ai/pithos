@@ -12,7 +12,7 @@ Currently:
 - `pithos brew` can pause for stanza review and automatically launches the system default web browser to view HTML previews unless `--silent` is passed.
 - `pithos brew --pages` launches an interactive multi-select prompt if page arguments are not explicitly given.
 
-This task introduces a global `--headless` flag (aliased with `--non-interactive` and `--batch`) with automatic detection of CI environments (`CI=true` or `PITHOS_HEADLESS=true`), ensuring strictly non-interactive, headless-safe execution.
+This task introduces a global `--headless` flag (aliased with `--non-interactive`) with automatic detection of CI environments (`CI=true` or `PITHOS_HEADLESS=true`), ensuring strictly non-interactive, headless-safe execution.
 
 ## User Review Required
 
