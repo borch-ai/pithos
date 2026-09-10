@@ -477,15 +477,15 @@ func TestBudget_DryRunCover_OverBudget(t *testing.T) {
 	opts := BrewOptions{
 		OutputDir: tmpDir,
 		DryRun:    true,
-		Budget:    0.02, // Lower than actual cost $0.04
+		Budget:    0.05, // Lower than actualCost ($0.04) + imageCost ($0.04)
 	}
 
 	ctx := context.Background()
 	err = generateIllustrations(ctx, m, opts)
 	if err == nil {
-		t.Fatalf("expected budget exceeded during execution, got nil")
+		t.Fatalf("expected budget limit exceeded error, got nil")
 	}
-	if !strings.Contains(err.Error(), "budget exceeded during execution") {
-		t.Errorf("expected budget exceeded during execution error, got: %v", err)
+	if !strings.Contains(err.Error(), "budget limit exceeded") {
+		t.Errorf("expected budget limit exceeded error, got: %v", err)
 	}
 }

@@ -584,8 +584,18 @@ func generateIllustrations(ctx context.Context, m *manifest.Manifest, opts BrewO
 					budget = cfgMax
 				}
 			}
-			if actualCost > budget {
-				return fmt.Errorf("budget exceeded during execution: actual cost $%.4f exceeds budget limit $%.4f", actualCost, budget)
+			var pricing map[string]telemetry.ModelPricing
+			if config.Cfg != nil {
+				pricing = config.Cfg.Pricing
+			}
+			imageCost := 0.04
+			if pricing != nil {
+				if p, ok := pricing["imagegen"]; ok {
+					imageCost = p.Input / 1_000_000.0
+				}
+			}
+			if actualCost+imageCost > budget {
+				return fmt.Errorf("budget limit exceeded: anticipated cost $%.4f exceeds budget of $%.2f", actualCost+imageCost, budget)
 			}
 
 			destPath := filepath.Join(opts.OutputDir, "images", "cover.png")
@@ -594,10 +604,6 @@ func generateIllustrations(ctx context.Context, m *manifest.Manifest, opts BrewO
 			}
 			m.Progress.CoverImagePath = "images/cover.png"
 			m.Progress.CoverImageGenerated = true
-			var pricing map[string]telemetry.ModelPricing
-			if config.Cfg != nil {
-				pricing = config.Cfg.Pricing
-			}
 			m.RecordImageGeneration(pricing)
 			if err := m.Save(); err != nil {
 				return fmt.Errorf("failed to save manifest after cover generation: %w", err)
