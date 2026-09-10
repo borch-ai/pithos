@@ -95,12 +95,16 @@ type KilnSync struct {
 	CoverPDFPath    string   `json:"cover_pdf_path,omitempty"`
 }
 
+// CurrentSchemaVersion is the latest version of the manifest schema.
+const CurrentSchemaVersion = 2
+
 // Manifest is the root structure serving as the checkpoint state file.
 type Manifest struct {
 	mu sync.RWMutex
 
 	filePath string
 
+	SchemaVersion  int               `json:"schema_version"`
 	BookProperties BookProperties    `json:"book_properties"`
 	Progress       Progress          `json:"progress"`
 	AssetRegistry  map[string]string `json:"asset_registry"`
@@ -109,40 +113,19 @@ type Manifest struct {
 	Kiln           KilnSync          `json:"kiln"`
 }
 
-// NewManifest instantiates a new Manifest with initialized fields.
-func NewManifest(path string) *Manifest {
-	m := &Manifest{
-		filePath:      path,
-		AssetRegistry: make(map[string]string),
-		Progress: Progress{
-			Pages: make([]PageState, 0),
-		},
-		Telemetry: TelemetryMetrics{
-			ModelUsages: make(map[string]*telemetry.ModelUsage),
-		},
-		Kiln: KilnSync{
-			Version:    1,
-			Milestones: make([]string, 0),
-		},
-	}
-	m.BookProperties.CharacterWeight = 100
-	return m
+type migrationFunc func(m *Manifest) error
+
+var migrations = map[int]migrationFunc{
+	1: migrateV1ToV2,
 }
 
-// LoadManifest reads a manifest from a file, parses it, and returns the Manifest pointer.
-func LoadManifest(path string) (*Manifest, error) {
-	//nolint:gosec // ReadFile path is constructed in local CLI environment for state management
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read manifest file: %w", err)
-	}
+func migrateV1ToV2(m *Manifest) error {
+	m.SchemaVersion = 2
+	return nil
+}
 
-	var m Manifest
-	if err := json.Unmarshal(data, &m); err != nil {
-		return nil, fmt.Errorf("failed to parse manifest json: %w", err)
-	}
-
-	m.filePath = path
+// normalizeDefaults ensures maps and slices are allocated and default properties are set.
+func (m *Manifest) normalizeDefaults() {
 	if m.AssetRegistry == nil {
 		m.AssetRegistry = make(map[string]string)
 	}
@@ -160,6 +143,79 @@ func LoadManifest(path string) (*Manifest, error) {
 	}
 	if m.BookProperties.CharacterWeight == 0 {
 		m.BookProperties.CharacterWeight = 100
+	}
+}
+
+// applyMigrations sequentially validates and executes registered migrations until CurrentSchemaVersion.
+func applyMigrations(m *Manifest) (bool, error) {
+	if m.SchemaVersion < 0 {
+		return false, fmt.Errorf("invalid manifest schema version %d", m.SchemaVersion)
+	}
+
+	// Unversioned legacy manifests (schema_version missing or 0) are recognized as version 1.
+	if m.SchemaVersion == 0 {
+		m.SchemaVersion = 1
+	}
+
+	if m.SchemaVersion > CurrentSchemaVersion {
+		return false, fmt.Errorf("manifest schema version %d is newer than supported version %d", m.SchemaVersion, CurrentSchemaVersion)
+	}
+
+	migrated := false
+	for m.SchemaVersion < CurrentSchemaVersion {
+		currentVer := m.SchemaVersion
+		migFn, ok := migrations[currentVer]
+		if !ok {
+			return false, fmt.Errorf("no migration path registered for manifest schema version %d", currentVer)
+		}
+		if err := migFn(m); err != nil {
+			return false, fmt.Errorf("failed migrating manifest from schema version %d: %w", currentVer, err)
+		}
+		if m.SchemaVersion <= currentVer {
+			return false, fmt.Errorf("migration from schema version %d did not advance schema version (remained %d)", currentVer, m.SchemaVersion)
+		}
+		migrated = true
+	}
+	return migrated, nil
+}
+
+// NewManifest instantiates a new Manifest with initialized fields.
+func NewManifest(path string) *Manifest {
+	m := &Manifest{
+		filePath:      path,
+		SchemaVersion: CurrentSchemaVersion,
+	}
+	m.normalizeDefaults()
+	return m
+}
+
+// LoadManifest reads a manifest from a file, parses it, applies any pending migrations, and returns the Manifest pointer.
+func LoadManifest(path string) (*Manifest, error) {
+	//nolint:gosec // ReadFile path is constructed in local CLI environment for state management
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read manifest file: %w", err)
+	}
+
+	var m Manifest
+	if parseErr := json.Unmarshal(data, &m); parseErr != nil {
+		return nil, fmt.Errorf("failed to parse manifest json: %w", parseErr)
+	}
+
+	m.filePath = path
+
+	migrated, err := applyMigrations(&m)
+	if err != nil {
+		return nil, err
+	}
+
+	m.normalizeDefaults()
+
+	// If migrations were executed, persist upgraded manifest to disk automatically.
+	if migrated {
+		if err := m.Save(); err != nil {
+			return nil, fmt.Errorf("failed to save migrated manifest: %w", err)
+		}
 	}
 
 	return &m, nil
