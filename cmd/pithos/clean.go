@@ -13,20 +13,17 @@ var (
 	cleanOrphans     bool
 	cleanResetFailed bool
 	cleanAll         bool
+	cleanDir         string
 )
 
 var cleanCmd = &cobra.Command{
-	Use:   "clean <book>",
+	Use:   "clean [book]",
 	Short: "Clean orphans and reset failed page states in a book workspace",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if config.Cfg == nil {
 			return fmt.Errorf("configuration is not loaded")
 		}
-		if config.Cfg.WorkspacesRoot == "" {
-			return fmt.Errorf("workspaces root is empty in config")
-		}
-
 		if !cleanOrphans && !cleanResetFailed && !cleanAll {
 			return fmt.Errorf("must specify at least one clean action (--orphans, --reset-failed, --all)")
 		}
@@ -34,8 +31,17 @@ var cleanCmd = &cobra.Command{
 			return fmt.Errorf("--all and --reset-failed are mutually exclusive")
 		}
 
-		bookName := args[0]
-		err := pipeline.CleanWorkspace(config.Cfg.WorkspacesRoot, bookName, cleanOrphans, cleanResetFailed, cleanAll)
+		target, isPositional, err := resolvePositionalOrDir(cmd, cleanDir, args)
+		if err != nil {
+			return err
+		}
+		if isPositional && config.Cfg.WorkspacesRoot == "" {
+			return fmt.Errorf("workspaces root is empty in config")
+		}
+
+		workspaceRoot, bookName := resolveWorkspaceAndBook(target, isPositional)
+
+		err = pipeline.CleanWorkspace(workspaceRoot, bookName, cleanOrphans, cleanResetFailed, cleanAll)
 		if err != nil {
 			return fmt.Errorf("failed to clean workspace %q: %w", bookName, err)
 		}
@@ -49,5 +55,6 @@ func init() {
 	cleanCmd.Flags().BoolVar(&cleanOrphans, "orphans", false, "Delete orphaned images not referenced in manifest")
 	cleanCmd.Flags().BoolVar(&cleanResetFailed, "reset-failed", false, "Reset stuck or failed pages to pending")
 	cleanCmd.Flags().BoolVar(&cleanAll, "all", false, "Reset all pages to pending")
+	cleanCmd.Flags().StringVarP(&cleanDir, "dir", "d", "", "Workspace directory path")
 	rootCmd.AddCommand(cleanCmd)
 }

@@ -12,19 +12,23 @@ import (
 
 var (
 	previewWatch bool
+	previewDir   string
 )
 
 var previewCmd = &cobra.Command{
-	Use:   "preview <book>",
+	Use:   "preview [book]",
 	Short: "Generates the web preview and optionally monitors changes",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if config.Cfg == nil {
 			return fmt.Errorf("configuration is not loaded")
 		}
 
-		bookName := args[0]
-		bookDir := pipeline.ResolveBookPath(bookName)
+		target, _, err := resolvePositionalOrDir(cmd, previewDir, args)
+		if err != nil {
+			return err
+		}
+		bookDir := pipeline.ResolveBookPath(target)
 
 		manifestPath := filepath.Join(bookDir, "manifest.json")
 		m, err := manifest.LoadManifest(manifestPath)
@@ -60,5 +64,6 @@ var previewCmd = &cobra.Command{
 
 func init() {
 	previewCmd.Flags().BoolVar(&previewWatch, "watch", false, "Watch the book directory for changes and hot-reload")
+	previewCmd.Flags().StringVarP(&previewDir, "dir", "d", "", "Workspace directory path")
 	rootCmd.AddCommand(previewCmd)
 }

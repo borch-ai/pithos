@@ -14,6 +14,7 @@ var (
 	brewTheme       string
 	brewStyle       string
 	brewOutput      string
+	brewDir         string
 	brewConcurrency int
 	brewReview      bool
 	brewPagesStr    string
@@ -52,8 +53,10 @@ var brewCmd = &cobra.Command{
 			}
 		}
 
+		outputDir := resolveDirectoryFlag(cmd, brewDir, brewOutput)
+
 		opts := pipeline.BrewOptions{
-			OutputDir:   brewOutput,
+			OutputDir:   outputDir,
 			Theme:       brewTheme,
 			Style:       brewStyle,
 			Concurrency: brewConcurrency,
@@ -81,6 +84,7 @@ func init() {
 	brewCmd.Flags().StringVar(&brewTheme, "theme", "", "Theme for the manuscript (optional override)")
 	brewCmd.Flags().StringVar(&brewStyle, "style", "", "Style reference for images (optional override)")
 	brewCmd.Flags().StringVar(&brewOutput, "output", "book", "Output directory path")
+	brewCmd.Flags().StringVarP(&brewDir, "dir", "d", "", "Workspace directory path (alias for --output)")
 	brewCmd.Flags().IntVar(&brewConcurrency, "concurrency", 0, "Number of concurrent image generation workers (defaults to config or 1)")
 	brewCmd.Flags().BoolVar(&brewReview, "review", false, "Export manuscript for local markdown review and pause execution")
 	brewCmd.Flags().StringVar(&brewPagesStr, "pages", "", "Comma-separated list of page numbers to regenerate (e.g. 2,4)")

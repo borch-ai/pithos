@@ -15,6 +15,7 @@ import (
 
 var (
 	initiateOutput       string
+	initiateDir          string
 	initiateTitle        string
 	initiateAuthor       string
 	initiateTheme        string
@@ -84,13 +85,15 @@ var initiateCmd = &cobra.Command{
 			initiatePages = val
 		}
 
-		outputDir := initiateOutput
-		if !cmd.Flags().Changed("output") {
-			// User did not provide --output, resolve unique output dir under books/book
+		outputDir := resolveDirectoryFlag(cmd, initiateDir, initiateOutput)
+		dirExplicitlySet := cmd.Flags().Changed("dir") || cmd.Flags().Changed("output")
+
+		if !dirExplicitlySet {
+			// User did not provide --dir or --output, resolve unique output dir under books/book
 			resolvedBase := pipeline.ResolveBookPath(outputDir)
 			outputDir = pipeline.GetUniqueOutputDir(resolvedBase)
 		} else {
-			// User explicitly provided --output. If it exists, ask for confirmation
+			// User explicitly provided --dir or --output. If it exists, ask for confirmation
 			resolvedDir := pipeline.ResolveBookPath(outputDir)
 			if _, err := os.Stat(resolvedDir); err == nil {
 				confirm, err := pipeline.ConfirmOverwrite(os.Stdin, os.Stdout, resolvedDir)
@@ -127,6 +130,7 @@ var initiateCmd = &cobra.Command{
 
 func init() {
 	initiateCmd.Flags().StringVar(&initiateOutput, "output", "book", "Output directory path")
+	initiateCmd.Flags().StringVarP(&initiateDir, "dir", "d", "", "Target workspace directory path (alias for --output)")
 	initiateCmd.Flags().StringVar(&initiateTitle, "title", "", "Title of the book (optional, will be generated if omitted)")
 	initiateCmd.Flags().StringVar(&initiateAuthor, "author", "", "Author pseudonym for the book (optional, will be generated if omitted)")
 	initiateCmd.Flags().StringVar(&initiateTheme, "theme", "", "Theme of the book")

@@ -10,20 +10,27 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var statusDir string
+
 var statusCmd = &cobra.Command{
-	Use:   "status <book>",
+	Use:   "status [book]",
 	Short: "Show detailed diagnostic status for a book workspace",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if config.Cfg == nil {
 			return fmt.Errorf("configuration is not loaded")
 		}
-		if config.Cfg.WorkspacesRoot == "" {
+		target, isPositional, err := resolvePositionalOrDir(cmd, statusDir, args)
+		if err != nil {
+			return err
+		}
+		if isPositional && config.Cfg.WorkspacesRoot == "" {
 			return fmt.Errorf("workspaces root is empty in config")
 		}
 
-		bookName := args[0]
-		ws, err := pipeline.GetWorkspaceStatus(config.Cfg.WorkspacesRoot, bookName)
+		workspaceRoot, bookName := resolveWorkspaceAndBook(target, isPositional)
+
+		ws, err := pipeline.GetWorkspaceStatus(workspaceRoot, bookName)
 		if err != nil {
 			return err
 		}
@@ -59,5 +66,6 @@ var statusCmd = &cobra.Command{
 }
 
 func init() {
+	statusCmd.Flags().StringVarP(&statusDir, "dir", "d", "", "Workspace directory path")
 	rootCmd.AddCommand(statusCmd)
 }
