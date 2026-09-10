@@ -223,6 +223,18 @@ Focus: Remote monitoring, Kiln state manifest integration, testing, and ecosyste
 *   [ ] **Task 5.49: Doctor System Dependency Diagnostics**
     *   Extend `pithos doctor` to check for essential external binaries (ffmpeg, typst) and verify Service Account credential / cloud storage permissions.
     *   [Implementation Plan](plans/phase_5/task_5_49_doctor_dependency_diagnostics.md)
+*   [x] **Task 5.51: Adopt Aeolian's GitHub Workflow Hygiene in Pithos**
+    *   Synchronize GitHub actions, daily dependabot sweeps, markdown linting, branch naming rules, and PR template validation with Aeolian standards.
+    *   [Implementation Plan](plans/phase_5/task_5_51_github_workflow_hygiene.md)
+*   [ ] **Task 5.52: CLI Flag Normalization & Directory Alias (`--dir` / `-d`)**
+    *   Standardize all workspace-targeting commands (`initiate`, `brew`, `assemble`, `preview`, `status`, `clean`, `character`) to accept `--dir` and `-d` flags to align with the `pw-mcp-pithos` contract.
+    *   [Implementation Plan](plans/phase_5/task_5_52_cli_flag_normalization.md)
+*   [ ] **Task 5.53: Headless & Batch Execution Mode (`--headless` / `--non-interactive`)**
+    *   Implement global `--headless` / `--non-interactive` execution mode and CI autodetection to prevent blocking on interactive `huh` forms, disable auto-opening browser windows, and bypass TUI review prompts.
+    *   [Implementation Plan](plans/phase_5/task_5_53_headless_batch_mode.md)
+*   [ ] **Task 5.54: Print-Ready Artifact Packaging & Integrity Verification (`pithos pack`)**
+    *   Add a packaging command to compile verified distribution archives (`dist/<slug>-print-ready.zip`) containing interior PDF, cover wrap PDF, sanitized manifest, and SHA-256 integrity checksums, gated on successful preflight checks.
+    *   [Implementation Plan](plans/phase_5/task_5_54_artifact_packaging_checksums.md)
 
 ---
 
