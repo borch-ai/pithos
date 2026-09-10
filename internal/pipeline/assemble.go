@@ -330,8 +330,11 @@ func compileCoverPDF(ctx context.Context, opts AssembleOptions, m *manifest.Mani
 	var result struct {
 		OutputPDF string `json:"output_pdf"`
 	}
-	if err := json.Unmarshal([]byte(resText), &result); err == nil && result.OutputPDF != "" {
-		return result.OutputPDF, nil
+	if err := json.Unmarshal([]byte(resText), &result); err == nil {
+		if result.OutputPDF != "" {
+			return result.OutputPDF, nil
+		}
+		return outputPath, nil
 	}
 
 	trimmedRes := strings.TrimSpace(resText)
@@ -339,7 +342,7 @@ func compileCoverPDF(ctx context.Context, opts AssembleOptions, m *manifest.Mani
 		return trimmedRes, nil
 	}
 
-	return outputPath, nil
+	return "", fmt.Errorf("unexpected non-JSON response from compile_cover tool (raw: %q)", resText)
 }
 
 func formatTrimSizeForTypst(trimSize string) string {

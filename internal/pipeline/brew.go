@@ -1990,6 +1990,10 @@ func generateCoverImageWithClient(ctx context.Context, m *manifest.Manifest, opt
 		return fmt.Errorf("budget limit exceeded: anticipated cost $%.4f exceeds budget of $%.2f", actualCost+imageCost, budget)
 	}
 
+	if mcpClient == nil {
+		return fmt.Errorf("mcpClient cannot be nil for cover image generation")
+	}
+
 	imgPath, _, err := generateImageRaw(ctx, mcpClient, prompt, styleID, "1024x1024", m.BookProperties.CharacterReferenceURL, &m.BookProperties.CharacterWeight, opts.OutputDir)
 	if err != nil {
 		return fmt.Errorf("failed to generate cover image: %w", err)

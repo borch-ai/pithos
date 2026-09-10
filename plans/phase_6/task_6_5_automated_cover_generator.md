@@ -3,7 +3,7 @@
 **Status:** Complete
 **Go Version:** 1.26+
 
-Automated parodic book cover generation by creating a unified workflow that queries the LLM for cover art ideas, generates a high-resolution cover illustration matching the style guide, compiles KDP geometry specifications (margins, bleed, spine width), and produces a print-ready PDF cover wrap.
+Automates parodic book cover generation by creating a unified workflow that queries the LLM for cover art ideas, generates a high-resolution cover illustration matching the style guide, compiles KDP geometry specifications (margins, bleed, spine width), and produces a print-ready PDF cover wrap.
 
 ## User Review Required
 

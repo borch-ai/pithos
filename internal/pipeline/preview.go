@@ -1287,6 +1287,46 @@ const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
     coverWrapContainer.appendChild(backEl);
     coverWrapContainer.appendChild(spineEl);
     coverWrapContainer.appendChild(frontEl);
+    coverWrapContainer.appendChild(createCoverWrapGuides());
+  }
+
+  function createCoverWrapGuides() {
+    const guideContainer = document.createElement('div');
+    guideContainer.className = 'print-guide';
+
+    // KDP Bleed Cut Line (outer boundary ~0.125" / 14px)
+    const cutLine = document.createElement('div');
+    cutLine.className = 'cut-line';
+    cutLine.style.top = '14px';
+    cutLine.style.bottom = '14px';
+    cutLine.style.left = '14px';
+    cutLine.style.right = '14px';
+
+    const cutLabel = document.createElement('div');
+    cutLabel.className = 'guide-label cut';
+    cutLabel.textContent = 'KDP WRAP CUT LINE';
+    cutLabel.style.left = '4px';
+    cutLabel.style.top = '4px';
+    cutLine.appendChild(cutLabel);
+    guideContainer.appendChild(cutLine);
+
+    // KDP Safe Zone Line
+    const safetyLine = document.createElement('div');
+    safetyLine.className = 'safety-line';
+    safetyLine.style.top = '28px';
+    safetyLine.style.bottom = '28px';
+    safetyLine.style.left = '28px';
+    safetyLine.style.right = '28px';
+
+    const safetyLabel = document.createElement('div');
+    safetyLabel.className = 'guide-label safety';
+    safetyLabel.textContent = 'SAFE ZONE';
+    safetyLabel.style.right = '4px';
+    safetyLabel.style.bottom = '4px';
+    safetyLine.appendChild(safetyLabel);
+    guideContainer.appendChild(safetyLine);
+
+    return guideContainer;
   }
 
   renderCoverWrap();
@@ -1438,9 +1478,11 @@ const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
     if (showGuides) {
       toggleGuidesBtn.classList.add('active');
       pageContainer.classList.add('show-guides');
+      if (coverWrapContainer) coverWrapContainer.classList.add('show-guides');
     } else {
       toggleGuidesBtn.classList.remove('active');
       pageContainer.classList.remove('show-guides');
+      if (coverWrapContainer) coverWrapContainer.classList.remove('show-guides');
     }
   });
 
@@ -1460,6 +1502,7 @@ const jsTemplate = `document.addEventListener('DOMContentLoaded', () => {
   if (showGuides) {
     toggleGuidesBtn.classList.add('active');
     pageContainer.classList.add('show-guides');
+    if (coverWrapContainer) coverWrapContainer.classList.add('show-guides');
   }
 
   // Polling for hot-reload
