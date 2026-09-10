@@ -2,9 +2,11 @@ package main
 
 import (
 	"bytes"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/borch-ai/pithos/internal/config"
 	"github.com/spf13/cobra"
 )
 
@@ -162,6 +164,7 @@ func TestExecution_PreviewMissingArgs(t *testing.T) {
 	if err := previewCmd.Flags().Set("dir", ""); err != nil {
 		t.Fatalf("failed to reset dir flag on previewCmd: %v", err)
 	}
+	previewCmd.Flags().Lookup("dir").Changed = false
 	rootCmd.SetArgs([]string{"preview"})
 	var buf bytes.Buffer
 	rootCmd.SetOut(&buf)
@@ -181,6 +184,7 @@ func TestExecution_StatusMissingArgs(t *testing.T) {
 	if err := statusCmd.Flags().Set("dir", ""); err != nil {
 		t.Fatalf("failed to reset dir flag on statusCmd: %v", err)
 	}
+	statusCmd.Flags().Lookup("dir").Changed = false
 	rootCmd.SetArgs([]string{"status"})
 	var buf bytes.Buffer
 	rootCmd.SetOut(&buf)
@@ -200,6 +204,7 @@ func TestExecution_CleanMissingArgs(t *testing.T) {
 	if err := cleanCmd.Flags().Set("dir", ""); err != nil {
 		t.Fatalf("failed to reset dir flag on cleanCmd: %v", err)
 	}
+	cleanCmd.Flags().Lookup("dir").Changed = false
 	rootCmd.SetArgs([]string{"clean", "--orphans"})
 	var buf bytes.Buffer
 	rootCmd.SetOut(&buf)
@@ -390,6 +395,13 @@ func TestExecution_RejectBothPositionalAndDir(t *testing.T) {
 	if !strings.Contains(err.Error(), "cannot specify both") {
 		t.Errorf("unexpected error message: %v", err)
 	}
+
+	_ = cleanCmd.Flags().Set("dir", "")
+	cleanCmd.Flags().Lookup("dir").Changed = false
+	_ = statusCmd.Flags().Set("dir", "")
+	statusCmd.Flags().Lookup("dir").Changed = false
+	_ = previewCmd.Flags().Set("dir", "")
+	previewCmd.Flags().Lookup("dir").Changed = false
 }
 
 func TestIsBareSlug(t *testing.T) {
@@ -482,4 +494,60 @@ func TestResolveWorkspaceAndBook(t *testing.T) {
 	if wsRoot != "books" {
 		t.Errorf("expected wsRoot 'books', got %q", wsRoot)
 	}
+}
+
+func TestStatusAndClean_EmptyWorkspacesRoot(t *testing.T) {
+	origCfg := config.Cfg
+	defer func() { config.Cfg = origCfg }()
+
+	statusDir = ""
+	_ = statusCmd.Flags().Set("dir", "")
+	statusCmd.Flags().Lookup("dir").Changed = false
+
+	cleanDir = ""
+	_ = cleanCmd.Flags().Set("dir", "")
+	cleanCmd.Flags().Lookup("dir").Changed = false
+
+	config.Cfg = &config.Config{
+		WorkspacesRoot: "",
+	}
+
+	// Positional bare slug with empty WorkspacesRoot must fail with "workspaces root is empty in config"
+	err := statusCmd.RunE(statusCmd, []string{"bare-book"})
+	if err == nil || !strings.Contains(err.Error(), "workspaces root is empty in config") {
+		t.Errorf("expected 'workspaces root is empty in config', got %v", err)
+	}
+
+	cleanAll = true
+	err = cleanCmd.RunE(cleanCmd, []string{"bare-book"})
+	if err == nil || !strings.Contains(err.Error(), "workspaces root is empty in config") {
+		t.Errorf("expected 'workspaces root is empty in config', got %v", err)
+	}
+	cleanAll = false
+
+	// Explicit --dir with absolute path must NOT fail with "workspaces root is empty in config"
+	tmpDir := t.TempDir()
+	bookDir := filepath.Join(tmpDir, "my-book")
+
+	statusDir = bookDir
+	err = statusCmd.RunE(statusCmd, []string{})
+	// Error may be manifest not found, but must NOT be "workspaces root is empty in config"
+	if err != nil && strings.Contains(err.Error(), "workspaces root is empty in config") {
+		t.Errorf("status --dir should not fail with empty workspaces root, got %v", err)
+	}
+	statusDir = ""
+
+	cleanDir = bookDir
+	cleanAll = true
+	err = cleanCmd.RunE(cleanCmd, []string{})
+	if err != nil && strings.Contains(err.Error(), "workspaces root is empty in config") {
+		t.Errorf("clean --dir should not fail with empty workspaces root, got %v", err)
+	}
+	cleanDir = ""
+	cleanAll = false
+
+	_ = statusCmd.Flags().Set("dir", "")
+	statusCmd.Flags().Lookup("dir").Changed = false
+	_ = cleanCmd.Flags().Set("dir", "")
+	cleanCmd.Flags().Lookup("dir").Changed = false
 }

@@ -20,13 +20,12 @@ var statusCmd = &cobra.Command{
 		if config.Cfg == nil {
 			return fmt.Errorf("configuration is not loaded")
 		}
-		if config.Cfg.WorkspacesRoot == "" {
-			return fmt.Errorf("workspaces root is empty in config")
-		}
-
 		target, isPositional, err := resolvePositionalOrDir(cmd, statusDir, args)
 		if err != nil {
 			return err
+		}
+		if isPositional && config.Cfg.WorkspacesRoot == "" {
+			return fmt.Errorf("workspaces root is empty in config")
 		}
 
 		workspaceRoot, bookName := resolveWorkspaceAndBook(target, isPositional)

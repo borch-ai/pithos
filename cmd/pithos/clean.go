@@ -24,10 +24,6 @@ var cleanCmd = &cobra.Command{
 		if config.Cfg == nil {
 			return fmt.Errorf("configuration is not loaded")
 		}
-		if config.Cfg.WorkspacesRoot == "" {
-			return fmt.Errorf("workspaces root is empty in config")
-		}
-
 		if !cleanOrphans && !cleanResetFailed && !cleanAll {
 			return fmt.Errorf("must specify at least one clean action (--orphans, --reset-failed, --all)")
 		}
@@ -38,6 +34,9 @@ var cleanCmd = &cobra.Command{
 		target, isPositional, err := resolvePositionalOrDir(cmd, cleanDir, args)
 		if err != nil {
 			return err
+		}
+		if isPositional && config.Cfg.WorkspacesRoot == "" {
+			return fmt.Errorf("workspaces root is empty in config")
 		}
 
 		workspaceRoot, bookName := resolveWorkspaceAndBook(target, isPositional)
