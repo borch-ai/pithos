@@ -131,21 +131,14 @@ func Assemble(ctx context.Context, opts AssembleOptions) (*manifest.Manifest, er
 	}
 
 	var typstClient *mcp.PluginClient
-	if !opts.DryRun {
-		typstClient = mcp.NewPluginClient(mcp.PluginTypst)
-		if opts.TypstTransport != nil {
-			typstClient.SetTransport(opts.TypstTransport)
-		} else if opts.MCPTransport != nil {
-			typstClient.SetTransport(opts.MCPTransport)
+	defer func() {
+		if typstClient != nil {
+			_ = typstClient.Stop()
 		}
-		if startErr := typstClient.Start(ctx); startErr != nil {
-			return nil, fmt.Errorf("failed to start MCP typst client: %w", startErr)
-		}
-		defer func() { _ = typstClient.Stop() }()
-	}
+	}()
 
 	// 5. Compile the interior PDF
-	pdfPath, err := compileInteriorPDF(ctx, opts, m, typstClient)
+	pdfPath, err := compileInteriorPDF(ctx, opts, m, &typstClient)
 	if err != nil {
 		return nil, err
 	}
@@ -193,7 +186,7 @@ func Assemble(ctx context.Context, opts AssembleOptions) (*manifest.Manifest, er
 	return m, nil
 }
 
-func compileInteriorPDF(ctx context.Context, opts AssembleOptions, m *manifest.Manifest, typstClients ...*mcp.PluginClient) (string, error) {
+func compileInteriorPDF(ctx context.Context, opts AssembleOptions, m *manifest.Manifest, sharedClients ...**mcp.PluginClient) (string, error) {
 	manuscriptPath := filepath.Join(opts.InputDir, "manuscript.md")
 	if _, err := os.Stat(manuscriptPath); err != nil {
 		if !os.IsNotExist(err) {
@@ -226,7 +219,7 @@ func compileInteriorPDF(ctx context.Context, opts AssembleOptions, m *manifest.M
 	marginVal := fmt.Sprintf("%.3fin", m.KDPLayout.MarginSize)
 
 	// Call pw-mcp-typst MCP client
-	mcpClient, cleanup, clientErr := getTypstClient(ctx, opts, typstClients, "failed to start MCP typst client")
+	mcpClient, cleanup, clientErr := acquireInteriorTypstClient(ctx, opts, sharedClients)
 	if clientErr != nil {
 		return "", clientErr
 	}
@@ -562,4 +555,19 @@ func getTypstClient(ctx context.Context, opts AssembleOptions, typstClients []*m
 		return nil, nil, fmt.Errorf("%s: %w", errPrefix, startErr)
 	}
 	return client, func() { _ = client.Stop() }, nil
+}
+
+func acquireInteriorTypstClient(ctx context.Context, opts AssembleOptions, sharedClients []**mcp.PluginClient) (*mcp.PluginClient, func(), error) {
+	if len(sharedClients) == 0 || sharedClients[0] == nil {
+		return getTypstClient(ctx, opts, nil, "failed to start MCP typst client")
+	}
+	if *sharedClients[0] != nil {
+		return *sharedClients[0], func() {}, nil
+	}
+	client, _, err := getTypstClient(ctx, opts, nil, "failed to start MCP typst client")
+	if err != nil {
+		return nil, nil, err
+	}
+	*sharedClients[0] = client
+	return client, func() {}, nil
 }
