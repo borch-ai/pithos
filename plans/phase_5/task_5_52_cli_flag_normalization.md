@@ -13,8 +13,8 @@ Currently, `pw-mcp-pithos` invokes Pithos subcommands with `--dir <path>`:
 - `pithos assemble --dir <path>`
 
 However, within Pithos:
-- `pithos brew` requires `--output` (`-o`).
-- `pithos assemble` requires `--input` (`-i`).
+- `pithos brew` uses `--output`.
+- `pithos assemble` uses `--input`.
 - Other commands (`preview`, `status`, `clean`, `character`) vary between positional arguments and workspace flags.
 
 This task standardizes all workspace-targeting subcommands to accept `--dir` and shorthand `-d` alongside their legacy flags, ensuring full backward compatibility while satisfying the MCP execution contract.
@@ -23,7 +23,7 @@ This task standardizes all workspace-targeting subcommands to accept `--dir` and
 
 > [!NOTE]
 > **Backward Compatibility**:
-> Existing flags (`--output` / `-o` on `brew`, `--input` / `-i` on `assemble`) will be retained as aliases. If both `--dir` and `--output`/`--input` are passed, `--dir` takes precedence.
+> Existing flags (`--output` on `brew`, `--input` on `assemble`) will be retained as aliases. If both `--dir` and `--output`/`--input` are passed, `--dir` takes precedence.
 
 ## Open Questions
 
@@ -64,8 +64,9 @@ None.
   make test
   ```
 - Add CLI flag parsing test suite covering:
-  - `pithos brew --dir <path>` vs `pithos brew -o <path>`
-  - `pithos assemble --dir <path>` vs `pithos assemble -i <path>`
+  - `pithos brew --dir <path>` vs `pithos brew --output <path>`
+  - `pithos assemble --dir <path>` vs `pithos assemble --input <path>`
+  - Shorthand `-d` verification across commands.
   - `pithos status --dir <path>`, `clean --dir <path>`, `character --dir <path>`
   - Precedence verification when both `--dir` and legacy flags are passed.
 - Run coverage verification:
