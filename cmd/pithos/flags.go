@@ -2,7 +2,9 @@ package main
 
 import (
 	"errors"
+	"path/filepath"
 
+	"github.com/borch-ai/pithos/internal/pipeline"
 	"github.com/spf13/cobra"
 )
 
@@ -27,4 +29,11 @@ func resolvePositionalOrDir(cmd *cobra.Command, dirVal string, args []string) (s
 		return "", errors.New("must specify book name as argument or via --dir flag")
 	}
 	return args[0], nil
+}
+
+// resolveWorkspaceAndBook resolves target path or slug using pipeline.ResolveBookPath
+// and splits it into workspaceRoot and bookName.
+func resolveWorkspaceAndBook(target string) (workspaceRoot string, bookName string) {
+	resolved := pipeline.ResolveBookPath(target)
+	return filepath.Dir(resolved), filepath.Base(resolved)
 }

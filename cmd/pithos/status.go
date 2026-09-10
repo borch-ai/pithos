@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"github.com/borch-ai/pithos/internal/config"
@@ -30,13 +29,7 @@ var statusCmd = &cobra.Command{
 			return err
 		}
 
-		workspaceRoot := config.Cfg.WorkspacesRoot
-		bookName := target
-		if strings.ContainsAny(target, "/\\") || filepath.IsAbs(target) {
-			resolved := pipeline.ResolveBookPath(target)
-			workspaceRoot = filepath.Dir(resolved)
-			bookName = filepath.Base(resolved)
-		}
+		workspaceRoot, bookName := resolveWorkspaceAndBook(target)
 
 		ws, err := pipeline.GetWorkspaceStatus(workspaceRoot, bookName)
 		if err != nil {

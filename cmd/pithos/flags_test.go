@@ -391,3 +391,42 @@ func TestExecution_RejectBothPositionalAndDir(t *testing.T) {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
+
+func TestResolveWorkspaceAndBook(t *testing.T) {
+	// Bare book name
+	wsRoot, bName := resolveWorkspaceAndBook("bare-slug")
+	if bName != "bare-slug" {
+		t.Errorf("expected bookName 'bare-slug', got %q", bName)
+	}
+	if wsRoot == "" {
+		t.Errorf("expected non-empty wsRoot for bare slug")
+	}
+
+	// Absolute path
+	absPath := "/tmp/test-workspaces/my-book"
+	wsRoot, bName = resolveWorkspaceAndBook(absPath)
+	if bName != "my-book" {
+		t.Errorf("expected bookName 'my-book', got %q", bName)
+	}
+	if wsRoot != "/tmp/test-workspaces" {
+		t.Errorf("expected wsRoot '/tmp/test-workspaces', got %q", wsRoot)
+	}
+
+	// Tilde path
+	wsRoot, bName = resolveWorkspaceAndBook("~/tilde-book")
+	if bName != "tilde-book" {
+		t.Errorf("expected bookName 'tilde-book', got %q", bName)
+	}
+	if wsRoot == "" || strings.HasPrefix(wsRoot, "~") {
+		t.Errorf("expected expanded wsRoot for tilde path, got %q", wsRoot)
+	}
+
+	// Books relative prefix
+	wsRoot, bName = resolveWorkspaceAndBook("books/relative-book")
+	if bName != "relative-book" {
+		t.Errorf("expected bookName 'relative-book', got %q", bName)
+	}
+	if wsRoot != "books" {
+		t.Errorf("expected wsRoot 'books', got %q", wsRoot)
+	}
+}
