@@ -7,7 +7,7 @@
 
 Implement an automated packaging and integrity verification command (`pithos pack [book]`) to compile production-ready distribution archives for publishing platforms (such as Amazon KDP or automated distributors).
 
-Currently, Pithos generates interior PDF files (`interior.pdf`) and cover wrap PDFs (`cover.pdf`) inside the workspace's `build/` directory. However, production deployment requires:
+Currently, Pithos generates interior PDF files (`interior.pdf`) and cover wrap PDFs (`cover.pdf`) directly inside the book workspace directory. However, production deployment requires:
 1. **Preflight Certification**: Confirming that `pw-mcp-pdfcheck` preflight verification passed with zero critical errors before assets are packaged.
 2. **Checksum Integrity**: Generating SHA-256 cryptographic hashes for all deliverable assets to prevent corrupt or incomplete uploads.
 3. **Packaging Artifact**: Bundling `interior.pdf`, `cover.pdf`, a sanitized export of `manifest.json`, and `checksums.sha256` into a compressed distribution archive (`dist/<slug>-print-ready.zip`).
@@ -45,7 +45,7 @@ None.
 
 #### [NEW] [pack.go](file://../../internal/pipeline/pack.go)
 - Implement `PackWorkspace(workspaceDir string, opts PackOptions) (*ReleaseBundle, error)`:
-  - Verify `interior.pdf` and `cover.pdf` exist.
+  - Verify `interior.pdf` and `cover.pdf` exist in the workspace directory.
   - Verify preflight checks are clean (or `--force` flag is set).
   - Calculate SHA-256 hashes for interior, cover, and manifest.
   - Write `checksums.sha256` file.

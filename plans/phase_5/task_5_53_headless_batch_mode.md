@@ -12,7 +12,7 @@ Currently:
 - `pithos brew` can pause for stanza review and automatically launches the system default web browser to view HTML previews unless `--silent` is passed.
 - `pithos brew --pages` launches an interactive multi-select prompt if page arguments are not explicitly given.
 
-This task introduces a global `--headless` flag (aliased with `--non-interactive`) with automatic detection of CI environments (`CI=true` or `PITHOS_HEADLESS=true`), ensuring strictly non-interactive, headless-safe execution.
+This task introduces a global `--headless` flag (aliased with `--non-interactive`) with automatic detection of CI environments (accepting truthy values such as `"1"` or `"true"` for `CI` or `PITHOS_HEADLESS`), ensuring strictly non-interactive, headless-safe execution.
 
 ## User Review Required
 
@@ -34,7 +34,7 @@ None.
 
 #### [MODIFY] [root.go](file://../../cmd/pithos/root.go)
 - Register persistent flags `--headless` and `--non-interactive` on root command.
-- Bind `PITHOS_HEADLESS` environment variable and auto-detect `CI=true` or non-TTY `stdin` (`!term.IsTerminal(os.Stdin.Fd())`).
+- Bind `PITHOS_HEADLESS` environment variable and auto-detect truthy `CI` / `PITHOS_HEADLESS` (`"1"`, `"true"`, `"yes"`, `"on"`) or non-TTY `stdin` (`!term.IsTerminal(os.Stdin.Fd())`).
 - Expose a helper `IsHeadless() bool` accessible across all subcommand handlers.
 
 ### Command Handlers
@@ -62,7 +62,7 @@ None.
   make test
   ```
 - Add unit tests verifying:
-  - `IsHeadless()` returns true when `--headless` flag, `--non-interactive` flag, or `PITHOS_HEADLESS=1` / `CI=1` env is set.
+  - `IsHeadless()` returns true when `--headless` flag, `--non-interactive` flag, or truthy `CI` / `PITHOS_HEADLESS` env (e.g. `1` or `true`) is set.
   - `pithos initiate` in headless mode without flags fails immediately with exit code 1 and error message rather than blocking on stdin.
   - `pithos brew` in headless mode suppresses browser preview launch and interactive review gates.
 - Verify coverage threshold:
