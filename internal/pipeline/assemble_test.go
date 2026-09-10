@@ -3,6 +3,7 @@ package pipeline
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -117,11 +118,35 @@ func setupMockTypstServer(t *testing.T, ctx context.Context, serverTransport mcp
 			return nil, err
 		}
 
+		_ = os.WriteFile(args.OutputPath, []byte("%PDF-1.4 dummy interior"), 0600)
 		resMap := map[string]interface{}{
 			"output_pdf": args.OutputPath,
 			"page_count": 80,
 		}
 
+		resBytes, _ := json.Marshal(resMap)
+		return &mcpsdk.CallToolResult{
+			Content: []mcpsdk.Content{
+				&mcpsdk.TextContent{Text: string(resBytes)},
+			},
+		}, nil
+	})
+
+	server.AddTool(&mcpsdk.Tool{
+		Name: "compile_cover",
+		InputSchema: map[string]any{
+			"type": "object",
+		},
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		var args struct {
+			OutputPath string `json:"output_path"`
+		}
+		_ = json.Unmarshal(req.Params.Arguments, &args)
+
+		_ = os.WriteFile(args.OutputPath, []byte("%PDF-1.4 dummy cover"), 0600)
+		resMap := map[string]interface{}{
+			"output_pdf": args.OutputPath,
+		}
 		resBytes, _ := json.Marshal(resMap)
 		return &mcpsdk.CallToolResult{
 			Content: []mcpsdk.Content{
@@ -1185,5 +1210,158 @@ func TestAssemble_PDFCheck_ToolError(t *testing.T) {
 	_, err = Assemble(ctx, optsAssemble)
 	if err == nil {
 		t.Error("expected Assemble to fail when PDFCheck tool invocation fails, but it succeeded")
+	}
+}
+
+func TestAssemble_CoverPDFCompilation_Success(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	tmpDir := t.TempDir()
+	optsInit := InitiateOptions{
+		OutputDir:       tmpDir,
+		Theme:           "Cover Compilation Parody",
+		TargetPageCount: 5,
+		NoBrainstorm:    true,
+	}
+	m, err := Initiate(optsInit)
+	if err != nil {
+		t.Fatalf("failed to initiate: %v", err)
+	}
+
+	// Create dummy pages and cover image
+	m.Progress.Pages = make([]manifest.PageState, 5)
+	for i := range m.Progress.Pages {
+		m.Progress.Pages[i] = manifest.PageState{
+			PageIndex: i + 1,
+			Status:    manifest.StatusCompleted,
+			Text:      "Test stanza",
+			ImagePath: "images/page.png",
+		}
+	}
+	m.Progress.CoverImageGenerated = true
+	m.Progress.CoverImagePath = "images/cover.png"
+	m.BookProperties.Title = "The Sisyphus Sprint"
+	m.BookProperties.Author = "Dr. Cynic"
+	_ = m.Save()
+
+	coverPath := filepath.Join(tmpDir, "images", "cover.png")
+	if writeErr := os.WriteFile(coverPath, []byte("fake-png"), 0600); writeErr != nil {
+		t.Fatalf("failed to write dummy cover: %v", writeErr)
+	}
+
+	clientKDP, serverKDP := mcpsdk.NewInMemoryTransports()
+	_, cleanupKDP := setupMockKDPMathServer(t, ctx, serverKDP)
+	defer cleanupKDP()
+
+	clientTypst, serverTypst := mcpsdk.NewInMemoryTransports()
+	_, cleanupTypst := setupMockTypstServer(t, ctx, serverTypst)
+	defer cleanupTypst()
+
+	clientPDFCheck, serverPDFCheck := mcpsdk.NewInMemoryTransports()
+	_, cleanupPDFCheck := setupMockPDFCheckServer(t, ctx, serverPDFCheck, true, nil, nil)
+	defer cleanupPDFCheck()
+
+	optsAssemble := AssembleOptions{
+		InputDir:          tmpDir,
+		KDPMathTransport:  clientKDP,
+		TypstTransport:    clientTypst,
+		PDFCheckTransport: clientPDFCheck,
+		DryRun:            false,
+	}
+
+	assembledManifest, err := Assemble(ctx, optsAssemble)
+	if err != nil {
+		t.Fatalf("Assemble failed: %v", err)
+	}
+
+	if assembledManifest.AssetRegistry["cover_pdf"] == "" {
+		t.Error("expected cover_pdf to be registered in AssetRegistry")
+	}
+	if assembledManifest.Kiln.CoverPDFPath == "" {
+		t.Error("expected Kiln.CoverPDFPath to be populated")
+	}
+
+	coverFile := filepath.Join(tmpDir, "cover.pdf")
+	if _, err := os.Stat(coverFile); err != nil {
+		t.Errorf("expected cover.pdf to exist at %s: %v", coverFile, err)
+	}
+}
+
+func TestCompileCoverPDF_Branches(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	tmpDir := t.TempDir()
+	coverImgPath := filepath.Join(tmpDir, "images", "cover.png")
+	_ = os.MkdirAll(filepath.Dir(coverImgPath), 0750)
+	_ = os.WriteFile(coverImgPath, []byte("png"), 0600)
+
+	m := &manifest.Manifest{
+		BookProperties: manifest.BookProperties{
+			Theme: "Fallback Theme",
+		},
+		Progress: manifest.Progress{
+			CoverImagePath: "images/cover.png",
+		},
+	}
+
+	// 1. Missing cover image: skips and returns "", nil
+	mMissing := &manifest.Manifest{
+		Progress: manifest.Progress{
+			CoverImagePath: "nonexistent.png",
+		},
+	}
+	res, err := compileCoverPDF(ctx, AssembleOptions{InputDir: tmpDir}, mMissing, 20, "paperback")
+	if err != nil || res != "" {
+		t.Fatalf("expected empty result and nil error for missing cover, got %q, %v", res, err)
+	}
+
+	// 2. DryRun returns outputPath and creates simulated file
+	resDry, errDry := compileCoverPDF(ctx, AssembleOptions{InputDir: tmpDir, DryRun: true}, m, 20, "paperback")
+	if errDry != nil {
+		t.Fatalf("unexpected dry-run error: %v", errDry)
+	}
+	if !strings.HasSuffix(resDry, "cover.pdf") {
+		t.Errorf("expected output ending in cover.pdf, got %q", resDry)
+	}
+
+	// 3. Raw .pdf string output from MCP tool (not JSON)
+	clientTypstRaw, serverTypstRaw := mcpsdk.NewInMemoryTransports()
+	rawServer := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "mock-raw-typst", Version: "1.0.0"}, nil)
+	rawServer.AddTool(&mcpsdk.Tool{
+		Name:        "compile_cover",
+		InputSchema: map[string]any{"type": "object"},
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		return &mcpsdk.CallToolResult{
+			Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: "/path/to/custom_cover.pdf\n"}},
+		}, nil
+	})
+	sessionRaw, _ := rawServer.Connect(ctx, serverTypstRaw, nil)
+	defer func() { _ = sessionRaw.Close() }()
+
+	resRaw, errRaw := compileCoverPDF(ctx, AssembleOptions{InputDir: tmpDir, TypstTransport: clientTypstRaw}, m, 20, "paperback")
+	if errRaw != nil {
+		t.Fatalf("unexpected raw .pdf output error: %v", errRaw)
+	}
+	if resRaw != "/path/to/custom_cover.pdf" {
+		t.Errorf("expected /path/to/custom_cover.pdf, got %q", resRaw)
+	}
+
+	// 4. Tool call error
+	clientTypstErr, serverTypstErr := mcpsdk.NewInMemoryTransports()
+	errServer := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "mock-err-typst", Version: "1.0.0"}, nil)
+	errServer.AddTool(&mcpsdk.Tool{
+		Name:        "compile_cover",
+		InputSchema: map[string]any{"type": "object"},
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		return nil, fmt.Errorf("simulated compile_cover failure")
+	})
+	sessionErr, _ := errServer.Connect(ctx, serverTypstErr, nil)
+	defer func() { _ = sessionErr.Close() }()
+
+	_, errTool := compileCoverPDF(ctx, AssembleOptions{InputDir: tmpDir, TypstTransport: clientTypstErr}, m, 20, "paperback")
+	if errTool == nil || !strings.Contains(errTool.Error(), "cover compilation failed") {
+		t.Fatalf("expected cover compilation failed error, got: %v", errTool)
 	}
 }

@@ -253,7 +253,7 @@ Focus: Enhancing the developer and author experience with rich TUI (Terminal Use
 *   [ ] **Task 6.4: LLM-Driven Stanza Refinement & Feedback Loop**
     *   Implement selective stanza regeneration based on user text feedback prompts during review, allowing the LLM to rewrite individual stanzas interactively.
     *   [Implementation Plan](plans/phase_6/task_6_4_llm_stanza_refinement.md)
-*   [ ] **Task 6.5: Automated Cover Art & Title Layout Generator**
+*   [x] **Task 6.5: Automated Cover Art & Title Layout Generator**
     *   Automate cover generation by prompting the LLM for cover art matching the style guide, brewing the assets, and compiling KDP-conforming cover wraps.
     *   [Implementation Plan](plans/phase_6/task_6_5_automated_cover_generator.md)
 *   [ ] **Task 6.6: Multi-Provider LLM Fallback & Retries**

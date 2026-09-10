@@ -130,8 +130,15 @@ func Assemble(ctx context.Context, opts AssembleOptions) (*manifest.Manifest, er
 		return nil, fmt.Errorf("failed to save manifest after geometry assembly: %w", saveErr)
 	}
 
+	var typstClient *mcp.PluginClient
+	defer func() {
+		if typstClient != nil {
+			_ = typstClient.Stop()
+		}
+	}()
+
 	// 5. Compile the interior PDF
-	pdfPath, err := compileInteriorPDF(ctx, opts, m)
+	pdfPath, err := compileInteriorPDF(ctx, opts, m, &typstClient)
 	if err != nil {
 		return nil, err
 	}
@@ -140,14 +147,22 @@ func Assemble(ctx context.Context, opts AssembleOptions) (*manifest.Manifest, er
 		return nil, fmt.Errorf("failed to register interior PDF asset: %w", err)
 	}
 
+	// 6. Compile the cover PDF wrap (if cover image is available)
+	coverPDFPath, cErr := compileCoverPDF(ctx, opts, m, pageCount, format, typstClient)
+	if cErr != nil {
+		return nil, cErr
+	}
+	if coverPDFPath != "" {
+		if err := m.RegisterAsset("cover_pdf", coverPDFPath); err != nil {
+			return nil, fmt.Errorf("failed to register cover PDF asset: %w", err)
+		}
+	}
+
 	// Run PDF preflight checks (Interior and optionally Cover PDF)
 	if err := runPDFPreflightCheck(ctx, opts, m, pdfPath); err != nil {
 		return nil, fmt.Errorf("pdf preflight check failed: %w", err)
 	}
 
-	// cover_pdf is read from the AssetRegistry as a future-proof hook for when
-	// cover PDF generation is introduced in Task 5.18. Currently, it defaults to empty.
-	coverPDFPath := m.AssetRegistry["cover_pdf"]
 	if err := m.UpdatePDFPaths(pdfPath, coverPDFPath); err != nil {
 		return nil, fmt.Errorf("failed to update PDF paths in manifest: %w", err)
 	}
@@ -171,7 +186,7 @@ func Assemble(ctx context.Context, opts AssembleOptions) (*manifest.Manifest, er
 	return m, nil
 }
 
-func compileInteriorPDF(ctx context.Context, opts AssembleOptions, m *manifest.Manifest) (string, error) {
+func compileInteriorPDF(ctx context.Context, opts AssembleOptions, m *manifest.Manifest, sharedClients ...**mcp.PluginClient) (string, error) {
 	manuscriptPath := filepath.Join(opts.InputDir, "manuscript.md")
 	if _, err := os.Stat(manuscriptPath); err != nil {
 		if !os.IsNotExist(err) {
@@ -204,17 +219,11 @@ func compileInteriorPDF(ctx context.Context, opts AssembleOptions, m *manifest.M
 	marginVal := fmt.Sprintf("%.3fin", m.KDPLayout.MarginSize)
 
 	// Call pw-mcp-typst MCP client
-	mcpClient := mcp.NewPluginClient(mcp.PluginTypst)
-	if opts.TypstTransport != nil {
-		mcpClient.SetTransport(opts.TypstTransport)
-	} else if opts.MCPTransport != nil {
-		mcpClient.SetTransport(opts.MCPTransport)
+	mcpClient, cleanup, clientErr := acquireInteriorTypstClient(ctx, opts, sharedClients)
+	if clientErr != nil {
+		return "", clientErr
 	}
-
-	if startErr := mcpClient.Start(ctx); startErr != nil {
-		return "", fmt.Errorf("failed to start MCP typst client: %w", startErr)
-	}
-	defer func() { _ = mcpClient.Stop() }()
+	defer cleanup()
 
 	args := map[string]interface{}{
 		"manuscript_path": manuscriptPath,
@@ -249,6 +258,91 @@ func compileInteriorPDF(ctx context.Context, opts AssembleOptions, m *manifest.M
 	}
 
 	return "", fmt.Errorf("unexpected non-JSON response from compile_interior tool (raw: %q)", resText)
+}
+
+func compileCoverPDF(ctx context.Context, opts AssembleOptions, m *manifest.Manifest, pageCount int, format string, typstClients ...*mcp.PluginClient) (string, error) {
+	coverImgRel := m.Progress.CoverImagePath
+	if coverImgRel == "" {
+		coverImgRel = "images/cover.png"
+	}
+	coverImgPath := filepath.Join(opts.InputDir, coverImgRel)
+	if _, err := os.Stat(coverImgPath); err != nil {
+		logger.Warn("Cover image not found, skipping cover PDF compilation", "path", coverImgPath)
+		return "", nil
+	}
+
+	outputPath := filepath.Join(opts.InputDir, "cover.pdf")
+
+	if opts.DryRun {
+		if err := os.WriteFile(outputPath, []byte("SIMULATED COVER PDF CONTENT"), 0600); err != nil {
+			return "", fmt.Errorf("failed to write simulated cover PDF: %w", err)
+		}
+		return outputPath, nil
+	}
+
+	title := m.BookProperties.Title
+	if title == "" {
+		title = m.BookProperties.Theme
+	}
+	subtitle := m.BookProperties.Subtitle
+	author := m.BookProperties.Author
+	if author == "" {
+		author = "Anonymous"
+	}
+	trimSize := opts.TrimSize
+	if trimSize == "" {
+		trimSize = m.BookProperties.TrimSize
+	}
+	if trimSize == "" {
+		trimSize = "6x9"
+	}
+	paperType := opts.PaperType
+	if paperType == "" {
+		paperType = "white"
+	}
+
+	mcpClient, cleanup, clientErr := getTypstClient(ctx, opts, typstClients, "failed to start MCP typst client for cover")
+	if clientErr != nil {
+		return "", clientErr
+	}
+	defer cleanup()
+
+	args := map[string]interface{}{
+		"front_image_path": coverImgPath,
+		"title":            title,
+		"subtitle":         subtitle,
+		"author":           author,
+		"back_cover_blurb": m.BookProperties.BackCoverBlurb,
+		"page_count":       pageCount,
+		"output_path":      outputPath,
+		"trim_size":        trimSize,
+		"paper_type":       paperType,
+		"binding_type":     format,
+		"bleed":            fmt.Sprintf("%.3fin", m.KDPLayout.Bleed),
+		"spine_width":      fmt.Sprintf("%.3fin", m.KDPLayout.SpineWidth),
+	}
+
+	resText, err := mcpClient.CallTool(ctx, "compile_cover", args)
+	if err != nil {
+		return "", fmt.Errorf("cover compilation failed: %w", err)
+	}
+
+	var result struct {
+		OutputPDF string `json:"output_pdf"`
+	}
+	if err := json.Unmarshal([]byte(resText), &result); err == nil {
+		if result.OutputPDF != "" {
+			return result.OutputPDF, nil
+		}
+		return outputPath, nil
+	}
+
+	trimmedRes := strings.TrimSpace(resText)
+	if strings.HasSuffix(strings.ToLower(trimmedRes), ".pdf") {
+		return trimmedRes, nil
+	}
+
+	return "", fmt.Errorf("unexpected non-JSON response from compile_cover tool (raw: %q)", resText)
 }
 
 func formatTrimSizeForTypst(trimSize string) string {
@@ -450,4 +544,36 @@ func fetchGeometry(ctx context.Context, opts AssembleOptions, pageCount int, for
 	}
 
 	return geom, nil
+}
+
+func getTypstClient(ctx context.Context, opts AssembleOptions, typstClients []*mcp.PluginClient, errPrefix string) (*mcp.PluginClient, func(), error) {
+	if len(typstClients) > 0 && typstClients[0] != nil {
+		return typstClients[0], func() {}, nil
+	}
+	client := mcp.NewPluginClient(mcp.PluginTypst)
+	if opts.TypstTransport != nil {
+		client.SetTransport(opts.TypstTransport)
+	} else if opts.MCPTransport != nil {
+		client.SetTransport(opts.MCPTransport)
+	}
+
+	if startErr := client.Start(ctx); startErr != nil {
+		return nil, nil, fmt.Errorf("%s: %w", errPrefix, startErr)
+	}
+	return client, func() { _ = client.Stop() }, nil
+}
+
+func acquireInteriorTypstClient(ctx context.Context, opts AssembleOptions, sharedClients []**mcp.PluginClient) (*mcp.PluginClient, func(), error) {
+	if len(sharedClients) == 0 || sharedClients[0] == nil {
+		return getTypstClient(ctx, opts, nil, "failed to start MCP typst client")
+	}
+	if *sharedClients[0] != nil {
+		return *sharedClients[0], func() {}, nil
+	}
+	client, _, err := getTypstClient(ctx, opts, nil, "failed to start MCP typst client")
+	if err != nil {
+		return nil, nil, err
+	}
+	*sharedClients[0] = client
+	return client, func() {}, nil
 }

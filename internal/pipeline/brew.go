@@ -148,7 +148,7 @@ func Brew(ctx context.Context, opts BrewOptions) error {
 		return err
 	}
 
-	// 2. Generate illustrations via MCP ImageGen server
+	// 2. Generate illustrations and cover via MCP ImageGen server
 	if err := generateIllustrations(ctx, m, opts); err != nil {
 		return err
 	}
@@ -387,6 +387,21 @@ func generateManuscript(ctx context.Context, m *manifest.Manifest, opts BrewOpti
 			stanzas[i] = fmt.Sprintf("This is page %d simulated stanza.", i+1)
 			prompts[i] = fmt.Sprintf("Illustration prompt for page %d", i+1)
 		}
+		if m.BookProperties.Title == "" {
+			m.BookProperties.Title = "The Parody of " + theme
+		}
+		if m.BookProperties.Subtitle == "" {
+			m.BookProperties.Subtitle = "A Parodic Tale of Modern Dread"
+		}
+		if m.BookProperties.Author == "" {
+			m.BookProperties.Author = "Dr. Cynic"
+		}
+		if m.BookProperties.BackCoverBlurb == "" {
+			m.BookProperties.BackCoverBlurb = "An existential and satirical reflection on the absurdities of life."
+		}
+		if m.BookProperties.CoverPrompt == "" {
+			m.BookProperties.CoverPrompt = "Cover illustration in " + m.BookProperties.Style + " featuring main character"
+		}
 		tokenUsage = telemetry.TokenUsage{
 			InputTokens:  100,
 			OutputTokens: 200,
@@ -408,6 +423,38 @@ func generateManuscript(ctx context.Context, m *manifest.Manifest, opts BrewOpti
 		stanzas, prompts, tokenUsage, genErr = llmClient.GenerateStanzas(ctx, theme, pageCount, m.BookProperties.Style, m.BookProperties.CharacterProfile)
 		if genErr != nil {
 			return fmt.Errorf("manuscript text generation failed: %w", genErr)
+		}
+
+		needCoverDesign := m.BookProperties.Title == "" ||
+			m.BookProperties.Subtitle == "" ||
+			m.BookProperties.Author == "" ||
+			m.BookProperties.BackCoverBlurb == "" ||
+			m.BookProperties.CoverPrompt == ""
+
+		if needCoverDesign {
+			coverDesign, coverUsage, cErr := llmClient.GenerateCoverDesign(ctx, theme, m.BookProperties.Style, m.BookProperties.CharacterProfile)
+			if cErr == nil && coverDesign != nil {
+				if m.BookProperties.Title == "" {
+					m.BookProperties.Title = coverDesign.Title
+				}
+				if m.BookProperties.Subtitle == "" {
+					m.BookProperties.Subtitle = coverDesign.Subtitle
+				}
+				if m.BookProperties.Author == "" {
+					m.BookProperties.Author = coverDesign.Author
+				}
+				if m.BookProperties.BackCoverBlurb == "" {
+					m.BookProperties.BackCoverBlurb = coverDesign.BackCoverBlurb
+				}
+				if m.BookProperties.CoverPrompt == "" {
+					m.BookProperties.CoverPrompt = coverDesign.CoverPrompt
+				}
+				tokenUsage.InputTokens += coverUsage.InputTokens
+				tokenUsage.OutputTokens += coverUsage.OutputTokens
+				tokenUsage.CachedTokens += coverUsage.CachedTokens
+			} else if cErr != nil {
+				logger.Warn("Failed to generate cover design via LLM", "error", cErr)
+			}
 		}
 
 		switch client := llmClient.(type) {
@@ -474,7 +521,9 @@ func generateIllustrations(ctx context.Context, m *manifest.Manifest, opts BrewO
 		}
 	}
 
-	if len(pendingPages) == 0 {
+	needCover := len(opts.Pages) == 0 && (!m.Progress.CoverImageGenerated || m.Progress.CoverImagePath == "" || !fileExists(filepath.Join(opts.OutputDir, m.Progress.CoverImagePath)))
+
+	if len(pendingPages) == 0 && !needCover {
 		return nil
 	}
 
@@ -524,6 +573,43 @@ func generateIllustrations(ctx context.Context, m *manifest.Manifest, opts BrewO
 				return fmt.Errorf("failed to update page %d status to completed: %w", page.PageIndex, err)
 			}
 		}
+
+		if needCover {
+			actualCost := m.GetTotalCost()
+			budget := 5.00
+			if opts.Budget > 0 {
+				budget = opts.Budget
+			} else if config.Cfg != nil {
+				if cfgMax := config.Cfg.GetMaxCostUSD(); cfgMax > 0 {
+					budget = cfgMax
+				}
+			}
+			var pricing map[string]telemetry.ModelPricing
+			if config.Cfg != nil {
+				pricing = config.Cfg.Pricing
+			}
+			imageCost := 0.04
+			if pricing != nil {
+				if p, ok := pricing["imagegen"]; ok {
+					imageCost = p.Input / 1_000_000.0
+				}
+			}
+			if actualCost+imageCost > budget {
+				return fmt.Errorf("budget limit exceeded: anticipated cost $%.4f exceeds budget of $%.2f", actualCost+imageCost, budget)
+			}
+
+			destPath := filepath.Join(opts.OutputDir, "images", "cover.png")
+			if err := writeDummyPNG(destPath); err != nil {
+				return fmt.Errorf("failed to write simulated cover PNG: %w", err)
+			}
+			m.Progress.CoverImagePath = "images/cover.png"
+			m.Progress.CoverImageGenerated = true
+			m.RecordImageGeneration(pricing)
+			if err := m.Save(); err != nil {
+				return fmt.Errorf("failed to save manifest after cover generation: %w", err)
+			}
+		}
+
 		return nil
 	}
 
@@ -751,6 +837,13 @@ Loop:
 	if len(workerErrors) > 0 {
 		return fmt.Errorf("failed to generate some illustrations: %w", workerErrors[0])
 	}
+
+	if needCover {
+		if err := generateCoverImageWithClient(ctx, m, opts, mcpClient, styleID); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -1797,11 +1890,18 @@ func estimateCost(m *manifest.Manifest, opts *BrewOptions) (float64, float64) {
 		expectedImageCount++
 	}
 
+	if len(opts.Pages) == 0 && (!m.Progress.CoverImageGenerated || m.Progress.CoverImagePath == "" || !fileExists(filepath.Join(opts.OutputDir, m.Progress.CoverImagePath))) {
+		expectedImageCount++
+	}
+
 	expectedImageCost := float64(expectedImageCount) * imageCost
 
 	expectedLlmCost := 0.0
 	if !m.Progress.ManuscriptGenerated {
 		expectedLlmCost = 0.01
+		if m.BookProperties.Title == "" || m.BookProperties.Subtitle == "" || m.BookProperties.Author == "" || m.BookProperties.BackCoverBlurb == "" || m.BookProperties.CoverPrompt == "" {
+			expectedLlmCost += 0.005
+		}
 	}
 
 	return expectedImageCost, expectedLlmCost
@@ -1869,4 +1969,71 @@ func checkBudget(m *manifest.Manifest, opts *BrewOptions) error {
 	_, _ = fmt.Fprintln(out, ui.SuccessStyle.Render("Proceeding with custom budget override for this run."))
 	opts.Budget = totalEstimatedCost
 	return nil
+}
+
+// generateCoverImageWithClient generates the front cover illustration using the active MCP client and saves it to images/cover.png.
+func generateCoverImageWithClient(ctx context.Context, m *manifest.Manifest, opts BrewOptions, mcpClient *mcp.PluginClient, styleID string) error {
+	imagesDir := filepath.Join(opts.OutputDir, "images")
+	if err := os.MkdirAll(imagesDir, 0750); err != nil {
+		return fmt.Errorf("failed to create images directory: %w", err)
+	}
+	destPath := filepath.Join(imagesDir, "cover.png")
+
+	prompt := m.BookProperties.CoverPrompt
+	if prompt == "" {
+		prompt = fmt.Sprintf("Cover illustration for %s, featuring %s in %s", m.BookProperties.Title, m.BookProperties.CharacterProfile, m.BookProperties.Style)
+	}
+
+	// Budget check
+	actualCost := m.GetTotalCost()
+	budget := 5.00
+	if opts.Budget > 0 {
+		budget = opts.Budget
+	} else if config.Cfg != nil {
+		if cfgMax := config.Cfg.GetMaxCostUSD(); cfgMax > 0 {
+			budget = cfgMax
+		}
+	}
+
+	var pricing map[string]telemetry.ModelPricing
+	if config.Cfg != nil {
+		pricing = config.Cfg.Pricing
+	}
+	imageCost := 0.04
+	if pricing != nil {
+		if p, ok := pricing["imagegen"]; ok {
+			imageCost = p.Input / 1_000_000.0
+		}
+	}
+	if actualCost+imageCost > budget {
+		return fmt.Errorf("budget limit exceeded: anticipated cost $%.4f exceeds budget of $%.2f", actualCost+imageCost, budget)
+	}
+
+	if mcpClient == nil {
+		return fmt.Errorf("mcpClient cannot be nil for cover image generation")
+	}
+
+	imgPath, _, err := generateImageRaw(ctx, mcpClient, prompt, styleID, "1024x1024", m.BookProperties.CharacterReferenceURL, &m.BookProperties.CharacterWeight, opts.OutputDir)
+	if err != nil {
+		return fmt.Errorf("failed to generate cover image: %w", err)
+	}
+
+	if err := copyFile(imgPath, destPath); err != nil {
+		return fmt.Errorf("failed to copy cover image: %w", err)
+	}
+
+	m.Progress.CoverImagePath = "images/cover.png"
+	m.Progress.CoverImageGenerated = true
+	m.RecordImageGeneration(pricing)
+
+	if err := m.Save(); err != nil {
+		return fmt.Errorf("failed to save manifest after cover image generation: %w", err)
+	}
+
+	return Checkpoint(ctx, opts.OutputDir, "Generated cover image")
+}
+
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
 }

@@ -35,6 +35,11 @@ type PageState struct {
 
 // BookProperties holds high-level configurations of the book.
 type BookProperties struct {
+	Title                 string `json:"title,omitempty"`
+	Subtitle              string `json:"subtitle,omitempty"`
+	Author                string `json:"author,omitempty"`
+	BackCoverBlurb        string `json:"back_cover_blurb,omitempty"`
+	CoverPrompt           string `json:"cover_prompt,omitempty"`
 	Theme                 string `json:"theme"`
 	Style                 string `json:"style"`
 	CharacterProfile      string `json:"character_profile"`
@@ -96,7 +101,7 @@ type KilnSync struct {
 }
 
 // CurrentSchemaVersion is the latest version of the manifest schema.
-const CurrentSchemaVersion = 2
+const CurrentSchemaVersion = 3
 
 // Manifest is the root structure serving as the checkpoint state file.
 type Manifest struct {
@@ -117,10 +122,16 @@ type migrationFunc func(m *Manifest) error
 
 var migrations = map[int]migrationFunc{
 	1: migrateV1ToV2,
+	2: migrateV2ToV3,
 }
 
 func migrateV1ToV2(m *Manifest) error {
 	m.SchemaVersion = 2
+	return nil
+}
+
+func migrateV2ToV3(m *Manifest) error {
+	m.SchemaVersion = 3
 	return nil
 }
 

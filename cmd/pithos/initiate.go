@@ -15,6 +15,8 @@ import (
 
 var (
 	initiateOutput       string
+	initiateTitle        string
+	initiateAuthor       string
 	initiateTheme        string
 	initiateStyle        string
 	initiateFormat       string
@@ -103,6 +105,8 @@ var initiateCmd = &cobra.Command{
 
 		opts := pipeline.InitiateOptions{
 			OutputDir:       outputDir,
+			Title:           initiateTitle,
+			Author:          initiateAuthor,
 			Theme:           initiateTheme,
 			Style:           initiateStyle,
 			Format:          initiateFormat,
@@ -123,6 +127,8 @@ var initiateCmd = &cobra.Command{
 
 func init() {
 	initiateCmd.Flags().StringVar(&initiateOutput, "output", "book", "Output directory path")
+	initiateCmd.Flags().StringVar(&initiateTitle, "title", "", "Title of the book (optional, will be generated if omitted)")
+	initiateCmd.Flags().StringVar(&initiateAuthor, "author", "", "Author pseudonym for the book (optional, will be generated if omitted)")
 	initiateCmd.Flags().StringVar(&initiateTheme, "theme", "", "Theme of the book")
 	initiateCmd.Flags().StringVar(&initiateStyle, "style", "", "Style reference for illustrations (supporting Midjourney sref format)")
 	initiateCmd.Flags().StringVar(&initiateFormat, "format", "paperback", "KDP print format (paperback or hardcover)")
