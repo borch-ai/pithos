@@ -49,12 +49,22 @@ type BrewOptions struct {
 	Out               io.Writer        // For testing
 	DryRun            bool
 	Budget            float64
+	Headless          bool
 }
 
 // Brew executes the manuscript generation and page-by-page illustration generation.
 //
 //nolint:gocognit,funlen // Brew function integrates manifest loading, overrides, manuscript generation, review loop, and illustration generation
 func Brew(ctx context.Context, opts BrewOptions) error {
+	if opts.Headless {
+		if opts.Select {
+			return errors.New("interactive page selection is not supported in headless mode; specify pages explicitly")
+		}
+		opts.Silent = true
+		opts.Review = false
+		opts.TUI = false
+	}
+
 	if opts.OutputDir == "" {
 		return errors.New("output directory is required")
 	}
@@ -1941,7 +1951,7 @@ func checkBudget(m *manifest.Manifest, opts *BrewOptions) error {
 	_, _ = fmt.Fprintf(out, "  Budget Limit:              $%.4f\n", budget)
 	_, _ = fmt.Fprintf(out, "  Excess Cost:               $%.4f\n\n", totalEstimatedCost-budget)
 
-	if !isTTY() || opts.Silent {
+	if !isTTY() || opts.Silent || opts.Headless {
 		return fmt.Errorf("budget exceeded: estimated cost $%.4f exceeds budget limit $%.4f", totalEstimatedCost, budget)
 	}
 

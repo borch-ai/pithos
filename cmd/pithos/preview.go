@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 
@@ -41,12 +42,19 @@ var previewCmd = &cobra.Command{
 			return err
 		}
 
-		// 2. Open browser preview
-		previewPath := filepath.Join(bookDir, "web_preview", "preview.html")
-		if previewWatch {
-			previewPath += "?watch=1"
+		ctx := cmd.Context()
+		if ctx == nil {
+			ctx = context.Background()
 		}
-		pipeline.TriggerBrowserOpen(cmd.Context(), previewPath)
+
+		// 2. Open browser preview
+		if !IsHeadless() {
+			previewPath := filepath.Join(bookDir, "web_preview", "preview.html")
+			if previewWatch {
+				previewPath += "?watch=1"
+			}
+			pipeline.TriggerBrowserOpen(ctx, previewPath)
+		}
 
 		// 3. Start live workspace watcher if requested
 		if previewWatch {
@@ -55,7 +63,7 @@ var previewCmd = &cobra.Command{
 				ConfigFile: cfgFile,
 				DryRun:     rootDryRun,
 			}
-			return pipeline.WatchWorkspace(cmd.Context(), opts)
+			return pipeline.WatchWorkspace(ctx, opts)
 		}
 
 		return nil
