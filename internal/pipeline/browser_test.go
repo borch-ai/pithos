@@ -420,15 +420,12 @@ func TestOpenBrowser_HeadlessMode(t *testing.T) {
 func TestOpenBrowser_EnvVars(t *testing.T) {
 	origFunc := openBrowserFunc
 	origHeadless := HeadlessMode
-	origAllowCI := allowCIHeadlessInTests
 	defer func() {
 		openBrowserFunc = origFunc
 		HeadlessMode = origHeadless
-		allowCIHeadlessInTests = origAllowCI
 	}()
 
 	HeadlessMode = false
-	allowCIHeadlessInTests = true
 
 	cases := []struct {
 		envKey string
@@ -438,8 +435,6 @@ func TestOpenBrowser_EnvVars(t *testing.T) {
 		{"PITHOS_HEADLESS", "true"},
 		{"PITHOS_HEADLESS", "yes"},
 		{"PITHOS_HEADLESS", "on"},
-		{"CI", "true"},
-		{"CI", "1"},
 	}
 
 	for _, tc := range cases {
@@ -598,4 +593,16 @@ func TestBrew_Headless(t *testing.T) {
 	if called {
 		t.Error("expected browser NOT to be opened when Headless is true")
 	}
+
+	t.Run("Headless with Select returns error", func(t *testing.T) {
+		optsSelect := BrewOptions{
+			OutputDir: tmpDir,
+			Headless:  true,
+			Select:    true,
+		}
+		errSelect := Brew(ctx, optsSelect)
+		if errSelect == nil || !strings.Contains(errSelect.Error(), "interactive page selection is not supported in headless mode") {
+			t.Errorf("expected error mentioning interactive page selection not supported in headless mode, got %v", errSelect)
+		}
+	})
 }

@@ -57,10 +57,12 @@ type BrewOptions struct {
 //nolint:gocognit,funlen // Brew function integrates manifest loading, overrides, manuscript generation, review loop, and illustration generation
 func Brew(ctx context.Context, opts BrewOptions) error {
 	if opts.Headless {
+		if opts.Select {
+			return errors.New("interactive page selection is not supported in headless mode; specify pages explicitly")
+		}
 		opts.Silent = true
 		opts.Review = false
 		opts.TUI = false
-		opts.Select = false
 	}
 
 	if opts.OutputDir == "" {

@@ -100,6 +100,9 @@ var initiateCmd = &cobra.Command{
 			// User explicitly provided --dir or --output. If it exists, ask for confirmation
 			resolvedDir := pipeline.ResolveBookPath(outputDir)
 			if _, err := os.Stat(resolvedDir); err == nil {
+				if IsHeadless() {
+					return fmt.Errorf("initiation cancelled: directory %s already exists; cannot prompt for overwrite in headless mode", resolvedDir)
+				}
 				confirm, err := pipeline.ConfirmOverwrite(os.Stdin, os.Stdout, resolvedDir)
 				if err != nil {
 					return err

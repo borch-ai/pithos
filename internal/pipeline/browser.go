@@ -65,9 +65,6 @@ func isTestEnv() bool {
 // HeadlessMode indicates whether browser launches should be globally suppressed.
 var HeadlessMode bool
 
-// allowCIHeadlessInTests enables CI env var checking in test environments when specifically testing it.
-var allowCIHeadlessInTests bool
-
 func isTruthy(val string) bool {
 	v := strings.ToLower(strings.TrimSpace(val))
 	return v == "1" || v == "true" || v == "yes" || v == "on" || v == "t" || v == "y"
@@ -77,13 +74,7 @@ func isHeadlessBrowser() bool {
 	if HeadlessMode {
 		return true
 	}
-	if isTruthy(os.Getenv("PITHOS_HEADLESS")) {
-		return true
-	}
-	if isTruthy(os.Getenv("CI")) && (!isTestEnv() || allowCIHeadlessInTests) {
-		return true
-	}
-	return false
+	return isTruthy(os.Getenv("PITHOS_HEADLESS"))
 }
 
 func openBrowser(ctx context.Context, urlStr string) error {

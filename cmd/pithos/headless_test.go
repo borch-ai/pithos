@@ -32,17 +32,14 @@ func TestIsHeadless_Detection(t *testing.T) {
 	// Save and restore state
 	origHeadless := rootHeadless
 	origNonInteractive := rootNonInteractive
-	origIsStdinTTY := isStdinTTY
 	defer func() {
 		rootHeadless = origHeadless
 		rootNonInteractive = origNonInteractive
-		isStdinTTY = origIsStdinTTY
 	}()
 
 	t.Run("Flag --headless", func(t *testing.T) {
 		t.Setenv("PITHOS_HEADLESS", "")
 		t.Setenv("CI", "")
-		isStdinTTY = func() bool { return true }
 		rootHeadless = true
 		rootNonInteractive = false
 
@@ -54,7 +51,6 @@ func TestIsHeadless_Detection(t *testing.T) {
 	t.Run("Flag --non-interactive", func(t *testing.T) {
 		t.Setenv("PITHOS_HEADLESS", "")
 		t.Setenv("CI", "")
-		isStdinTTY = func() bool { return true }
 		rootHeadless = false
 		rootNonInteractive = true
 
@@ -66,7 +62,6 @@ func TestIsHeadless_Detection(t *testing.T) {
 	t.Run("Env PITHOS_HEADLESS", func(t *testing.T) {
 		rootHeadless = false
 		rootNonInteractive = false
-		isStdinTTY = func() bool { return true }
 
 		cases := []struct {
 			val      string
@@ -93,7 +88,6 @@ func TestIsHeadless_Detection(t *testing.T) {
 	t.Run("Env CI", func(t *testing.T) {
 		rootHeadless = false
 		rootNonInteractive = false
-		isStdinTTY = func() bool { return true }
 		t.Setenv("PITHOS_HEADLESS", "")
 
 		cases := []struct {
@@ -115,36 +109,18 @@ func TestIsHeadless_Detection(t *testing.T) {
 			}
 		}
 	})
-
-	t.Run("Non-TTY stdin", func(t *testing.T) {
-		rootHeadless = false
-		rootNonInteractive = false
-		t.Setenv("PITHOS_HEADLESS", "")
-		t.Setenv("CI", "")
-
-		isStdinTTY = func() bool { return false }
-		if !IsHeadless() {
-			t.Error("expected IsHeadless() == true when isStdinTTY returns false")
-		}
-
-		isStdinTTY = func() bool { return true }
-		if IsHeadless() {
-			t.Error("expected IsHeadless() == false when isStdinTTY returns true and no env/flags set")
-		}
-	})
 }
 
+//nolint:funlen // TestInitiateCmd_HeadlessValidation tests multiple headless validation branches
 func TestInitiateCmd_HeadlessValidation(t *testing.T) {
 	origHeadless := rootHeadless
 	origNonInteractive := rootNonInteractive
-	origIsStdinTTY := isStdinTTY
 	origTheme := initiateTheme
 	origDir := initiateDir
 	origOutput := initiateOutput
 	defer func() {
 		rootHeadless = origHeadless
 		rootNonInteractive = origNonInteractive
-		isStdinTTY = origIsStdinTTY
 		initiateTheme = origTheme
 		initiateDir = origDir
 		initiateOutput = origOutput
@@ -155,7 +131,6 @@ func TestInitiateCmd_HeadlessValidation(t *testing.T) {
 	}()
 
 	rootHeadless = true
-	isStdinTTY = func() bool { return true }
 	t.Setenv("PITHOS_HEADLESS", "1")
 
 	// 1. Missing theme fails fast with clear guidance
@@ -171,6 +146,7 @@ func TestInitiateCmd_HeadlessValidation(t *testing.T) {
 	initiateTheme = "Valid Parody Theme"
 	initiateDir = newBookDir
 	_ = initiateCmd.Flags().Set("dir", newBookDir)
+	initiateCmd.Flags().Lookup("dir").Changed = true
 	initiateNoBrainstorm = true
 	rootDryRun = true
 
@@ -178,12 +154,24 @@ func TestInitiateCmd_HeadlessValidation(t *testing.T) {
 	if err != nil {
 		t.Errorf("expected initiate to succeed in headless mode with valid args, got %v", err)
 	}
+
+	// 3. Existing directory in headless mode fails fast without prompting
+	existingDir := filepath.Join(tmpDir, "existing-book")
+	if mkdirErr := os.MkdirAll(existingDir, 0750); mkdirErr != nil {
+		t.Fatalf("failed to create existing dir: %v", mkdirErr)
+	}
+	initiateDir = existingDir
+	_ = initiateCmd.Flags().Set("dir", existingDir)
+	initiateCmd.Flags().Lookup("dir").Changed = true
+	err = initiateCmd.RunE(initiateCmd, []string{})
+	if err == nil || !strings.Contains(err.Error(), "cannot prompt for overwrite in headless mode") {
+		t.Errorf("expected error mentioning cannot prompt for overwrite in headless mode, got %v", err)
+	}
 }
 
 func TestBrewCmd_HeadlessValidation(t *testing.T) {
 	origHeadless := rootHeadless
 	origNonInteractive := rootNonInteractive
-	origIsStdinTTY := isStdinTTY
 	origSelect := brewSelect
 	origPages := brewPagesStr
 	origReview := brewReview
@@ -192,7 +180,6 @@ func TestBrewCmd_HeadlessValidation(t *testing.T) {
 	defer func() {
 		rootHeadless = origHeadless
 		rootNonInteractive = origNonInteractive
-		isStdinTTY = origIsStdinTTY
 		brewSelect = origSelect
 		brewPagesStr = origPages
 		brewReview = origReview
@@ -203,7 +190,6 @@ func TestBrewCmd_HeadlessValidation(t *testing.T) {
 	}()
 
 	rootHeadless = true
-	isStdinTTY = func() bool { return true }
 	t.Setenv("PITHOS_HEADLESS", "1")
 
 	// 1. --select in headless mode fails fast with clear guidance
@@ -220,13 +206,11 @@ func TestBrewCmd_HeadlessValidation(t *testing.T) {
 func TestPreviewCmd_HeadlessSuppression(t *testing.T) {
 	origHeadless := rootHeadless
 	origNonInteractive := rootNonInteractive
-	origIsStdinTTY := isStdinTTY
 	origCfg := config.Cfg
 	origDir := previewDir
 	defer func() {
 		rootHeadless = origHeadless
 		rootNonInteractive = origNonInteractive
-		isStdinTTY = origIsStdinTTY
 		config.Cfg = origCfg
 		previewDir = origDir
 		_ = previewCmd.Flags().Set("dir", "")
@@ -252,7 +236,6 @@ func TestPreviewCmd_HeadlessSuppression(t *testing.T) {
 	_ = m
 
 	rootHeadless = true
-	isStdinTTY = func() bool { return true }
 	t.Setenv("PITHOS_HEADLESS", "1")
 
 	previewDir = bookDir
@@ -274,13 +257,11 @@ func TestPreviewCmd_HeadlessSuppression(t *testing.T) {
 func TestAssembleCmd_Headless(t *testing.T) {
 	origHeadless := rootHeadless
 	origNonInteractive := rootNonInteractive
-	origIsStdinTTY := isStdinTTY
 	origDir := assembleDir
 	origSilent := assembleSilent
 	defer func() {
 		rootHeadless = origHeadless
 		rootNonInteractive = origNonInteractive
-		isStdinTTY = origIsStdinTTY
 		assembleDir = origDir
 		assembleSilent = origSilent
 		_ = assembleCmd.Flags().Set("dir", "")
@@ -306,7 +287,6 @@ func TestAssembleCmd_Headless(t *testing.T) {
 
 	rootHeadless = true
 	rootDryRun = true
-	isStdinTTY = func() bool { return false }
 	t.Setenv("PITHOS_HEADLESS", "1")
 
 	assembleDir = bookDir
@@ -322,17 +302,14 @@ func TestAssembleCmd_Headless(t *testing.T) {
 func TestPersistentPreRunE_InitializesPipelineHeadlessMode(t *testing.T) {
 	origHeadless := rootHeadless
 	origNonInteractive := rootNonInteractive
-	origIsStdinTTY := isStdinTTY
 	origPipelineHeadless := pipeline.HeadlessMode
 	defer func() {
 		rootHeadless = origHeadless
 		rootNonInteractive = origNonInteractive
-		isStdinTTY = origIsStdinTTY
 		pipeline.HeadlessMode = origPipelineHeadless
 	}()
 
 	rootHeadless = true
-	isStdinTTY = func() bool { return true }
 	t.Setenv("PITHOS_HEADLESS", "1")
 
 	err := rootCmd.PersistentPreRunE(rootCmd, []string{})
