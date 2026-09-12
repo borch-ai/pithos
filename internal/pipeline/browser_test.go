@@ -386,3 +386,213 @@ func TestBrew_BrowserOpen(t *testing.T) {
 		}
 	})
 }
+
+func TestOpenBrowser_HeadlessMode(t *testing.T) {
+	origFunc := openBrowserFunc
+	origHeadless := HeadlessMode
+	defer func() {
+		openBrowserFunc = origFunc
+		HeadlessMode = origHeadless
+	}()
+
+	called := false
+	openBrowserFunc = func(ctx context.Context, urlStr string) error {
+		called = true
+		return nil
+	}
+
+	HeadlessMode = true
+	err := openBrowser(context.Background(), "https://example.com")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if called {
+		t.Error("expected browser NOT to be opened when HeadlessMode is true")
+	}
+
+	called = false
+	triggerBrowserOpen(context.Background(), "https://example.com")
+	if called {
+		t.Error("expected triggerBrowserOpen NOT to call browser when HeadlessMode is true")
+	}
+}
+
+func TestOpenBrowser_EnvVars(t *testing.T) {
+	origFunc := openBrowserFunc
+	origHeadless := HeadlessMode
+	defer func() {
+		openBrowserFunc = origFunc
+		HeadlessMode = origHeadless
+	}()
+
+	HeadlessMode = false
+
+	cases := []struct {
+		envKey string
+		envVal string
+	}{
+		{"PITHOS_HEADLESS", "1"},
+		{"PITHOS_HEADLESS", "true"},
+		{"PITHOS_HEADLESS", "yes"},
+		{"PITHOS_HEADLESS", "on"},
+		{"CI", "true"},
+		{"CI", "1"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.envKey+"="+tc.envVal, func(t *testing.T) {
+			t.Setenv(tc.envKey, tc.envVal)
+			called := false
+			openBrowserFunc = func(ctx context.Context, urlStr string) error {
+				called = true
+				return nil
+			}
+
+			triggerBrowserOpen(context.Background(), "https://example.com")
+			if called {
+				t.Errorf("expected triggerBrowserOpen NOT to call browser when %s=%s", tc.envKey, tc.envVal)
+			}
+		})
+	}
+}
+
+func TestAssemble_Headless(t *testing.T) {
+	origFunc := openBrowserFunc
+	defer func() { openBrowserFunc = origFunc }()
+
+	tmpDir, err := os.MkdirTemp("", "pithos-assemble-headless-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	optsInit := InitiateOptions{
+		OutputDir:       tmpDir,
+		Theme:           "Parody Theme",
+		TargetPageCount: 80,
+	}
+	m, err := Initiate(optsInit)
+	if err != nil {
+		t.Fatalf("Initiate failed: %v", err)
+	}
+	m.Progress.Pages = make([]manifest.PageState, 80)
+	if saveErr := m.Save(); saveErr != nil {
+		t.Fatalf("failed to save manifest: %v", saveErr)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	clientKDP, serverKDP := mcpsdk.NewInMemoryTransports()
+	_, cleanupKDP := setupMockKDPMathServer(t, ctx, serverKDP)
+	defer cleanupKDP()
+
+	clientTypst, serverTypst := mcpsdk.NewInMemoryTransports()
+	_, cleanupTypst := setupMockTypstServer(t, ctx, serverTypst)
+	defer cleanupTypst()
+
+	clientPDFCheck, serverPDFCheck := mcpsdk.NewInMemoryTransports()
+	_, cleanupPDFCheck := setupMockPDFCheckServer(t, ctx, serverPDFCheck, true, nil, nil)
+	defer cleanupPDFCheck()
+
+	called := false
+	openBrowserFunc = func(ctx context.Context, urlStr string) error {
+		called = true
+		return nil
+	}
+
+	opts := AssembleOptions{
+		InputDir:          tmpDir,
+		Format:            "paperback",
+		Bleed:             true,
+		Silent:            false,
+		Headless:          true,
+		KDPMathTransport:  clientKDP,
+		TypstTransport:    clientTypst,
+		PDFCheckTransport: clientPDFCheck,
+	}
+	_, err = Assemble(ctx, opts)
+	if err != nil {
+		t.Fatalf("Assemble failed: %v", err)
+	}
+	if called {
+		t.Error("expected browser NOT to be opened when Headless is true")
+	}
+}
+
+func TestBrew_Headless(t *testing.T) {
+	origFunc := openBrowserFunc
+	defer func() { openBrowserFunc = origFunc }()
+
+	tmpDir, err := os.MkdirTemp("", "pithos-brew-headless-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	dummySourceImage := filepath.Join(tmpDir, "source.png")
+	if writeErr := os.WriteFile(dummySourceImage, []byte("fake-image-bytes"), 0600); writeErr != nil {
+		t.Fatalf("failed to write source image: %v", writeErr)
+	}
+
+	optsInit := InitiateOptions{
+		OutputDir:       tmpDir,
+		Theme:           "Original Theme",
+		Style:           "original-style --sref http://example.com/original.png",
+		TargetPageCount: 2,
+	}
+	mInit, err := Initiate(optsInit)
+	if err != nil {
+		t.Fatalf("failed to initiate book: %v", err)
+	}
+	mInit.BookProperties.CharacterProfile = "mock-character-profile"
+	if err = mInit.Save(); err != nil {
+		t.Fatalf("failed to save manifest: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	clientTransport, serverTransport := mcpsdk.NewInMemoryTransports()
+	_, cleanupMCP := setupMockImageGenServer(t, ctx, serverTransport, dummySourceImage)
+	defer cleanupMCP()
+
+	cloudClientTransport, cloudCleanup := setupMockCloudTransport(t, ctx, "http://example.com/uploaded_character.png")
+	defer cloudCleanup()
+
+	mockLLMClient := &mockLLM{
+		stanzas: []string{"Stanza 1 text", "Stanza 2 text"},
+		usage: telemetry.TokenUsage{
+			InputTokens:  1000,
+			OutputTokens: 2000,
+			CachedTokens: 500,
+		},
+	}
+
+	called := false
+	openBrowserFunc = func(ctx context.Context, urlStr string) error {
+		called = true
+		return nil
+	}
+
+	optsBrew := BrewOptions{
+		OutputDir:         tmpDir,
+		Theme:             "Overridden Theme",
+		Style:             "new-style",
+		MCPTransport:      clientTransport,
+		CloudMCPTransport: cloudClientTransport,
+		LLM:               mockLLMClient,
+		Silent:            false,
+		Headless:          true,
+		Review:            true,
+		TUI:               true,
+	}
+
+	err = Brew(ctx, optsBrew)
+	if err != nil {
+		t.Fatalf("Brew failed: %v", err)
+	}
+	if called {
+		t.Error("expected browser NOT to be opened when Headless is true")
+	}
+}

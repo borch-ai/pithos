@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -31,6 +32,9 @@ var initiateCmd = &cobra.Command{
 	Short: "Scaffolds a new book project directory and manifest",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if initiateTheme == "" {
+			if IsHeadless() {
+				return errors.New("theme is required in headless mode (specify with --theme)")
+			}
 			pagesStr := strconv.Itoa(initiatePages)
 			form := huh.NewForm(
 				huh.NewGroup(
@@ -106,6 +110,11 @@ var initiateCmd = &cobra.Command{
 			}
 		}
 
+		ctx := cmd.Context()
+		if ctx == nil {
+			ctx = context.Background()
+		}
+
 		opts := pipeline.InitiateOptions{
 			OutputDir:       outputDir,
 			Title:           initiateTitle,
@@ -116,7 +125,7 @@ var initiateCmd = &cobra.Command{
 			TargetPageCount: initiatePages,
 			TrimSize:        initiateTrimSize,
 			NoBrainstorm:    initiateNoBrainstorm,
-			Context:         cmd.Context(),
+			Context:         ctx,
 			DryRun:          rootDryRun,
 		}
 		m, err := pipeline.Initiate(opts)

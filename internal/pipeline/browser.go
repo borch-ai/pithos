@@ -62,11 +62,34 @@ func isTestEnv() bool {
 	return strings.HasSuffix(os.Args[0], ".test") || strings.HasSuffix(os.Args[0], ".test.exe")
 }
 
+// HeadlessMode indicates whether browser launches should be globally suppressed.
+var HeadlessMode bool
+
+func isTruthy(val string) bool {
+	v := strings.ToLower(strings.TrimSpace(val))
+	return v == "1" || v == "true" || v == "yes" || v == "on" || v == "t" || v == "y"
+}
+
+func isHeadlessBrowser() bool {
+	if HeadlessMode {
+		return true
+	}
+	return isTruthy(os.Getenv("PITHOS_HEADLESS")) || isTruthy(os.Getenv("CI"))
+}
+
 func openBrowser(ctx context.Context, urlStr string) error {
+	if isHeadlessBrowser() {
+		logger.Debug("Suppressing browser open in headless mode", "url", urlStr)
+		return nil
+	}
 	return openBrowserFunc(ctx, urlStr)
 }
 
 func triggerBrowserOpen(ctx context.Context, urlStr string) {
+	if isHeadlessBrowser() {
+		logger.Debug("Suppressing browser open in headless mode", "url", urlStr)
+		return
+	}
 	if err := openBrowser(ctx, urlStr); err != nil {
 		logger.Warn("Failed to automatically open browser preview", "error", err)
 	}

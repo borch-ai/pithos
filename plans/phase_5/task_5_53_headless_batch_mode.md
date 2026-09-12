@@ -1,6 +1,6 @@
 # plan: Task 5.53: Headless & Batch Execution Mode (`--headless` / `--non-interactive`)
 
-**Status:** Open
+**Status:** Complete
 **Go Version:** 1.26+
 
 ## Overview

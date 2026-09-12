@@ -229,7 +229,7 @@ Focus: Remote monitoring, Kiln state manifest integration, testing, and ecosyste
 *   [x] **Task 5.52: CLI Flag Normalization & Directory Alias (`--dir` / `-d`)**
     *   Standardize all workspace-targeting commands (`initiate`, `brew`, `assemble`, `preview`, `status`, `clean`, `character`) to accept `--dir` and `-d` flags to align with the `pw-mcp-pithos` contract.
     *   [Implementation Plan](plans/phase_5/task_5_52_cli_flag_normalization.md)
-*   [ ] **Task 5.53: Headless & Batch Execution Mode (`--headless` / `--non-interactive`)**
+*   [x] **Task 5.53: Headless & Batch Execution Mode (`--headless` / `--non-interactive`)**
     *   Implement global `--headless` / `--non-interactive` execution mode and CI autodetection to prevent blocking on interactive `huh` forms, disable auto-opening browser windows, and bypass TUI review prompts.
     *   [Implementation Plan](plans/phase_5/task_5_53_headless_batch_mode.md)
 *   [ ] **Task 5.54: Print-Ready Artifact Packaging & Integrity Verification (`pithos pack`)**
