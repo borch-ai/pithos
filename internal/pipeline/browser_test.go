@@ -420,12 +420,15 @@ func TestOpenBrowser_HeadlessMode(t *testing.T) {
 func TestOpenBrowser_EnvVars(t *testing.T) {
 	origFunc := openBrowserFunc
 	origHeadless := HeadlessMode
+	origAllowCI := allowCIHeadlessInTests
 	defer func() {
 		openBrowserFunc = origFunc
 		HeadlessMode = origHeadless
+		allowCIHeadlessInTests = origAllowCI
 	}()
 
 	HeadlessMode = false
+	allowCIHeadlessInTests = true
 
 	cases := []struct {
 		envKey string
