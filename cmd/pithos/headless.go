@@ -1,14 +1,22 @@
 package main
 
 import (
+	"io"
 	"os"
 	"strings"
 
 	"github.com/mattn/go-isatty"
 )
 
+var isInputTTY = func(r io.Reader) bool {
+	if f, ok := r.(*os.File); ok {
+		return isatty.IsTerminal(f.Fd()) || isatty.IsCygwinTerminal(f.Fd())
+	}
+	return false
+}
+
 var isStdinTTY = func() bool {
-	return isatty.IsTerminal(os.Stdin.Fd()) || isatty.IsCygwinTerminal(os.Stdin.Fd())
+	return isInputTTY(os.Stdin)
 }
 
 // isTruthy returns true if val matches typical boolean true values.

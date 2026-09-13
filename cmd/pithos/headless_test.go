@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -490,5 +492,115 @@ func TestPersistentPreRunE_FlagPrecedenceOverEnv(t *testing.T) {
 	}
 	if pipeline.InteractiveMode {
 		t.Error("expected pipeline.InteractiveMode == false when --headless is passed")
+	}
+}
+
+func backupInitiateGlobals(t *testing.T) {
+	origHeadless := rootHeadless
+	origNonInteractive := rootNonInteractive
+	origInteractive := rootInteractive
+	origStdinTTY := isStdinTTY
+	origInputTTY := isInputTTY
+	origDryRun := rootDryRun
+	origNoBrainstorm := initiateNoBrainstorm
+	origTheme := initiateTheme
+	origDir := initiateDir
+	origFormat := initiateFormat
+	origTrim := initiateTrimSize
+	origPages := initiatePages
+	t.Cleanup(func() {
+		rootHeadless = origHeadless
+		rootNonInteractive = origNonInteractive
+		rootInteractive = origInteractive
+		isStdinTTY = origStdinTTY
+		isInputTTY = origInputTTY
+		rootDryRun = origDryRun
+		initiateNoBrainstorm = origNoBrainstorm
+		initiateTheme = origTheme
+		initiateDir = origDir
+		initiateFormat = origFormat
+		initiateTrimSize = origTrim
+		initiatePages = origPages
+		initiateCmd.SetIn(nil)
+		initiateCmd.SetOut(nil)
+	})
+}
+
+func TestInitiateCmd_InteractivePipedStdin(t *testing.T) {
+	backupInitiateGlobals(t)
+
+	rootHeadless = false
+	rootNonInteractive = false
+	rootInteractive = true
+	rootDryRun = true
+	initiateNoBrainstorm = true
+	isStdinTTY = func() bool { return false }
+	isInputTTY = func(r io.Reader) bool { return false }
+
+	tmpDir := t.TempDir()
+	targetDir := filepath.Join(tmpDir, "interactive-piped-book")
+	initiateDir = targetDir
+	_ = initiateCmd.Flags().Set("dir", targetDir)
+	initiateCmd.Flags().Lookup("dir").Changed = true
+	initiateTheme = "" // Trigger form
+
+	inputData := "Piped Parody Theme\n\n\n24\n"
+	initiateCmd.SetIn(bytes.NewBufferString(inputData))
+	initiateCmd.SetOut(&bytes.Buffer{})
+
+	err := initiateCmd.RunE(initiateCmd, []string{})
+	if err != nil {
+		t.Fatalf("expected initiate with --interactive and piped stdin to succeed in accessible mode, got: %v", err)
+	}
+
+	if initiateTheme != "Piped Parody Theme" {
+		t.Errorf("expected initiateTheme to be 'Piped Parody Theme', got %q", initiateTheme)
+	}
+}
+
+func TestPersistentPreRunE_LoadsEnvBeforeMode(t *testing.T) {
+	origHeadless := rootHeadless
+	origNonInteractive := rootNonInteractive
+	origInteractive := rootInteractive
+	origCfgFile := cfgFile
+	origPipelineHeadless := pipeline.HeadlessMode
+	origPipelineInteractive := pipeline.InteractiveMode
+	defer func() {
+		rootHeadless = origHeadless
+		rootNonInteractive = origNonInteractive
+		rootInteractive = origInteractive
+		cfgFile = origCfgFile
+		pipeline.HeadlessMode = origPipelineHeadless
+		pipeline.InteractiveMode = origPipelineInteractive
+	}()
+
+	tmpDir := t.TempDir()
+	envPath := filepath.Join(tmpDir, ".env")
+	if err := os.WriteFile(envPath, []byte("PITHOS_INTERACTIVE=1\n"), 0600); err != nil {
+		t.Fatalf("failed to write .env: %v", err)
+	}
+	cfgPath := filepath.Join(tmpDir, "pithos.toml")
+	if err := os.WriteFile(cfgPath, []byte("[llm]\nprovider=\"gemini\"\n"), 0600); err != nil {
+		t.Fatalf("failed to write pithos.toml: %v", err)
+	}
+
+	rootHeadless = false
+	rootNonInteractive = false
+	rootInteractive = false
+	cfgFile = cfgPath
+	_ = os.Unsetenv("PITHOS_INTERACTIVE")
+	_ = os.Unsetenv("PITHOS_HEADLESS")
+	_ = os.Unsetenv("CI")
+
+	err := rootCmd.PersistentPreRunE(rootCmd, []string{})
+	if err != nil {
+		t.Fatalf("PersistentPreRunE failed: %v", err)
+	}
+
+	if pipeline.HeadlessMode {
+		t.Error("expected pipeline.HeadlessMode == false when .env sets PITHOS_INTERACTIVE=1")
+	}
+	if !pipeline.InteractiveMode {
+		t.Error("expected pipeline.InteractiveMode == true when .env sets PITHOS_INTERACTIVE=1")
 	}
 }

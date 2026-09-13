@@ -27,11 +27,13 @@ var (
 			if (rootHeadless || rootNonInteractive) && rootInteractive {
 				return errors.New("cannot specify both --headless/--non-interactive and --interactive")
 			}
+			if _, err := config.LoadConfig(cfgFile); err != nil {
+				return err
+			}
 			isHeadless := IsHeadless()
 			pipeline.HeadlessMode = isHeadless
 			pipeline.InteractiveMode = !isHeadless && (rootInteractive || isTruthy(os.Getenv("PITHOS_INTERACTIVE")))
-			_, err := config.LoadConfig(cfgFile)
-			return err
+			return nil
 		},
 	}
 )

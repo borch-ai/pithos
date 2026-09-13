@@ -31,6 +31,9 @@ var initiateCmd = &cobra.Command{
 	Use:   "initiate",
 	Short: "Scaffolds a new book project directory and manifest",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		in := cmd.InOrStdin()
+		out := cmd.OutOrStdout()
+
 		if initiateTheme == "" {
 			if IsHeadless() {
 				return errors.New("theme is required in headless mode (specify with --theme)")
@@ -77,8 +80,8 @@ var initiateCmd = &cobra.Command{
 							return nil
 						}),
 				),
-			)
-			form.WithAccessible(!isTTY())
+			).WithInput(in).WithOutput(out)
+			form.WithAccessible(in != os.Stdin || !isTTY() || pipeline.InteractiveMode || !isInputTTY(in))
 			if err := form.Run(); err != nil {
 				return err
 			}
@@ -103,7 +106,7 @@ var initiateCmd = &cobra.Command{
 				if IsHeadless() {
 					return fmt.Errorf("initiation cancelled: directory %s already exists; cannot prompt for overwrite in headless mode", resolvedDir)
 				}
-				confirm, err := pipeline.ConfirmOverwrite(os.Stdin, os.Stdout, resolvedDir)
+				confirm, err := pipeline.ConfirmOverwrite(in, out, resolvedDir)
 				if err != nil {
 					return err
 				}
