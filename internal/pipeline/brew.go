@@ -1775,7 +1775,7 @@ func truncate(s string, maxLen int) string {
 }
 
 func promptSelectPages(m *manifest.Manifest, opts BrewOptions) ([]int, error) {
-	if !isTTY() {
+	if !isTTY() && !InteractiveMode {
 		return nil, errors.New("interactive selection requires a TTY terminal")
 	}
 	var selectedPages []int
@@ -1806,7 +1806,7 @@ func promptSelectPages(m *manifest.Manifest, opts BrewOptions) ([]int, error) {
 				Value(&selectedPages),
 		),
 	).WithInput(in).WithOutput(out)
-	form.WithAccessible(opts.In != nil)
+	form.WithAccessible(opts.In != nil || !isTTY())
 
 	if err := form.Run(); err != nil {
 		return nil, err
@@ -1951,7 +1951,7 @@ func checkBudget(m *manifest.Manifest, opts *BrewOptions) error {
 	_, _ = fmt.Fprintf(out, "  Budget Limit:              $%.4f\n", budget)
 	_, _ = fmt.Fprintf(out, "  Excess Cost:               $%.4f\n\n", totalEstimatedCost-budget)
 
-	if !isTTY() || opts.Silent || opts.Headless {
+	if (!isTTY() && !InteractiveMode) || opts.Silent || opts.Headless {
 		return fmt.Errorf("budget exceeded: estimated cost $%.4f exceeds budget limit $%.4f", totalEstimatedCost, budget)
 	}
 
@@ -1967,7 +1967,7 @@ func checkBudget(m *manifest.Manifest, opts *BrewOptions) error {
 		WithTheme(huh.ThemeCharm())
 
 	form := huh.NewForm(huh.NewGroup(confirm)).WithInput(in).WithOutput(out)
-	form.WithAccessible(opts.In != nil)
+	form.WithAccessible(opts.In != nil || !isTTY())
 	if err := form.Run(); err != nil {
 		return fmt.Errorf("prompt error: %w", err)
 	}

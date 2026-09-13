@@ -3825,3 +3825,43 @@ func TestGenerateCoverImageWithClient_Branches(t *testing.T) {
 		t.Errorf("expected cover.png to exist: %v", statErr)
 	}
 }
+
+func TestPromptSelectPages_NonTTY(t *testing.T) {
+	t.Run("non-TTY without InteractiveMode fails", func(t *testing.T) {
+		oldIsTTY := isTTY
+		origInteractive := InteractiveMode
+		isTTY = func() bool { return false }
+		InteractiveMode = false
+		defer func() {
+			isTTY = oldIsTTY
+			InteractiveMode = origInteractive
+		}()
+
+		m := manifest.NewManifest("/dummy/manifest.json")
+		m.Progress.Pages = []manifest.PageState{
+			{PageIndex: 1, Status: manifest.StatusCompleted, Text: "Page 1"},
+		}
+		_, err := promptSelectPages(m, BrewOptions{})
+		if err == nil || !strings.Contains(err.Error(), "interactive selection requires a TTY terminal") {
+			t.Errorf("expected TTY required error, got %v", err)
+		}
+	})
+
+	t.Run("non-TTY with InteractiveMode proceeds", func(t *testing.T) {
+		oldIsTTY := isTTY
+		origInteractive := InteractiveMode
+		isTTY = func() bool { return false }
+		InteractiveMode = true
+		defer func() {
+			isTTY = oldIsTTY
+			InteractiveMode = origInteractive
+		}()
+
+		m := manifest.NewManifest("/dummy/manifest.json")
+		// Empty pages so it returns "no pages found" error rather than blocking on form.Run()
+		_, err := promptSelectPages(m, BrewOptions{})
+		if err == nil || !strings.Contains(err.Error(), "no pages found in manifest to select") {
+			t.Errorf("expected 'no pages found' error, got %v", err)
+		}
+	})
+}

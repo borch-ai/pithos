@@ -168,6 +168,8 @@ func TestInitiateCmd_HeadlessValidation(t *testing.T) {
 	origTheme := initiateTheme
 	origDir := initiateDir
 	origOutput := initiateOutput
+	origNoBrainstorm := initiateNoBrainstorm
+	origDryRun := rootDryRun
 	defer func() {
 		rootHeadless = origHeadless
 		rootNonInteractive = origNonInteractive
@@ -176,6 +178,8 @@ func TestInitiateCmd_HeadlessValidation(t *testing.T) {
 		initiateTheme = origTheme
 		initiateDir = origDir
 		initiateOutput = origOutput
+		initiateNoBrainstorm = origNoBrainstorm
+		rootDryRun = origDryRun
 		_ = initiateCmd.Flags().Set("dir", "")
 		initiateCmd.Flags().Lookup("dir").Changed = false
 		_ = initiateCmd.Flags().Set("output", "book")
@@ -338,11 +342,13 @@ func TestAssembleCmd_Headless(t *testing.T) {
 	origNonInteractive := rootNonInteractive
 	origDir := assembleDir
 	origSilent := assembleSilent
+	origDryRun := rootDryRun
 	defer func() {
 		rootHeadless = origHeadless
 		rootNonInteractive = origNonInteractive
 		assembleDir = origDir
 		assembleSilent = origSilent
+		rootDryRun = origDryRun
 		_ = assembleCmd.Flags().Set("dir", "")
 		assembleCmd.Flags().Lookup("dir").Changed = false
 	}()
@@ -381,14 +387,20 @@ func TestAssembleCmd_Headless(t *testing.T) {
 func TestPersistentPreRunE_InitializesPipelineHeadlessMode(t *testing.T) {
 	origHeadless := rootHeadless
 	origNonInteractive := rootNonInteractive
+	origInteractive := rootInteractive
 	origPipelineHeadless := pipeline.HeadlessMode
+	origPipelineInteractive := pipeline.InteractiveMode
 	defer func() {
 		rootHeadless = origHeadless
 		rootNonInteractive = origNonInteractive
+		rootInteractive = origInteractive
 		pipeline.HeadlessMode = origPipelineHeadless
+		pipeline.InteractiveMode = origPipelineInteractive
 	}()
 
 	rootHeadless = true
+	rootNonInteractive = false
+	rootInteractive = false
 	t.Setenv("PITHOS_HEADLESS", "1")
 
 	err := rootCmd.PersistentPreRunE(rootCmd, []string{})
@@ -398,5 +410,85 @@ func TestPersistentPreRunE_InitializesPipelineHeadlessMode(t *testing.T) {
 
 	if !pipeline.HeadlessMode {
 		t.Error("expected pipeline.HeadlessMode to be true after PersistentPreRunE")
+	}
+	if pipeline.InteractiveMode {
+		t.Error("expected pipeline.InteractiveMode to be false when headless")
+	}
+}
+
+func TestPersistentPreRunE_ConflictingFlags(t *testing.T) {
+	origHeadless := rootHeadless
+	origNonInteractive := rootNonInteractive
+	origInteractive := rootInteractive
+	defer func() {
+		rootHeadless = origHeadless
+		rootNonInteractive = origNonInteractive
+		rootInteractive = origInteractive
+	}()
+
+	rootHeadless = true
+	rootInteractive = true
+	err := rootCmd.PersistentPreRunE(rootCmd, []string{})
+	if err == nil || !strings.Contains(err.Error(), "cannot specify both --headless/--non-interactive and --interactive") {
+		t.Errorf("expected error for conflicting flags, got %v", err)
+	}
+
+	rootHeadless = false
+	rootNonInteractive = true
+	rootInteractive = true
+	err = rootCmd.PersistentPreRunE(rootCmd, []string{})
+	if err == nil || !strings.Contains(err.Error(), "cannot specify both --headless/--non-interactive and --interactive") {
+		t.Errorf("expected error for conflicting flags, got %v", err)
+	}
+}
+
+func TestPersistentPreRunE_FlagPrecedenceOverEnv(t *testing.T) {
+	origHeadless := rootHeadless
+	origNonInteractive := rootNonInteractive
+	origInteractive := rootInteractive
+	origPipelineHeadless := pipeline.HeadlessMode
+	origPipelineInteractive := pipeline.InteractiveMode
+	defer func() {
+		rootHeadless = origHeadless
+		rootNonInteractive = origNonInteractive
+		rootInteractive = origInteractive
+		pipeline.HeadlessMode = origPipelineHeadless
+		pipeline.InteractiveMode = origPipelineInteractive
+	}()
+
+	// 1. --interactive flag overrides PITHOS_HEADLESS=1 env var
+	rootHeadless = false
+	rootNonInteractive = false
+	rootInteractive = true
+	t.Setenv("PITHOS_HEADLESS", "1")
+	t.Setenv("PITHOS_INTERACTIVE", "")
+
+	err := rootCmd.PersistentPreRunE(rootCmd, []string{})
+	if err != nil {
+		t.Fatalf("PersistentPreRunE failed: %v", err)
+	}
+	if pipeline.HeadlessMode {
+		t.Error("expected pipeline.HeadlessMode == false when --interactive is passed despite PITHOS_HEADLESS=1")
+	}
+	if !pipeline.InteractiveMode {
+		t.Error("expected pipeline.InteractiveMode == true when --interactive is passed")
+	}
+
+	// 2. --headless flag overrides PITHOS_INTERACTIVE=1 env var
+	rootHeadless = true
+	rootNonInteractive = false
+	rootInteractive = false
+	t.Setenv("PITHOS_HEADLESS", "")
+	t.Setenv("PITHOS_INTERACTIVE", "1")
+
+	err = rootCmd.PersistentPreRunE(rootCmd, []string{})
+	if err != nil {
+		t.Fatalf("PersistentPreRunE failed: %v", err)
+	}
+	if !pipeline.HeadlessMode {
+		t.Error("expected pipeline.HeadlessMode == true when --headless is passed despite PITHOS_INTERACTIVE=1")
+	}
+	if pipeline.InteractiveMode {
+		t.Error("expected pipeline.InteractiveMode == false when --headless is passed")
 	}
 }

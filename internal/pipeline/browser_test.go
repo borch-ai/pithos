@@ -16,9 +16,16 @@ import (
 )
 
 func TestOpenBrowserBehavior(t *testing.T) {
-	// Backup the original openBrowserFunc and restore it after test
 	origFunc := openBrowserFunc
-	defer func() { openBrowserFunc = origFunc }()
+	origHeadless := HeadlessMode
+	origInteractive := InteractiveMode
+	defer func() {
+		openBrowserFunc = origFunc
+		HeadlessMode = origHeadless
+		InteractiveMode = origInteractive
+	}()
+	HeadlessMode = false
+	InteractiveMode = false
 
 	var calledURL string
 	var callCount int
@@ -42,7 +49,15 @@ func TestOpenBrowserBehavior(t *testing.T) {
 
 func TestTriggerBrowserOpen_Error(t *testing.T) {
 	origFunc := openBrowserFunc
-	defer func() { openBrowserFunc = origFunc }()
+	origHeadless := HeadlessMode
+	origInteractive := InteractiveMode
+	defer func() {
+		openBrowserFunc = origFunc
+		HeadlessMode = origHeadless
+		InteractiveMode = origInteractive
+	}()
+	HeadlessMode = false
+	InteractiveMode = false
 
 	openBrowserFunc = func(ctx context.Context, urlStr string) error {
 		return errors.New("mock browser launch error")
@@ -54,7 +69,15 @@ func TestTriggerBrowserOpen_Error(t *testing.T) {
 
 func TestTriggerBrowserOpen_Exported(t *testing.T) {
 	origFunc := openBrowserFunc
-	defer func() { openBrowserFunc = origFunc }()
+	origHeadless := HeadlessMode
+	origInteractive := InteractiveMode
+	defer func() {
+		openBrowserFunc = origFunc
+		HeadlessMode = origHeadless
+		InteractiveMode = origInteractive
+	}()
+	HeadlessMode = false
+	InteractiveMode = false
 
 	var calledURL string
 	openBrowserFunc = func(ctx context.Context, urlStr string) error {
@@ -417,43 +440,6 @@ func TestOpenBrowser_HeadlessMode(t *testing.T) {
 	}
 }
 
-func TestOpenBrowser_EnvVars(t *testing.T) {
-	origFunc := openBrowserFunc
-	origHeadless := HeadlessMode
-	defer func() {
-		openBrowserFunc = origFunc
-		HeadlessMode = origHeadless
-	}()
-
-	HeadlessMode = false
-
-	cases := []struct {
-		envKey string
-		envVal string
-	}{
-		{"PITHOS_HEADLESS", "1"},
-		{"PITHOS_HEADLESS", "true"},
-		{"PITHOS_HEADLESS", "yes"},
-		{"PITHOS_HEADLESS", "on"},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.envKey+"="+tc.envVal, func(t *testing.T) {
-			t.Setenv(tc.envKey, tc.envVal)
-			called := false
-			openBrowserFunc = func(ctx context.Context, urlStr string) error {
-				called = true
-				return nil
-			}
-
-			triggerBrowserOpen(context.Background(), "https://example.com")
-			if called {
-				t.Errorf("expected triggerBrowserOpen NOT to call browser when %s=%s", tc.envKey, tc.envVal)
-			}
-		})
-	}
-}
-
 func TestOpenBrowser_InteractiveOverride(t *testing.T) {
 	origFunc := openBrowserFunc
 	origHeadless := HeadlessMode
@@ -464,11 +450,9 @@ func TestOpenBrowser_InteractiveOverride(t *testing.T) {
 		InteractiveMode = origInteractive
 	}()
 
-	t.Run("InteractiveMode overrides HeadlessMode", func(t *testing.T) {
+	t.Run("InteractiveMode overrides HeadlessMode in openBrowser", func(t *testing.T) {
 		HeadlessMode = true
 		InteractiveMode = true
-		t.Setenv("PITHOS_HEADLESS", "")
-		t.Setenv("PITHOS_INTERACTIVE", "")
 
 		called := false
 		openBrowserFunc = func(ctx context.Context, urlStr string) error {
@@ -485,11 +469,25 @@ func TestOpenBrowser_InteractiveOverride(t *testing.T) {
 		}
 	})
 
-	t.Run("PITHOS_INTERACTIVE overrides PITHOS_HEADLESS", func(t *testing.T) {
-		HeadlessMode = false
+	t.Run("InteractiveMode overrides HeadlessMode in triggerBrowserOpen", func(t *testing.T) {
+		HeadlessMode = true
+		InteractiveMode = true
+
+		called := false
+		openBrowserFunc = func(ctx context.Context, urlStr string) error {
+			called = true
+			return nil
+		}
+
+		triggerBrowserOpen(context.Background(), "https://example.com")
+		if !called {
+			t.Error("expected triggerBrowserOpen to call browser when InteractiveMode is true despite HeadlessMode")
+		}
+	})
+
+	t.Run("HeadlessMode suppresses browser when InteractiveMode is false", func(t *testing.T) {
+		HeadlessMode = true
 		InteractiveMode = false
-		t.Setenv("PITHOS_HEADLESS", "1")
-		t.Setenv("PITHOS_INTERACTIVE", "1")
 
 		called := false
 		openBrowserFunc = func(ctx context.Context, urlStr string) error {
@@ -501,8 +499,8 @@ func TestOpenBrowser_InteractiveOverride(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if !called {
-			t.Error("expected browser to be called when PITHOS_INTERACTIVE is 1 despite PITHOS_HEADLESS=1")
+		if called {
+			t.Error("expected browser NOT to be called when HeadlessMode is true and InteractiveMode is false")
 		}
 	})
 }

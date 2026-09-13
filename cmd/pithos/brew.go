@@ -30,9 +30,6 @@ var brewCmd = &cobra.Command{
 	Short: "Generates the manuscript and stanza illustrations",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		headless := IsHeadless()
-		if headless {
-			brewSilent = true
-		}
 
 		var pages []int
 		if cmd.Flags().Changed("pages") {

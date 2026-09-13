@@ -18,16 +18,19 @@ func isTruthy(val string) bool {
 }
 
 // IsHeadless determines whether Pithos should execute in non-interactive headless mode.
-// It returns true if:
-// 1. The --headless or --non-interactive persistent CLI flag is set.
-// 2. The PITHOS_HEADLESS environment variable is set to a truthy value ("1", "true", "yes", "on", etc.).
-// 3. The CI environment variable is set to a truthy value.
-// 4. Standard input is not a terminal (non-TTY), unless overridden by --interactive or PITHOS_INTERACTIVE.
+// Precedence order:
+// 1. Explicit CLI flags: --headless / --non-interactive (true) or --interactive (false).
+// 2. Environment variables: PITHOS_INTERACTIVE (false) or PITHOS_HEADLESS (true).
+// 3. CI environment: CI (true).
+// 4. Stdin terminal check: non-TTY stdin (true), TTY stdin (false).
 func IsHeadless() bool {
 	if rootHeadless || rootNonInteractive {
 		return true
 	}
-	if rootInteractive || isTruthy(os.Getenv("PITHOS_INTERACTIVE")) {
+	if rootInteractive {
+		return false
+	}
+	if isTruthy(os.Getenv("PITHOS_INTERACTIVE")) {
 		return false
 	}
 	if isTruthy(os.Getenv("PITHOS_HEADLESS")) {

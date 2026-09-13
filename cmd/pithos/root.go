@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 
 	"github.com/borch-ai/pithos/internal/config"
@@ -23,8 +24,12 @@ var (
 		SilenceUsage: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			logger.Init(rootDebug)
-			pipeline.InteractiveMode = rootInteractive || isTruthy(os.Getenv("PITHOS_INTERACTIVE"))
-			pipeline.HeadlessMode = IsHeadless()
+			if (rootHeadless || rootNonInteractive) && rootInteractive {
+				return errors.New("cannot specify both --headless/--non-interactive and --interactive")
+			}
+			isHeadless := IsHeadless()
+			pipeline.HeadlessMode = isHeadless
+			pipeline.InteractiveMode = !isHeadless && (rootInteractive || isTruthy(os.Getenv("PITHOS_INTERACTIVE")))
 			_, err := config.LoadConfig(cfgFile)
 			return err
 		},
