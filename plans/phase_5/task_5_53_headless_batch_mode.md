@@ -35,11 +35,11 @@ None.
 ### Configuration & Root Command
 
 #### [MODIFY] [root.go](file://../../cmd/pithos/root.go)
-- Register persistent flags `--headless` and `--non-interactive` on root command.
-- Set `pipeline.HeadlessMode` in `PersistentPreRunE` when `IsHeadless()` is true.
+- Register persistent flags `--headless`, `--non-interactive`, and `--interactive` on root command.
+- In `PersistentPreRunE`, reject conflicting flags, resolve mode via `IsHeadless()`, and set `pipeline.HeadlessMode` and `pipeline.InteractiveMode`.
 
 #### [NEW] [headless.go](file://../../cmd/pithos/headless.go)
-- Expose `IsHeadless() bool` detecting `--headless`, `--non-interactive`, truthy `PITHOS_HEADLESS`, and truthy `CI` (`"1"`, `"true"`, `"yes"`, `"on"`).
+- Expose `IsHeadless() bool` with deterministic precedence: CLI flags (`--headless`, `--non-interactive`, `--interactive`) override environment variables (`PITHOS_INTERACTIVE`, `PITHOS_HEADLESS`, `CI`) and non-TTY stdin auto-detection.
 
 ### Command Handlers & Pipeline
 
@@ -50,17 +50,18 @@ None.
 #### [MODIFY] [brew.go](file://../../cmd/pithos/brew.go)
 - Propagate headless setting into pipeline options.
 - Fail fast if interactive page selection (`--select`) is attempted in headless mode.
-- In headless mode, automatically default `silent` to `true` and disable interactive review/TUI flags.
+- In headless mode, compute effective `silent` locally without mutating the package-level flag, and disable interactive review/TUI flags.
 
 #### [MODIFY] [brew.go](file://../../internal/pipeline/brew.go)
 - In `pipeline.Brew`, return an error immediately if `Headless` and `Select` are both enabled.
+- Honor `InteractiveMode` in `promptSelectPages` and `checkBudget` so explicit interactive mode functions on non-TTY streams with accessible form rendering.
 
 #### [MODIFY] [assemble.go](file://../../cmd/pithos/assemble.go)
 - Ensure assemble propagates `Headless` to pipeline options to suppress browser preview launch.
 
 #### [MODIFY] [browser.go](file://../../internal/pipeline/browser.go)
-- Check `HeadlessMode` and `PITHOS_HEADLESS` in `isHeadlessBrowser()` before launching browsers.
-- CI environment detection is isolated to CLI initialization to ensure pipeline unit test stubs run cleanly.
+- `isHeadlessBrowser()` checks the resolved `HeadlessMode` and `InteractiveMode` globals (single source of truth set by the CLI), completely isolating the pipeline package from ambient environment variables.
+- Ambient environment variables (`CI`, `PITHOS_HEADLESS`, `PITHOS_INTERACTIVE`) are resolved exclusively in `cmd/pithos`, keeping the pipeline package and its unit tests decoupled from environment mutations.
 
 ## Verification Plan
 
