@@ -3,6 +3,7 @@ package pipeline
 import (
 	"bytes"
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -529,9 +530,14 @@ func TestBudget_OverBudget_NonTTY_InteractiveMode(t *testing.T) {
 	}
 
 	oldIsTTY := isTTY
-	isTTY = func() bool { return false }
+	oldIsInputTTY := isInputTTY
+	isTTY = func() bool { return true }
+	isInputTTY = func(r io.Reader) bool { return false }
 	InteractiveMode = true
-	defer func() { isTTY = oldIsTTY }()
+	defer func() {
+		isTTY = oldIsTTY
+		isInputTTY = oldIsInputTTY
+	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
