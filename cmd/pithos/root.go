@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+
 	"github.com/borch-ai/pithos/internal/config"
 	"github.com/borch-ai/pithos/internal/logger"
 	"github.com/borch-ai/pithos/internal/pipeline"
@@ -21,6 +23,7 @@ var (
 		SilenceUsage: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			logger.Init(rootDebug)
+			pipeline.InteractiveMode = rootInteractive || isTruthy(os.Getenv("PITHOS_INTERACTIVE"))
 			pipeline.HeadlessMode = IsHeadless()
 			_, err := config.LoadConfig(cfgFile)
 			return err

@@ -454,6 +454,59 @@ func TestOpenBrowser_EnvVars(t *testing.T) {
 	}
 }
 
+func TestOpenBrowser_InteractiveOverride(t *testing.T) {
+	origFunc := openBrowserFunc
+	origHeadless := HeadlessMode
+	origInteractive := InteractiveMode
+	defer func() {
+		openBrowserFunc = origFunc
+		HeadlessMode = origHeadless
+		InteractiveMode = origInteractive
+	}()
+
+	t.Run("InteractiveMode overrides HeadlessMode", func(t *testing.T) {
+		HeadlessMode = true
+		InteractiveMode = true
+		t.Setenv("PITHOS_HEADLESS", "")
+		t.Setenv("PITHOS_INTERACTIVE", "")
+
+		called := false
+		openBrowserFunc = func(ctx context.Context, urlStr string) error {
+			called = true
+			return nil
+		}
+
+		err := openBrowser(context.Background(), "https://example.com")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !called {
+			t.Error("expected browser to be called when InteractiveMode is true despite HeadlessMode")
+		}
+	})
+
+	t.Run("PITHOS_INTERACTIVE overrides PITHOS_HEADLESS", func(t *testing.T) {
+		HeadlessMode = false
+		InteractiveMode = false
+		t.Setenv("PITHOS_HEADLESS", "1")
+		t.Setenv("PITHOS_INTERACTIVE", "1")
+
+		called := false
+		openBrowserFunc = func(ctx context.Context, urlStr string) error {
+			called = true
+			return nil
+		}
+
+		err := openBrowser(context.Background(), "https://example.com")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !called {
+			t.Error("expected browser to be called when PITHOS_INTERACTIVE is 1 despite PITHOS_HEADLESS=1")
+		}
+	})
+}
+
 func TestAssemble_Headless(t *testing.T) {
 	origFunc := openBrowserFunc
 	defer func() { openBrowserFunc = origFunc }()

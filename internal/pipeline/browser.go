@@ -65,12 +65,18 @@ func isTestEnv() bool {
 // HeadlessMode indicates whether browser launches should be globally suppressed.
 var HeadlessMode bool
 
+// InteractiveMode indicates whether interactive mode has been explicitly forced.
+var InteractiveMode bool
+
 func isTruthy(val string) bool {
 	v := strings.ToLower(strings.TrimSpace(val))
 	return v == "1" || v == "true" || v == "yes" || v == "on" || v == "t" || v == "y"
 }
 
 func isHeadlessBrowser() bool {
+	if InteractiveMode || isTruthy(os.Getenv("PITHOS_INTERACTIVE")) {
+		return false
+	}
 	if HeadlessMode {
 		return true
 	}
