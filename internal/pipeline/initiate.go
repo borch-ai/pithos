@@ -143,7 +143,7 @@ func ConfirmOverwrite(r io.Reader, w io.Writer, path string) (bool, error) {
 		Value(&confirm)
 
 	form := huh.NewForm(huh.NewGroup(f)).WithInput(r).WithOutput(w)
-	form.WithAccessible(r != os.Stdin || !isTTY())
+	form.WithAccessible(r != os.Stdin || !isTTY() || InteractiveMode || !isInputTTY(r))
 
 	if err := form.Run(); err != nil {
 		return false, err

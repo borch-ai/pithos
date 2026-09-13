@@ -3,6 +3,7 @@ package pipeline
 import (
 	"bytes"
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -487,5 +488,62 @@ func TestBudget_DryRunCover_OverBudget(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "budget limit exceeded") {
 		t.Errorf("expected budget limit exceeded error, got: %v", err)
+	}
+}
+
+func TestBudget_OverBudget_NonTTY_InteractiveMode(t *testing.T) {
+	origCfg := config.Cfg
+	origInteractive := InteractiveMode
+	defer func() {
+		config.Cfg = origCfg
+		InteractiveMode = origInteractive
+	}()
+
+	tmpDir, err := os.MkdirTemp("", "pithos-budget-nontty-interactive-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	createTestBook(t, tmpDir, 5)
+
+	config.Cfg = &config.Config{
+		Pricing: map[string]telemetry.ModelPricing{
+			"imagegen": {Input: 40000.00}, // $0.04 per image
+		},
+		Budget: config.BudgetConfig{
+			MaxCostUSD: 0.10, // low budget (estimated ~0.21)
+		},
+	}
+
+	mockStanzas := []string{"S1", "S2", "S3", "S4", "S5"}
+	mockLLMClient := &mockLLM{
+		stanzas: mockStanzas,
+	}
+
+	optsBrew := BrewOptions{
+		OutputDir: tmpDir,
+		LLM:       mockLLMClient,
+		DryRun:    true,
+		Silent:    false,
+		In:        strings.NewReader("y\n"),
+	}
+
+	oldIsTTY := isTTY
+	oldIsInputTTY := isInputTTY
+	isTTY = func() bool { return true }
+	isInputTTY = func(r io.Reader) bool { return false }
+	InteractiveMode = true
+	defer func() {
+		isTTY = oldIsTTY
+		isInputTTY = oldIsInputTTY
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err = Brew(ctx, optsBrew)
+	if err != nil {
+		t.Fatalf("expected interactive mode to proceed through confirmation prompt on non-TTY stdin, got: %v", err)
 	}
 }

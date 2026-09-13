@@ -62,11 +62,32 @@ func isTestEnv() bool {
 	return strings.HasSuffix(os.Args[0], ".test") || strings.HasSuffix(os.Args[0], ".test.exe")
 }
 
+// HeadlessMode indicates whether browser launches should be globally suppressed.
+var HeadlessMode bool
+
+// InteractiveMode indicates whether interactive mode has been explicitly forced.
+var InteractiveMode bool
+
+func isHeadlessBrowser() bool {
+	if InteractiveMode {
+		return false
+	}
+	return HeadlessMode
+}
+
 func openBrowser(ctx context.Context, urlStr string) error {
+	if isHeadlessBrowser() {
+		logger.Debug("Suppressing browser open in headless mode", "url", urlStr)
+		return nil
+	}
 	return openBrowserFunc(ctx, urlStr)
 }
 
 func triggerBrowserOpen(ctx context.Context, urlStr string) {
+	if isHeadlessBrowser() {
+		logger.Debug("Suppressing browser open in headless mode", "url", urlStr)
+		return
+	}
 	if err := openBrowser(ctx, urlStr); err != nil {
 		logger.Warn("Failed to automatically open browser preview", "error", err)
 	}

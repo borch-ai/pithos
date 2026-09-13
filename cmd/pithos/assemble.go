@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -24,6 +25,7 @@ var assembleCmd = &cobra.Command{
 	Short: "Calculates book geometry and generates the layout manifest",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		inputDir := resolveDirectoryFlag(cmd, assembleDir, assembleInput)
+		headless := IsHeadless()
 
 		opts := pipeline.AssembleOptions{
 			InputDir:  inputDir,
@@ -31,10 +33,15 @@ var assembleCmd = &cobra.Command{
 			Bleed:     assembleBleed,
 			TrimSize:  assembleTrimSize,
 			PaperType: assemblePaperType,
-			Silent:    assembleSilent,
+			Silent:    assembleSilent || headless,
+			Headless:  headless,
 			DryRun:    rootDryRun,
 		}
-		m, err := pipeline.Assemble(cmd.Context(), opts)
+		ctx := cmd.Context()
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		m, err := pipeline.Assemble(ctx, opts)
 		if err != nil {
 			return err
 		}

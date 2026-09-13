@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -28,6 +29,8 @@ var brewCmd = &cobra.Command{
 	Use:   "brew",
 	Short: "Generates the manuscript and stanza illustrations",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		headless := IsHeadless()
+
 		var pages []int
 		if cmd.Flags().Changed("pages") {
 			if brewPagesStr == "" {
@@ -53,6 +56,12 @@ var brewCmd = &cobra.Command{
 			}
 		}
 
+		if brewSelect {
+			if headless {
+				return errors.New("interactive page selection (--select) is not supported in headless mode; specify pages explicitly with --pages")
+			}
+		}
+
 		outputDir := resolveDirectoryFlag(cmd, brewDir, brewOutput)
 
 		opts := pipeline.BrewOptions{
@@ -60,15 +69,20 @@ var brewCmd = &cobra.Command{
 			Theme:       brewTheme,
 			Style:       brewStyle,
 			Concurrency: brewConcurrency,
-			Review:      brewReview,
-			TUI:         brewTUI,
+			Review:      brewReview && !headless,
+			TUI:         brewTUI && !headless,
 			Pages:       pages,
 			Select:      brewSelect,
-			Silent:      brewSilent,
+			Silent:      brewSilent || headless,
+			Headless:    headless,
 			DryRun:      rootDryRun,
 			Budget:      brewBudget,
 		}
-		err := pipeline.Brew(cmd.Context(), opts)
+		ctx := cmd.Context()
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		err := pipeline.Brew(ctx, opts)
 		if err != nil {
 			if errors.Is(err, pipeline.ErrReviewPause) {
 				fmt.Println(err.Error())

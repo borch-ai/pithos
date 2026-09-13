@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -30,7 +31,14 @@ var initiateCmd = &cobra.Command{
 	Use:   "initiate",
 	Short: "Scaffolds a new book project directory and manifest",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		in := cmd.InOrStdin()
+		out := cmd.OutOrStdout()
+
+		initiateTheme = strings.TrimSpace(initiateTheme)
 		if initiateTheme == "" {
+			if IsHeadless() {
+				return errors.New("theme is required in headless mode (specify with --theme)")
+			}
 			pagesStr := strconv.Itoa(initiatePages)
 			form := huh.NewForm(
 				huh.NewGroup(
@@ -73,8 +81,8 @@ var initiateCmd = &cobra.Command{
 							return nil
 						}),
 				),
-			)
-			form.WithAccessible(!isTTY())
+			).WithInput(in).WithOutput(out)
+			form.WithAccessible(in != os.Stdin || !isTTY() || pipeline.InteractiveMode || !isInputTTY(in))
 			if err := form.Run(); err != nil {
 				return err
 			}
@@ -96,7 +104,10 @@ var initiateCmd = &cobra.Command{
 			// User explicitly provided --dir or --output. If it exists, ask for confirmation
 			resolvedDir := pipeline.ResolveBookPath(outputDir)
 			if _, err := os.Stat(resolvedDir); err == nil {
-				confirm, err := pipeline.ConfirmOverwrite(os.Stdin, os.Stdout, resolvedDir)
+				if IsHeadless() {
+					return fmt.Errorf("initiation cancelled: directory %s already exists; cannot prompt for overwrite in headless mode", resolvedDir)
+				}
+				confirm, err := pipeline.ConfirmOverwrite(in, out, resolvedDir)
 				if err != nil {
 					return err
 				}
@@ -104,6 +115,11 @@ var initiateCmd = &cobra.Command{
 					return fmt.Errorf("initiation cancelled: directory %s already exists and manifest overwrite was declined", resolvedDir)
 				}
 			}
+		}
+
+		ctx := cmd.Context()
+		if ctx == nil {
+			ctx = context.Background()
 		}
 
 		opts := pipeline.InitiateOptions{
@@ -116,7 +132,7 @@ var initiateCmd = &cobra.Command{
 			TargetPageCount: initiatePages,
 			TrimSize:        initiateTrimSize,
 			NoBrainstorm:    initiateNoBrainstorm,
-			Context:         cmd.Context(),
+			Context:         ctx,
 			DryRun:          rootDryRun,
 		}
 		m, err := pipeline.Initiate(opts)

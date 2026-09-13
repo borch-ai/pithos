@@ -25,6 +25,7 @@ type AssembleOptions struct {
 	TrimSize          string // e.g. "6x9"
 	PaperType         string // e.g. "white"
 	Silent            bool
+	Headless          bool
 	MCPTransport      mcpsdk.Transport // For testing (fallback)
 	KDPMathTransport  mcpsdk.Transport // For testing
 	TypstTransport    mcpsdk.Transport // For testing
@@ -50,6 +51,10 @@ type geometryResult struct {
 //
 //nolint:gocognit,funlen // Assemble function coordinates page count validation, fetchGeometry, and Typst compile
 func Assemble(ctx context.Context, opts AssembleOptions) (*manifest.Manifest, error) {
+	if opts.Headless {
+		opts.Silent = true
+	}
+
 	if opts.InputDir == "" {
 		return nil, errors.New("input directory is required")
 	}
@@ -174,7 +179,7 @@ func Assemble(ctx context.Context, opts AssembleOptions) (*manifest.Manifest, er
 	// Regenerate web preview with updated KDP layout calculations
 	if previewErr := GenerateWebPreview(opts.InputDir, m); previewErr != nil {
 		logger.Warn("Failed to regenerate web preview", "error", previewErr)
-	} else if !opts.Silent {
+	} else if !opts.Silent && !opts.Headless {
 		previewPath := filepath.Join(opts.InputDir, "web_preview", "preview.html")
 		triggerBrowserOpen(ctx, formatFileURL(previewPath))
 	}

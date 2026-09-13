@@ -24,6 +24,7 @@ import (
 	"github.com/borch-ai/pithos/internal/ui"
 	"github.com/borch-ai/powerword/pkg/telemetry"
 	"github.com/charmbracelet/huh"
+	"github.com/mattn/go-isatty"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -49,12 +50,22 @@ type BrewOptions struct {
 	Out               io.Writer        // For testing
 	DryRun            bool
 	Budget            float64
+	Headless          bool
 }
 
 // Brew executes the manuscript generation and page-by-page illustration generation.
 //
 //nolint:gocognit,funlen // Brew function integrates manifest loading, overrides, manuscript generation, review loop, and illustration generation
 func Brew(ctx context.Context, opts BrewOptions) error {
+	if opts.Headless {
+		if opts.Select {
+			return errors.New("interactive page selection is not supported in headless mode; specify pages explicitly")
+		}
+		opts.Silent = true
+		opts.Review = false
+		opts.TUI = false
+	}
+
 	if opts.OutputDir == "" {
 		return errors.New("output directory is required")
 	}
@@ -1751,6 +1762,13 @@ var isTTY = func() bool {
 	return fi.Mode()&os.ModeCharDevice != 0
 }
 
+var isInputTTY = func(r io.Reader) bool {
+	if f, ok := r.(*os.File); ok {
+		return isatty.IsTerminal(f.Fd()) || isatty.IsCygwinTerminal(f.Fd())
+	}
+	return false
+}
+
 func truncate(s string, maxLen int) string {
 	s = strings.ReplaceAll(s, "\n", " ")
 	s = strings.ReplaceAll(s, "\r", "")
@@ -1765,7 +1783,16 @@ func truncate(s string, maxLen int) string {
 }
 
 func promptSelectPages(m *manifest.Manifest, opts BrewOptions) ([]int, error) {
-	if !isTTY() {
+	in := opts.In
+	if in == nil {
+		in = os.Stdin
+	}
+	out := opts.Out
+	if out == nil {
+		out = os.Stdout
+	}
+
+	if (!isTTY() || (opts.In == nil && !isInputTTY(in))) && !InteractiveMode {
 		return nil, errors.New("interactive selection requires a TTY terminal")
 	}
 	var selectedPages []int
@@ -1778,15 +1805,6 @@ func promptSelectPages(m *manifest.Manifest, opts BrewOptions) ([]int, error) {
 		return nil, errors.New("no pages found in manifest to select")
 	}
 
-	in := opts.In
-	if in == nil {
-		in = os.Stdin
-	}
-	out := opts.Out
-	if out == nil {
-		out = os.Stdout
-	}
-
 	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewMultiSelect[int]().
@@ -1796,7 +1814,7 @@ func promptSelectPages(m *manifest.Manifest, opts BrewOptions) ([]int, error) {
 				Value(&selectedPages),
 		),
 	).WithInput(in).WithOutput(out)
-	form.WithAccessible(opts.In != nil)
+	form.WithAccessible(opts.In != nil || !isTTY() || InteractiveMode || !isInputTTY(in))
 
 	if err := form.Run(); err != nil {
 		return nil, err
@@ -1941,13 +1959,13 @@ func checkBudget(m *manifest.Manifest, opts *BrewOptions) error {
 	_, _ = fmt.Fprintf(out, "  Budget Limit:              $%.4f\n", budget)
 	_, _ = fmt.Fprintf(out, "  Excess Cost:               $%.4f\n\n", totalEstimatedCost-budget)
 
-	if !isTTY() || opts.Silent {
-		return fmt.Errorf("budget exceeded: estimated cost $%.4f exceeds budget limit $%.4f", totalEstimatedCost, budget)
-	}
-
 	in := opts.In
 	if in == nil {
 		in = os.Stdin
+	}
+
+	if ((!isTTY() || (opts.In == nil && !isInputTTY(in))) && !InteractiveMode) || opts.Silent || opts.Headless {
+		return fmt.Errorf("budget exceeded: estimated cost $%.4f exceeds budget limit $%.4f", totalEstimatedCost, budget)
 	}
 
 	var proceed bool
@@ -1957,7 +1975,7 @@ func checkBudget(m *manifest.Manifest, opts *BrewOptions) error {
 		WithTheme(huh.ThemeCharm())
 
 	form := huh.NewForm(huh.NewGroup(confirm)).WithInput(in).WithOutput(out)
-	form.WithAccessible(opts.In != nil)
+	form.WithAccessible(opts.In != nil || !isTTY() || InteractiveMode || !isInputTTY(in))
 	if err := form.Run(); err != nil {
 		return fmt.Errorf("prompt error: %w", err)
 	}
