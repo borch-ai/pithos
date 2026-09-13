@@ -558,21 +558,48 @@ func TestInitiateCmd_InteractivePipedStdin(t *testing.T) {
 	}
 }
 
-func TestPersistentPreRunE_LoadsEnvBeforeMode(t *testing.T) {
+func backupPersistentPreRunEnvAndConfig(t *testing.T) {
 	origHeadless := rootHeadless
 	origNonInteractive := rootNonInteractive
 	origInteractive := rootInteractive
 	origCfgFile := cfgFile
 	origPipelineHeadless := pipeline.HeadlessMode
 	origPipelineInteractive := pipeline.InteractiveMode
-	defer func() {
+	origCfg := config.Cfg
+
+	origInteractiveEnv, hasInteractive := os.LookupEnv("PITHOS_INTERACTIVE")
+	origHeadlessEnv, hasHeadless := os.LookupEnv("PITHOS_HEADLESS")
+	origCIEnv, hasCI := os.LookupEnv("CI")
+
+	t.Cleanup(func() {
 		rootHeadless = origHeadless
 		rootNonInteractive = origNonInteractive
 		rootInteractive = origInteractive
 		cfgFile = origCfgFile
 		pipeline.HeadlessMode = origPipelineHeadless
 		pipeline.InteractiveMode = origPipelineInteractive
-	}()
+		config.Cfg = origCfg
+
+		if hasInteractive {
+			_ = os.Setenv("PITHOS_INTERACTIVE", origInteractiveEnv)
+		} else {
+			_ = os.Unsetenv("PITHOS_INTERACTIVE")
+		}
+		if hasHeadless {
+			_ = os.Setenv("PITHOS_HEADLESS", origHeadlessEnv)
+		} else {
+			_ = os.Unsetenv("PITHOS_HEADLESS")
+		}
+		if hasCI {
+			_ = os.Setenv("CI", origCIEnv)
+		} else {
+			_ = os.Unsetenv("CI")
+		}
+	})
+}
+
+func TestPersistentPreRunE_LoadsEnvBeforeMode(t *testing.T) {
+	backupPersistentPreRunEnvAndConfig(t)
 
 	tmpDir := t.TempDir()
 	envPath := filepath.Join(tmpDir, ".env")
