@@ -199,6 +199,13 @@ func TestInitiateCmd_HeadlessValidation(t *testing.T) {
 		t.Errorf("expected error mentioning theme is required in headless mode, got %v", err)
 	}
 
+	// 1b. Whitespace-only theme fails fast with clear guidance
+	initiateTheme = "   "
+	err = initiateCmd.RunE(initiateCmd, []string{})
+	if err == nil || !strings.Contains(err.Error(), "theme is required in headless mode") {
+		t.Errorf("expected whitespace-only theme to fail in headless mode, got %v", err)
+	}
+
 	// 2. Brand new directory with theme succeeds in headless mode
 	tmpDir := t.TempDir()
 	newBookDir := filepath.Join(tmpDir, "brand-new-book")

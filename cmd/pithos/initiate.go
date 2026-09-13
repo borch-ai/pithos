@@ -34,6 +34,7 @@ var initiateCmd = &cobra.Command{
 		in := cmd.InOrStdin()
 		out := cmd.OutOrStdout()
 
+		initiateTheme = strings.TrimSpace(initiateTheme)
 		if initiateTheme == "" {
 			if IsHeadless() {
 				return errors.New("theme is required in headless mode (specify with --theme)")
