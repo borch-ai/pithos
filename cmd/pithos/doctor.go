@@ -80,7 +80,7 @@ var doctorCmd = &cobra.Command{
 	},
 }
 
-func isTTY() bool {
+var isTTY = func() bool {
 	fi, err := os.Stdout.Stat()
 	if err != nil {
 		return false

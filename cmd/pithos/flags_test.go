@@ -22,6 +22,7 @@ func TestFlagRegistration_DirFlags(t *testing.T) {
 		{"status", "dir"},
 		{"clean", "dir"},
 		{"character", "dir"},
+		{"pack", "dir"},
 	}
 
 	for _, tc := range cmds {
@@ -396,12 +397,27 @@ func TestExecution_RejectBothPositionalAndDir(t *testing.T) {
 		t.Errorf("unexpected error message: %v", err)
 	}
 
+	// 4. Pack command rejects both positional arg and --dir
+	rootCmd.SetArgs([]string{"pack", "--dir", "dir-a", "arg-b"})
+	buf.Reset()
+	rootCmd.SetOut(&buf)
+	rootCmd.SetErr(&buf)
+	err = rootCmd.Execute()
+	if err == nil {
+		t.Fatal("expected pack to reject both positional arg and --dir flag")
+	}
+	if !strings.Contains(err.Error(), "cannot specify both") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+
 	_ = cleanCmd.Flags().Set("dir", "")
 	cleanCmd.Flags().Lookup("dir").Changed = false
 	_ = statusCmd.Flags().Set("dir", "")
 	statusCmd.Flags().Lookup("dir").Changed = false
 	_ = previewCmd.Flags().Set("dir", "")
 	previewCmd.Flags().Lookup("dir").Changed = false
+	_ = packCmd.Flags().Set("dir", "")
+	packCmd.Flags().Lookup("dir").Changed = false
 }
 
 func TestIsBareSlug(t *testing.T) {

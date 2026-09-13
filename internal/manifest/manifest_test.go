@@ -475,7 +475,7 @@ func TestLoadManifest_NilFields(t *testing.T) {
 	}
 }
 
-//nolint:funlen // Test covers multiple sequential migration test cases
+//nolint:funlen,gocognit // Test covers multiple sequential migration test cases
 func TestManifestSchemaVersionAndMigration(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "pithos-test-*")
 	if err != nil {
@@ -539,7 +539,24 @@ func TestManifestSchemaVersionAndMigration(t *testing.T) {
 		t.Errorf("expected loaded v2 manifest SchemaVersion to be %d, got %d", CurrentSchemaVersion, loadedV2Migrated.SchemaVersion)
 	}
 
-	// 4. Manifest already at CurrentSchemaVersion loads cleanly
+	// 4. Manifest with schema version 3 migrates to CurrentSchemaVersion
+	v3Path := filepath.Join(tmpDir, "v3_manifest.json")
+	v3JSON := `{
+		"schema_version": 3,
+		"book_properties": {"theme": "V3 Parody"}
+	}`
+	if writeErr := os.WriteFile(v3Path, []byte(v3JSON), 0600); writeErr != nil {
+		t.Fatalf("failed to write v3 manifest: %v", writeErr)
+	}
+	loadedV3Migrated, err := LoadManifest(v3Path)
+	if err != nil {
+		t.Fatalf("failed to load v3 manifest: %v", err)
+	}
+	if loadedV3Migrated.SchemaVersion != CurrentSchemaVersion {
+		t.Errorf("expected loaded v3 manifest SchemaVersion to be %d, got %d", CurrentSchemaVersion, loadedV3Migrated.SchemaVersion)
+	}
+
+	// 5. Manifest already at CurrentSchemaVersion loads cleanly
 	loadedCurrent, err := LoadManifest(legacyPath)
 	if err != nil {
 		t.Fatalf("failed reloading current manifest: %v", err)
@@ -548,7 +565,7 @@ func TestManifestSchemaVersionAndMigration(t *testing.T) {
 		t.Errorf("expected SchemaVersion %d, got %d", CurrentSchemaVersion, loadedCurrent.SchemaVersion)
 	}
 
-	// 4. Manifest with newer schema version than supported fails to load to prevent data corruption
+	// 6. Manifest with newer schema version than supported fails to load to prevent data corruption
 	futurePath := filepath.Join(tmpDir, "future_manifest.json")
 	futureJSON := `{
 		"schema_version": 99,
@@ -561,7 +578,7 @@ func TestManifestSchemaVersionAndMigration(t *testing.T) {
 		t.Error("expected error loading manifest with future schema version, got nil")
 	}
 
-	// 5. Manifest with invalid negative schema version fails to load
+	// 7. Manifest with invalid negative schema version fails to load
 	negativePath := filepath.Join(tmpDir, "negative_manifest.json")
 	negativeJSON := `{
 		"schema_version": -1,
@@ -572,5 +589,89 @@ func TestManifestSchemaVersionAndMigration(t *testing.T) {
 	}
 	if _, negErr := LoadManifest(negativePath); negErr == nil {
 		t.Error("expected error loading manifest with negative schema version, got nil")
+	}
+}
+
+func TestReleaseBundleAndHelpers(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos-bundle-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	manifestPath := filepath.Join(tmpDir, "manifest.json")
+	m := NewManifest(manifestPath)
+
+	// Test HasMilestone
+	if m.HasMilestone("assemble_complete") {
+		t.Error("expected HasMilestone('assemble_complete') to be false initially")
+	}
+	if addErr := m.AddMilestone("assemble_complete"); addErr != nil {
+		t.Fatalf("AddMilestone failed: %v", addErr)
+	}
+	if !m.HasMilestone("assemble_complete") {
+		t.Error("expected HasMilestone('assemble_complete') to be true")
+	}
+
+	// Test SetPreflightPassed
+	if m.Progress.PreflightPassed {
+		t.Error("expected PreflightPassed to be false initially")
+	}
+	if preErr := m.SetPreflightPassed(true); preErr != nil {
+		t.Fatalf("SetPreflightPassed failed: %v", preErr)
+	}
+	if !m.Progress.PreflightPassed {
+		t.Error("expected PreflightPassed to be true after SetPreflightPassed")
+	}
+
+	// Test RecordReleaseBundle
+	checksums := map[string]string{
+		"interior.pdf": "hash123",
+		"cover.pdf":    "hash456",
+	}
+	archivePath := filepath.Join(tmpDir, "dist", "book-print-ready.zip")
+	if recErr := m.RecordReleaseBundle(archivePath, checksums); recErr != nil {
+		t.Fatalf("RecordReleaseBundle failed: %v", recErr)
+	}
+	if m.ReleaseBundle == nil {
+		t.Fatal("expected ReleaseBundle to be non-nil")
+	}
+	if m.ReleaseBundle.ArchivePath != archivePath {
+		t.Errorf("expected archive path %q, got %q", archivePath, m.ReleaseBundle.ArchivePath)
+	}
+	if m.ReleaseBundle.Checksums["interior.pdf"] != "hash123" {
+		t.Errorf("expected checksum hash123, got %q", m.ReleaseBundle.Checksums["interior.pdf"])
+	}
+	if m.ReleaseBundle.PackagedAt == "" {
+		t.Error("expected PackagedAt to be populated")
+	}
+
+	// Test SanitizedExport
+	m.Kiln.InteriorPDFPath = "/home/user/books/book1/interior.pdf"
+	m.Kiln.CoverPDFPath = "/home/user/books/book1/cover.pdf"
+	m.Progress.CoverImagePath = "/home/user/books/book1/images/cover.png"
+	m.AssetRegistry["interior_pdf"] = "/home/user/books/book1/interior.pdf"
+	m.Progress.Pages = []PageState{
+		{PageIndex: 1, ImagePath: "/home/user/books/book1/images/page_1.png"},
+	}
+
+	sanitized, err := m.SanitizedExport()
+	if err != nil {
+		t.Fatalf("SanitizedExport failed: %v", err)
+	}
+	if sanitized.Kiln.InteriorPDFPath != "interior.pdf" {
+		t.Errorf("expected sanitized InteriorPDFPath 'interior.pdf', got %q", sanitized.Kiln.InteriorPDFPath)
+	}
+	if sanitized.Kiln.CoverPDFPath != "cover.pdf" {
+		t.Errorf("expected sanitized CoverPDFPath 'cover.pdf', got %q", sanitized.Kiln.CoverPDFPath)
+	}
+	if sanitized.Progress.CoverImagePath != "cover.png" {
+		t.Errorf("expected sanitized CoverImagePath 'cover.png', got %q", sanitized.Progress.CoverImagePath)
+	}
+	if sanitized.AssetRegistry["interior_pdf"] != "interior.pdf" {
+		t.Errorf("expected sanitized asset 'interior.pdf', got %q", sanitized.AssetRegistry["interior_pdf"])
+	}
+	if sanitized.Progress.Pages[0].ImagePath != "page_1.png" {
+		t.Errorf("expected sanitized page image 'page_1.png', got %q", sanitized.Progress.Pages[0].ImagePath)
 	}
 }

@@ -232,7 +232,7 @@ Focus: Remote monitoring, Kiln state manifest integration, testing, and ecosyste
 *   [x] **Task 5.53: Headless & Batch Execution Mode (`--headless` / `--non-interactive`)**
     *   Implement global `--headless` / `--non-interactive` execution mode and CI autodetection to prevent blocking on interactive `huh` forms, disable auto-opening browser windows, and bypass TUI review prompts.
     *   [Implementation Plan](plans/phase_5/task_5_53_headless_batch_mode.md)
-*   [ ] **Task 5.54: Print-Ready Artifact Packaging & Integrity Verification (`pithos pack`)**
+*   [x] **Task 5.54: Print-Ready Artifact Packaging & Integrity Verification (`pithos pack`)**
     *   Add a packaging command to compile verified distribution archives (`dist/<slug>-print-ready.zip`) containing interior PDF, cover wrap PDF, sanitized manifest, and SHA-256 integrity checksums, gated on successful preflight checks.
     *   [Implementation Plan](plans/phase_5/task_5_54_artifact_packaging_checksums.md)
 

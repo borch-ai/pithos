@@ -293,30 +293,7 @@ func TestAssemble_Success(t *testing.T) {
 		t.Fatalf("failed to load manifest: %v", err)
 	}
 
-	if math.Abs(m2.KDPLayout.SpineWidth-0.15) > 1e-9 {
-		t.Errorf("expected SpineWidth 0.15, got %f", m2.KDPLayout.SpineWidth)
-	}
-	if !m2.KDPLayout.SpineTextEligible {
-		t.Error("expected SpineTextEligible to be true")
-	}
-	if len(m2.KDPLayout.Guides) != 1 || m2.KDPLayout.Guides[0].Label != "Spine" {
-		t.Errorf("expected 1 Guide labelled 'Spine', got: %v", m2.KDPLayout.Guides)
-	}
-	if m2.AssetRegistry["interior_pdf"] == "" {
-		t.Error("expected interior_pdf asset to be registered, got empty")
-	}
-	if len(m2.Kiln.Milestones) != 2 || m2.Kiln.Milestones[0] != "initiate_complete" || m2.Kiln.Milestones[1] != "assemble_complete" {
-		t.Errorf("expected milestones [initiate_complete, assemble_complete], got %v", m2.Kiln.Milestones)
-	}
-	if m2.Kiln.InteriorPDFPath == "" {
-		t.Error("expected InteriorPDFPath to be set in Kiln sync data")
-	}
-	if m2.Kiln.InteriorPDFPath != m2.AssetRegistry["interior_pdf"] {
-		t.Errorf("expected Kiln InteriorPDFPath to match AssetRegistry, got %q vs %q", m2.Kiln.InteriorPDFPath, m2.AssetRegistry["interior_pdf"])
-	}
-	if m2.BookProperties.TrimSize != "8.5x8.5" {
-		t.Errorf("expected TrimSize fallback to default '8.5x8.5', got %q", m2.BookProperties.TrimSize)
-	}
+	verifyAssembleSuccessManifest(t, m2)
 }
 
 func TestAssemble_TrimSizeOverride(t *testing.T) {
@@ -982,6 +959,11 @@ func TestAssemble_PDFCheck_Failure(t *testing.T) {
 	} else if !strings.Contains(err.Error(), "pdf preflight check failed") {
 		t.Errorf("expected error to contain 'pdf preflight check failed', got: %v", err)
 	}
+
+	mAfter, loadErr := manifest.LoadManifest(filepath.Join(tmpDir, "manifest.json"))
+	if loadErr == nil && mAfter.Progress.PreflightPassed {
+		t.Error("expected PreflightPassed to be false after PDF check failure")
+	}
 }
 
 func TestAssemble_PDFCheck_CoverFailure(t *testing.T) {
@@ -1363,5 +1345,85 @@ func TestCompileCoverPDF_Branches(t *testing.T) {
 	_, errTool := compileCoverPDF(ctx, AssembleOptions{InputDir: tmpDir, TypstTransport: clientTypstErr}, m, 20, "paperback")
 	if errTool == nil || !strings.Contains(errTool.Error(), "cover compilation failed") {
 		t.Fatalf("expected cover compilation failed error, got: %v", errTool)
+	}
+}
+
+func TestAssemble_DryRun_DoesNotSetPreflightPassed(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos-assemble-dryrun-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	optsInit := InitiateOptions{
+		OutputDir:       tmpDir,
+		Theme:           "Parody Theme",
+		TargetPageCount: 10,
+	}
+	m, err := Initiate(optsInit)
+	if err != nil {
+		t.Fatalf("Initiate failed: %v", err)
+	}
+	m.Progress.Pages = make([]manifest.PageState, 10)
+	if saveErr := m.Save(); saveErr != nil {
+		t.Fatalf("failed to save manifest: %v", saveErr)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	clientKDP, serverKDP := mcpsdk.NewInMemoryTransports()
+	_, cleanupKDP := setupMockKDPMathServer(t, ctx, serverKDP)
+	defer cleanupKDP()
+
+	optsAssemble := AssembleOptions{
+		InputDir:         tmpDir,
+		Format:           "paperback",
+		DryRun:           true,
+		KDPMathTransport: clientKDP,
+	}
+
+	_, err = Assemble(ctx, optsAssemble)
+	if err != nil {
+		t.Fatalf("Assemble dry-run failed: %v", err)
+	}
+
+	mAfter, loadErr := manifest.LoadManifest(filepath.Join(tmpDir, "manifest.json"))
+	if loadErr != nil {
+		t.Fatalf("failed to load manifest after dry-run: %v", loadErr)
+	}
+	if mAfter.Progress.PreflightPassed {
+		t.Error("expected PreflightPassed to be false after dry-run assemble")
+	}
+}
+
+func verifyAssembleSuccessManifest(t *testing.T, m2 *manifest.Manifest) {
+	t.Helper()
+	if math.Abs(m2.KDPLayout.SpineWidth-0.15) > 1e-9 {
+		t.Errorf("expected SpineWidth 0.15, got %f", m2.KDPLayout.SpineWidth)
+	}
+	if !m2.KDPLayout.SpineTextEligible {
+		t.Error("expected SpineTextEligible to be true")
+	}
+	if len(m2.KDPLayout.Guides) != 1 || m2.KDPLayout.Guides[0].Label != "Spine" {
+		t.Errorf("expected 1 Guide labelled 'Spine', got: %v", m2.KDPLayout.Guides)
+	}
+	if m2.AssetRegistry["interior_pdf"] == "" {
+		t.Error("expected interior_pdf asset to be registered, got empty")
+	}
+	if len(m2.Kiln.Milestones) != 2 || m2.Kiln.Milestones[0] != "initiate_complete" || m2.Kiln.Milestones[1] != "assemble_complete" {
+		t.Errorf("expected milestones [initiate_complete, assemble_complete], got %v", m2.Kiln.Milestones)
+	}
+	if m2.Kiln.InteriorPDFPath == "" {
+		t.Error("expected InteriorPDFPath to be set in Kiln sync data")
+	}
+	if m2.Kiln.InteriorPDFPath != m2.AssetRegistry["interior_pdf"] {
+		t.Errorf("expected Kiln InteriorPDFPath to match AssetRegistry, got %q vs %q", m2.Kiln.InteriorPDFPath, m2.AssetRegistry["interior_pdf"])
+	}
+	if m2.BookProperties.TrimSize != "8.5x8.5" {
+		t.Errorf("expected TrimSize fallback to default '8.5x8.5', got %q", m2.BookProperties.TrimSize)
+	}
+	if !m2.Progress.PreflightPassed {
+		t.Errorf("expected PreflightPassed to be true after successful assemble with PDF check")
 	}
 }

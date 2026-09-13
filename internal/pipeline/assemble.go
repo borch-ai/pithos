@@ -142,6 +142,11 @@ func Assemble(ctx context.Context, opts AssembleOptions) (*manifest.Manifest, er
 		}
 	}()
 
+	// Invalidate preflight certification before compiling new PDFs
+	if setErr := m.SetPreflightPassed(false); setErr != nil {
+		return nil, fmt.Errorf("failed to reset preflight status: %w", setErr)
+	}
+
 	// 5. Compile the interior PDF
 	pdfPath, err := compileInteriorPDF(ctx, opts, m, &typstClient)
 	if err != nil {
@@ -164,8 +169,14 @@ func Assemble(ctx context.Context, opts AssembleOptions) (*manifest.Manifest, er
 	}
 
 	// Run PDF preflight checks (Interior and optionally Cover PDF)
-	if err := runPDFPreflightCheck(ctx, opts, m, pdfPath); err != nil {
-		return nil, fmt.Errorf("pdf preflight check failed: %w", err)
+	if !opts.DryRun {
+		if err := runPDFPreflightCheck(ctx, opts, m, pdfPath); err != nil {
+			return nil, fmt.Errorf("pdf preflight check failed: %w", err)
+		}
+
+		if err := m.SetPreflightPassed(true); err != nil {
+			return nil, fmt.Errorf("failed to record preflight passed: %w", err)
+		}
 	}
 
 	if err := m.UpdatePDFPaths(pdfPath, coverPDFPath); err != nil {
