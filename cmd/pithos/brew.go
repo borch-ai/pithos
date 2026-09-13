@@ -57,7 +57,9 @@ var brewCmd = &cobra.Command{
 			if len(pages) == 0 {
 				return errors.New("no valid page numbers parsed from pages flag")
 			}
-		} else if brewSelect {
+		}
+
+		if brewSelect {
 			if headless {
 				return errors.New("interactive page selection (--select) is not supported in headless mode; specify pages explicitly with --pages")
 			}
@@ -73,7 +75,7 @@ var brewCmd = &cobra.Command{
 			Review:      brewReview && !headless,
 			TUI:         brewTUI && !headless,
 			Pages:       pages,
-			Select:      brewSelect && !headless,
+			Select:      brewSelect,
 			Silent:      brewSilent || headless,
 			Headless:    headless,
 			DryRun:      rootDryRun,

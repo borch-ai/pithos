@@ -209,10 +209,10 @@ func TestCLI_Initiate_Overwrite(t *testing.T) {
 		t.Fatalf("first pithos initiate failed: %v\nOutput: %s", err1, string(out1))
 	}
 
-	// Second run, input 'n' to decline overwrite
+	// Second run, input 'n' to decline overwrite (using --interactive since stdin is piped)
 	ctx2, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel2()
-	cmd2 := newPithosCmd(ctx2, homeDir, "initiate", "--output", bookDir, "--theme", "test2", "--dry-run")
+	cmd2 := newPithosCmd(ctx2, homeDir, "initiate", "--output", bookDir, "--theme", "test2", "--dry-run", "--interactive")
 	stdin2, err := cmd2.StdinPipe()
 	if err != nil {
 		t.Fatalf("failed to get stdin pipe: %v", err)
@@ -239,10 +239,10 @@ func TestCLI_Initiate_Overwrite(t *testing.T) {
 		t.Errorf("expected 'initiation cancelled' in output, got: %s", string(out2))
 	}
 
-	// Third run, input 'y' to accept overwrite
+	// Third run, input 'y' to accept overwrite (using --interactive)
 	ctx3, cancel3 := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel3()
-	cmd3 := newPithosCmd(ctx3, homeDir, "initiate", "--output", bookDir, "--theme", "test3", "--dry-run")
+	cmd3 := newPithosCmd(ctx3, homeDir, "initiate", "--output", bookDir, "--theme", "test3", "--dry-run", "--interactive")
 	stdin3, err := cmd3.StdinPipe()
 	if err != nil {
 		t.Fatalf("failed to get stdin pipe: %v", err)
@@ -267,6 +267,45 @@ func TestCLI_Initiate_Overwrite(t *testing.T) {
 
 	if m.BookProperties.Theme != "test3" {
 		t.Errorf("expected theme 'test3' after overwrite, got %q", m.BookProperties.Theme)
+	}
+}
+
+func TestCLI_Initiate_NonTTY_Headless(t *testing.T) {
+	getPithosBinary(t)
+
+	tempDir := t.TempDir()
+	homeDir := filepath.Join(tempDir, "home")
+	if err := os.MkdirAll(homeDir, 0700); err != nil {
+		t.Fatalf("failed to create home dir: %v", err)
+	}
+
+	bookDir := filepath.Join(tempDir, "existingbook")
+
+	// First run creates directory
+	ctx1, cancel1 := context.WithTimeout(context.Background(), 10*time.Second)
+	cmd1 := newPithosCmd(ctx1, homeDir, "initiate", "--output", bookDir, "--theme", "initial", "--dry-run")
+	out1, err1 := cmd1.CombinedOutput()
+	cancel1()
+	if err1 != nil {
+		t.Fatalf("first pithos initiate failed: %v\nOutput: %s", err1, string(out1))
+	}
+
+	// Without --interactive, non-TTY piped stdin auto-detects headless mode and fails fast
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel2()
+	cmd2 := newPithosCmd(ctx2, homeDir, "initiate", "--output", bookDir, "--theme", "newtheme", "--dry-run")
+	stdin2, err := cmd2.StdinPipe()
+	if err != nil {
+		t.Fatalf("failed to get stdin pipe: %v", err)
+	}
+	_ = stdin2.Close()
+
+	out2, err2 := cmd2.CombinedOutput()
+	if err2 == nil {
+		t.Fatalf("expected command to fail in headless mode when directory exists, but succeeded: %s", string(out2))
+	}
+	if !strings.Contains(string(out2), "cannot prompt for overwrite in headless mode") {
+		t.Errorf("expected error mentioning cannot prompt for overwrite in headless mode, got %s", string(out2))
 	}
 }
 

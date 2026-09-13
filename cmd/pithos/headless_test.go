@@ -27,21 +27,28 @@ func TestIsTruthy(t *testing.T) {
 	}
 }
 
-//nolint:funlen // TestIsHeadless_Detection coordinates multiple subtests verifying detection vectors
+//nolint:funlen,gocognit // TestIsHeadless_Detection coordinates multiple subtests verifying detection vectors
 func TestIsHeadless_Detection(t *testing.T) {
 	// Save and restore state
 	origHeadless := rootHeadless
 	origNonInteractive := rootNonInteractive
+	origInteractive := rootInteractive
+	origIsStdinTTY := isStdinTTY
 	defer func() {
 		rootHeadless = origHeadless
 		rootNonInteractive = origNonInteractive
+		rootInteractive = origInteractive
+		isStdinTTY = origIsStdinTTY
 	}()
 
 	t.Run("Flag --headless", func(t *testing.T) {
 		t.Setenv("PITHOS_HEADLESS", "")
 		t.Setenv("CI", "")
+		t.Setenv("PITHOS_INTERACTIVE", "")
+		isStdinTTY = func() bool { return true }
 		rootHeadless = true
 		rootNonInteractive = false
+		rootInteractive = false
 
 		if !IsHeadless() {
 			t.Error("expected IsHeadless() == true when rootHeadless is true")
@@ -51,8 +58,11 @@ func TestIsHeadless_Detection(t *testing.T) {
 	t.Run("Flag --non-interactive", func(t *testing.T) {
 		t.Setenv("PITHOS_HEADLESS", "")
 		t.Setenv("CI", "")
+		t.Setenv("PITHOS_INTERACTIVE", "")
+		isStdinTTY = func() bool { return true }
 		rootHeadless = false
 		rootNonInteractive = true
+		rootInteractive = false
 
 		if !IsHeadless() {
 			t.Error("expected IsHeadless() == true when rootNonInteractive is true")
@@ -62,6 +72,8 @@ func TestIsHeadless_Detection(t *testing.T) {
 	t.Run("Env PITHOS_HEADLESS", func(t *testing.T) {
 		rootHeadless = false
 		rootNonInteractive = false
+		rootInteractive = false
+		isStdinTTY = func() bool { return true }
 
 		cases := []struct {
 			val      string
@@ -79,6 +91,7 @@ func TestIsHeadless_Detection(t *testing.T) {
 		for _, tc := range cases {
 			t.Setenv("PITHOS_HEADLESS", tc.val)
 			t.Setenv("CI", "")
+			t.Setenv("PITHOS_INTERACTIVE", "")
 			if got := IsHeadless(); got != tc.expected {
 				t.Errorf("PITHOS_HEADLESS=%q: expected IsHeadless() == %v, got %v", tc.val, tc.expected, got)
 			}
@@ -88,7 +101,10 @@ func TestIsHeadless_Detection(t *testing.T) {
 	t.Run("Env CI", func(t *testing.T) {
 		rootHeadless = false
 		rootNonInteractive = false
+		rootInteractive = false
+		isStdinTTY = func() bool { return true }
 		t.Setenv("PITHOS_HEADLESS", "")
+		t.Setenv("PITHOS_INTERACTIVE", "")
 
 		cases := []struct {
 			val      string
@@ -109,18 +125,54 @@ func TestIsHeadless_Detection(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("Non-TTY stdin and interactive override", func(t *testing.T) {
+		rootHeadless = false
+		rootNonInteractive = false
+		rootInteractive = false
+		t.Setenv("PITHOS_HEADLESS", "")
+		t.Setenv("CI", "")
+		t.Setenv("PITHOS_INTERACTIVE", "")
+
+		isStdinTTY = func() bool { return false }
+		if !IsHeadless() {
+			t.Error("expected IsHeadless() == true when stdin is non-TTY")
+		}
+
+		isStdinTTY = func() bool { return true }
+		if IsHeadless() {
+			t.Error("expected IsHeadless() == false when stdin is TTY")
+		}
+
+		// Test interactive override flags/env
+		isStdinTTY = func() bool { return false }
+		rootInteractive = true
+		if IsHeadless() {
+			t.Error("expected IsHeadless() == false when rootInteractive is true")
+		}
+		rootInteractive = false
+
+		t.Setenv("PITHOS_INTERACTIVE", "1")
+		if IsHeadless() {
+			t.Error("expected IsHeadless() == false when PITHOS_INTERACTIVE is 1")
+		}
+	})
 }
 
 //nolint:funlen // TestInitiateCmd_HeadlessValidation tests multiple headless validation branches
 func TestInitiateCmd_HeadlessValidation(t *testing.T) {
 	origHeadless := rootHeadless
 	origNonInteractive := rootNonInteractive
+	origInteractive := rootInteractive
+	origIsStdinTTY := isStdinTTY
 	origTheme := initiateTheme
 	origDir := initiateDir
 	origOutput := initiateOutput
 	defer func() {
 		rootHeadless = origHeadless
 		rootNonInteractive = origNonInteractive
+		rootInteractive = origInteractive
+		isStdinTTY = origIsStdinTTY
 		initiateTheme = origTheme
 		initiateDir = origDir
 		initiateOutput = origOutput
@@ -131,6 +183,7 @@ func TestInitiateCmd_HeadlessValidation(t *testing.T) {
 	}()
 
 	rootHeadless = true
+	isStdinTTY = func() bool { return true }
 	t.Setenv("PITHOS_HEADLESS", "1")
 
 	// 1. Missing theme fails fast with clear guidance
@@ -167,6 +220,21 @@ func TestInitiateCmd_HeadlessValidation(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "cannot prompt for overwrite in headless mode") {
 		t.Errorf("expected error mentioning cannot prompt for overwrite in headless mode, got %v", err)
 	}
+
+	// 4. Non-TTY stdin auto-detects headless mode and fails fast on missing theme
+	rootHeadless = false
+	rootNonInteractive = false
+	rootInteractive = false
+	t.Setenv("PITHOS_HEADLESS", "")
+	t.Setenv("CI", "")
+	t.Setenv("PITHOS_INTERACTIVE", "")
+	isStdinTTY = func() bool { return false }
+	initiateTheme = ""
+
+	err = initiateCmd.RunE(initiateCmd, []string{})
+	if err == nil || !strings.Contains(err.Error(), "theme is required in headless mode") {
+		t.Errorf("expected non-TTY stdin to trigger headless theme validation error, got %v", err)
+	}
 }
 
 func TestBrewCmd_HeadlessValidation(t *testing.T) {
@@ -200,6 +268,17 @@ func TestBrewCmd_HeadlessValidation(t *testing.T) {
 	err := brewCmd.RunE(brewCmd, []string{})
 	if err == nil || !strings.Contains(err.Error(), "interactive page selection (--select) is not supported in headless mode") {
 		t.Errorf("expected --select error in headless mode, got %v", err)
+	}
+
+	// 2. --select together with --pages in headless mode still fails fast on --select
+	brewSelect = true
+	brewPagesStr = "2"
+	_ = brewCmd.Flags().Set("pages", "2")
+	brewCmd.Flags().Lookup("pages").Changed = true
+
+	err = brewCmd.RunE(brewCmd, []string{})
+	if err == nil || !strings.Contains(err.Error(), "interactive page selection (--select) is not supported in headless mode") {
+		t.Errorf("expected --select error in headless mode when pages is specified, got %v", err)
 	}
 }
 

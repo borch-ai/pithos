@@ -13,6 +13,7 @@ var (
 	rootDebug          bool
 	rootHeadless       bool
 	rootNonInteractive bool
+	rootInteractive    bool
 	rootCmd            = &cobra.Command{
 		Use:          "pithos",
 		Short:        "Pithos is a minimalist publishing pipeline",
@@ -33,4 +34,5 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&rootDebug, "debug", false, "enable debug logging")
 	rootCmd.PersistentFlags().BoolVar(&rootHeadless, "headless", false, "run in non-interactive headless mode (fail on missing inputs, bypass prompts, silence browser)")
 	rootCmd.PersistentFlags().BoolVar(&rootNonInteractive, "non-interactive", false, "alias for --headless")
+	rootCmd.PersistentFlags().BoolVar(&rootInteractive, "interactive", false, "force interactive mode (prompt on stdin even when not attached to a TTY)")
 }
