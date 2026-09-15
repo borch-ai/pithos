@@ -41,18 +41,20 @@ None.
       Checksums   map[string]string `json:"checksums"`
   }
   ```
+- Add `PreflightHashes map[string]string` to `Progress` to bind preflight certification to exact deliverable hashes.
 - Add helper method `RecordReleaseBundle(archivePath string, checksums map[string]string) error`.
+- Add helper method `RecordPreflightPassed(hashes map[string]string) error`.
 
 ### Packaging Pipeline
 
 #### [NEW] [pack.go](file://../../internal/pipeline/pack.go)
-- Implement `PackWorkspace(workspaceDir string, opts PackOptions) (*ReleaseBundle, error)`:
-  - Verify `interior.pdf` and `cover.pdf` exist in the workspace directory.
-  - Verify preflight checks are clean (or `--force` flag is set).
-  - Calculate SHA-256 hashes for interior, cover, and manifest.
-  - Write `checksums.sha256` file.
-  - Create zip archive in `<workspace>/dist/<slug>-print-ready.zip`.
-  - Update `manifest.json` with `ReleaseBundle` metadata.
+- Implement `PackWorkspace(ctx context.Context, opts PackOptions) (*manifest.ReleaseBundle, error)`:
+  - Verify `interior.pdf` and `cover.pdf` exist and strictly reside inside workspace root (canonical path validation preventing symlink/traversal escape).
+  - Capture deliverable bytes in memory and verify SHA-256 matches preflight hashes recorded during assemble (or `--force` flag is set).
+  - Write verified captured bytes into zip archive (`dist/<slug>-print-ready.zip`), eliminating TOCTOU discrepancies.
+  - Post-verify archive entries bit-for-bit against advertised checksums.
+  - Write `checksums.sha256` file and update `manifest.json` with `ReleaseBundle` metadata.
+  - Create git checkpoint for packaged workspace.
 
 ### CLI Layer
 

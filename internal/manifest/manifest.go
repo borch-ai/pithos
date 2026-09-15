@@ -53,11 +53,12 @@ type BookProperties struct {
 
 // Progress tracks the completion state of various pipeline stages.
 type Progress struct {
-	ManuscriptGenerated bool        `json:"manuscript_generated"`
-	CoverImageGenerated bool        `json:"cover_image_generated"`
-	CoverImagePath      string      `json:"cover_image_path,omitempty"`
-	PreflightPassed     bool        `json:"preflight_passed,omitempty"`
-	Pages               []PageState `json:"pages"`
+	ManuscriptGenerated bool              `json:"manuscript_generated"`
+	CoverImageGenerated bool              `json:"cover_image_generated"`
+	CoverImagePath      string            `json:"cover_image_path,omitempty"`
+	PreflightPassed     bool              `json:"preflight_passed,omitempty"`
+	PreflightHashes     map[string]string `json:"preflight_hashes,omitempty"`
+	Pages               []PageState       `json:"pages"`
 }
 
 // LayoutGuide represents a logical bounding box in the cover coordinate system.
@@ -301,9 +302,29 @@ func (m *Manifest) HasMilestone(milestone string) bool {
 }
 
 // SetPreflightPassed updates the preflight check status and saves the manifest.
+// If passed is false, any previously recorded preflight deliverable hashes are cleared.
 func (m *Manifest) SetPreflightPassed(passed bool) error {
 	m.mu.Lock()
 	m.Progress.PreflightPassed = passed
+	if !passed {
+		m.Progress.PreflightHashes = nil
+	}
+	m.mu.Unlock()
+	return m.Save()
+}
+
+// RecordPreflightPassed records that preflight checks succeeded along with verified deliverable hashes.
+func (m *Manifest) RecordPreflightPassed(hashes map[string]string) error {
+	m.mu.Lock()
+	m.Progress.PreflightPassed = true
+	if hashes != nil {
+		m.Progress.PreflightHashes = make(map[string]string, len(hashes))
+		for k, v := range hashes {
+			m.Progress.PreflightHashes[k] = v
+		}
+	} else {
+		m.Progress.PreflightHashes = nil
+	}
 	m.mu.Unlock()
 	return m.Save()
 }

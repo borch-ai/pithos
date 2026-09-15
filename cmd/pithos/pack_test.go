@@ -24,10 +24,6 @@ func setupTestWorkspaceForCLI(t *testing.T, preflightPassed bool) string {
 	m.BookProperties.Theme = "Existential Parody"
 	m.BookProperties.Format = "6x9"
 
-	if preflightPassed {
-		m.Progress.PreflightPassed = true
-	}
-
 	interiorContent := []byte("%PDF-1.4 Mock Interior PDF Content for CLI")
 	coverContent := []byte("%PDF-1.4 Mock Cover PDF Content for CLI")
 
@@ -40,6 +36,14 @@ func setupTestWorkspaceForCLI(t *testing.T, preflightPassed bool) string {
 
 	m.AssetRegistry["interior_pdf"] = filepath.Join(tmpDir, "interior.pdf")
 	m.AssetRegistry["cover_pdf"] = filepath.Join(tmpDir, "cover.pdf")
+
+	if preflightPassed {
+		m.Progress.PreflightPassed = true
+		m.Progress.PreflightHashes = map[string]string{
+			"interior.pdf": pipeline.ComputeBytesSHA256(interiorContent),
+			"cover.pdf":    pipeline.ComputeBytesSHA256(coverContent),
+		}
+	}
 
 	if err := m.Save(); err != nil {
 		t.Fatalf("failed to save manifest: %v", err)

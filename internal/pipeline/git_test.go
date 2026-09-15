@@ -431,6 +431,8 @@ func TestCheckpoint_AssembleError(t *testing.T) {
 			"type": "object",
 		},
 	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		outPDF := filepath.Join(tmpDir, "interior.pdf")
+		_ = os.WriteFile(outPDF, []byte("%PDF-1.4 Mock Interior Content"), 0600)
 		return &mcpsdk.CallToolResult{Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: `{"output_pdf":"interior.pdf"}`}}}, nil
 	})
 	sessionTypst, _ := serverT.Connect(ctx, serverTypst, nil)

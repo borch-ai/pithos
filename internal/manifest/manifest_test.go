@@ -613,17 +613,6 @@ func TestReleaseBundleAndHelpers(t *testing.T) {
 		t.Error("expected HasMilestone('assemble_complete') to be true")
 	}
 
-	// Test SetPreflightPassed
-	if m.Progress.PreflightPassed {
-		t.Error("expected PreflightPassed to be false initially")
-	}
-	if preErr := m.SetPreflightPassed(true); preErr != nil {
-		t.Fatalf("SetPreflightPassed failed: %v", preErr)
-	}
-	if !m.Progress.PreflightPassed {
-		t.Error("expected PreflightPassed to be true after SetPreflightPassed")
-	}
-
 	// Test RecordReleaseBundle
 	checksums := map[string]string{
 		"interior.pdf": "hash123",
@@ -673,5 +662,60 @@ func TestReleaseBundleAndHelpers(t *testing.T) {
 	}
 	if sanitized.Progress.Pages[0].ImagePath != "page_1.png" {
 		t.Errorf("expected sanitized page image 'page_1.png', got %q", sanitized.Progress.Pages[0].ImagePath)
+	}
+}
+
+func TestManifest_PreflightState(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos-preflight-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	manifestPath := filepath.Join(tmpDir, "manifest.json")
+	m := NewManifest(manifestPath)
+
+	if m.Progress.PreflightPassed {
+		t.Error("expected PreflightPassed to be false initially")
+	}
+	if preErr := m.SetPreflightPassed(true); preErr != nil {
+		t.Fatalf("SetPreflightPassed failed: %v", preErr)
+	}
+	if !m.Progress.PreflightPassed {
+		t.Error("expected PreflightPassed to be true after SetPreflightPassed")
+	}
+
+	hashes := map[string]string{
+		"interior.pdf": "interior-hash-abc",
+		"cover.pdf":    "cover-hash-xyz",
+	}
+	if recPreErr := m.RecordPreflightPassed(hashes); recPreErr != nil {
+		t.Fatalf("RecordPreflightPassed failed: %v", recPreErr)
+	}
+	if !m.Progress.PreflightPassed {
+		t.Error("expected PreflightPassed to be true after RecordPreflightPassed")
+	}
+	if m.Progress.PreflightHashes["interior.pdf"] != "interior-hash-abc" {
+		t.Errorf("expected interior.pdf hash to be %q, got %q", "interior-hash-abc", m.Progress.PreflightHashes["interior.pdf"])
+	}
+
+	if resetErr := m.SetPreflightPassed(false); resetErr != nil {
+		t.Fatalf("SetPreflightPassed(false) failed: %v", resetErr)
+	}
+	if m.Progress.PreflightPassed {
+		t.Error("expected PreflightPassed to be false after SetPreflightPassed(false)")
+	}
+	if m.Progress.PreflightHashes != nil {
+		t.Errorf("expected PreflightHashes to be nil after SetPreflightPassed(false), got %v", m.Progress.PreflightHashes)
+	}
+
+	if errNil := m.RecordPreflightPassed(nil); errNil != nil {
+		t.Fatalf("RecordPreflightPassed(nil) failed: %v", errNil)
+	}
+	if !m.Progress.PreflightPassed {
+		t.Error("expected PreflightPassed to be true after RecordPreflightPassed(nil)")
+	}
+	if m.Progress.PreflightHashes != nil {
+		t.Error("expected PreflightHashes to be nil after RecordPreflightPassed(nil)")
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -26,15 +27,6 @@ func setupTestBookWorkspace(t *testing.T, preflightPassed bool, withMilestone st
 	m.BookProperties.Theme = "Existential Parody"
 	m.BookProperties.Format = "6x9"
 
-	if preflightPassed {
-		m.Progress.PreflightPassed = true
-	}
-	if withMilestone != "" {
-		if err := m.AddMilestone(withMilestone); err != nil {
-			t.Fatalf("failed to add milestone: %v", err)
-		}
-	}
-
 	// Write mock interior.pdf and cover.pdf
 	interiorContent := []byte("%PDF-1.4 Mock Interior PDF Content")
 	coverContent := []byte("%PDF-1.4 Mock Cover PDF Content")
@@ -48,6 +40,19 @@ func setupTestBookWorkspace(t *testing.T, preflightPassed bool, withMilestone st
 
 	m.AssetRegistry["interior_pdf"] = filepath.Join(tmpDir, "interior.pdf")
 	m.AssetRegistry["cover_pdf"] = filepath.Join(tmpDir, "cover.pdf")
+
+	if preflightPassed {
+		m.Progress.PreflightPassed = true
+		m.Progress.PreflightHashes = map[string]string{
+			"interior.pdf": computeBytesSHA256(interiorContent),
+			"cover.pdf":    computeBytesSHA256(coverContent),
+		}
+	}
+	if withMilestone != "" {
+		if err := m.AddMilestone(withMilestone); err != nil {
+			t.Fatalf("failed to add milestone: %v", err)
+		}
+	}
 
 	if err := m.Save(); err != nil {
 		t.Fatalf("failed to save manifest: %v", err)
@@ -284,11 +289,13 @@ func TestPackWorkspace_NormalizedManifestExport(t *testing.T) {
 	defer func() { _ = os.RemoveAll(wsDir) }()
 
 	altInterior := filepath.Join(wsDir, "alt_interior.pdf")
-	if err := os.WriteFile(altInterior, []byte("%PDF-1.4 Alt Interior Content"), 0600); err != nil {
+	altInteriorBytes := []byte("%PDF-1.4 Alt Interior Content")
+	if err := os.WriteFile(altInterior, altInteriorBytes, 0600); err != nil {
 		t.Fatalf("failed to write alt_interior.pdf: %v", err)
 	}
 	m.AssetRegistry["interior_pdf"] = altInterior
 	_ = os.Remove(filepath.Join(wsDir, "interior.pdf"))
+	m.Progress.PreflightHashes["interior.pdf"] = computeBytesSHA256(altInteriorBytes)
 	if err := m.Save(); err != nil {
 		t.Fatalf("failed to save manifest: %v", err)
 	}
@@ -436,14 +443,16 @@ func TestPackWorkspace_HelpersAndErrorPaths(t *testing.T) {
 		}
 	})
 
-	t.Run("addFileToZip error on missing file", func(t *testing.T) {
+	t.Run("addBytesToZip error on compressor creation failure", func(t *testing.T) {
 		var buf strings.Builder
 		zw := zip.NewWriter(&buf)
-		err := addFileToZip(zw, "test.pdf", "/nonexistent/test.pdf")
-		if err == nil {
-			t.Fatal("expected error adding nonexistent file to zip, got nil")
+		zw.RegisterCompressor(zip.Deflate, func(out io.Writer) (io.WriteCloser, error) {
+			return nil, errors.New("failed to initialize compressor")
+		})
+		err := addBytesToZip(zw, "test.pdf", []byte("hello"))
+		if err == nil || !strings.Contains(err.Error(), "failed to create entry") {
+			t.Fatalf("expected create entry error, got: %v", err)
 		}
-		_ = zw.Close()
 	})
 
 	t.Run("corrupted manifest json", func(t *testing.T) {
@@ -486,20 +495,22 @@ func TestPackWorkspace_HelpersAndErrorPaths(t *testing.T) {
 		wsDir, m := setupTestBookWorkspace(t, true, "")
 		defer func() { _ = os.RemoveAll(wsDir) }()
 
-		// Move interior and cover outside wsDir and point via AssetRegistry
-		altDir, err := os.MkdirTemp("", "pithos-alt-assets-*")
-		if err != nil {
-			t.Fatalf("failed to create temp dir: %v", err)
+		// Place custom deliverables inside wsDir under custom names and point via AssetRegistry
+		altDir := filepath.Join(wsDir, "custom_build")
+		if err := os.MkdirAll(altDir, 0750); err != nil {
+			t.Fatalf("failed to create custom dir: %v", err)
 		}
-		defer func() { _ = os.RemoveAll(altDir) }()
 
 		altInterior := filepath.Join(altDir, "alt_interior.pdf")
 		altCover := filepath.Join(altDir, "alt_cover.pdf")
 
-		if writeErr := os.WriteFile(altInterior, []byte("%PDF-1.4 alt interior"), 0600); writeErr != nil {
+		altInteriorBytes := []byte("%PDF-1.4 alt interior")
+		altCoverBytes := []byte("%PDF-1.4 alt cover")
+
+		if writeErr := os.WriteFile(altInterior, altInteriorBytes, 0600); writeErr != nil {
 			t.Fatalf("failed to write alt interior: %v", writeErr)
 		}
-		if writeErr := os.WriteFile(altCover, []byte("%PDF-1.4 alt cover"), 0600); writeErr != nil {
+		if writeErr := os.WriteFile(altCover, altCoverBytes, 0600); writeErr != nil {
 			t.Fatalf("failed to write alt cover: %v", writeErr)
 		}
 
@@ -508,6 +519,8 @@ func TestPackWorkspace_HelpersAndErrorPaths(t *testing.T) {
 
 		m.AssetRegistry["interior_pdf"] = altInterior
 		m.AssetRegistry["cover_pdf"] = altCover
+		m.Progress.PreflightHashes["interior.pdf"] = computeBytesSHA256(altInteriorBytes)
+		m.Progress.PreflightHashes["cover.pdf"] = computeBytesSHA256(altCoverBytes)
 		if saveErr := m.Save(); saveErr != nil {
 			t.Fatalf("failed to save manifest: %v", saveErr)
 		}
@@ -562,26 +575,181 @@ func TestCreateZipArchive_Errors(t *testing.T) {
 		t.Fatalf("failed to write valid interior: %v", writeErr)
 	}
 
-	validCover := filepath.Join(tmpDir, "cover.pdf")
-	if writeErr := os.WriteFile(validCover, []byte("%PDF-1.4 cover"), 0600); writeErr != nil {
-		t.Fatalf("failed to write valid cover: %v", writeErr)
+	interiorBytes := []byte("%PDF-1.4 interior")
+	coverBytes := []byte("%PDF-1.4 cover")
+	manifestBytes := []byte("{}")
+	checksumsBytes := []byte("hash  interior.pdf\n")
+	checksums := map[string]string{
+		"interior.pdf":  computeBytesSHA256(interiorBytes),
+		"cover.pdf":     computeBytesSHA256(coverBytes),
+		"manifest.json": computeBytesSHA256(manifestBytes),
 	}
 
 	// 1. Invalid outDir -> CreateTemp failure
-	err = createZipArchive(filepath.Join(validInterior, "out.zip"), validInterior, validCover, []byte("{}"), []byte("cs"))
+	err = createZipArchive(filepath.Join(validInterior, "out.zip"), interiorBytes, coverBytes, manifestBytes, checksumsBytes, checksums)
 	if err == nil {
 		t.Error("expected createTemp error, got nil")
 	}
 
-	// 2. Bad interiorPath -> addFileToZip failure
-	err = createZipArchive(filepath.Join(tmpDir, "out1.zip"), "/nonexistent/interior.pdf", validCover, []byte("{}"), []byte("cs"))
-	if err == nil {
-		t.Error("expected addFileToZip error for interior, got nil")
+	// 2. Checksum mismatch -> verifyZipArchive failure
+	badChecksums := map[string]string{
+		"interior.pdf":  "mismatched_hash",
+		"cover.pdf":     computeBytesSHA256(coverBytes),
+		"manifest.json": computeBytesSHA256(manifestBytes),
+	}
+	err = createZipArchive(filepath.Join(tmpDir, "out1.zip"), interiorBytes, coverBytes, manifestBytes, checksumsBytes, badChecksums)
+	if err == nil || !strings.Contains(err.Error(), "archive verification failed") {
+		t.Errorf("expected archive verification error for bad checksum, got: %v", err)
 	}
 
-	// 3. Bad coverPath -> addFileToZip failure for cover
-	err = createZipArchive(filepath.Join(tmpDir, "out2.zip"), validInterior, "/nonexistent/cover.pdf", []byte("{}"), []byte("cs"))
-	if err == nil {
-		t.Error("expected addFileToZip error for cover, got nil")
+	// 3. Missing expected entry in zip -> verifyZipArchive failure
+	missingEntryChecksums := map[string]string{
+		"nonexistent.pdf": "some_hash",
+	}
+	err = createZipArchive(filepath.Join(tmpDir, "out2.zip"), interiorBytes, coverBytes, manifestBytes, checksumsBytes, missingEntryChecksums)
+	if err == nil || !strings.Contains(err.Error(), "missing expected entry") {
+		t.Errorf("expected missing expected entry error, got: %v", err)
+	}
+
+	// 4. Destination path rename failure when target is directory
+	err = createZipArchive(tmpDir, interiorBytes, coverBytes, manifestBytes, checksumsBytes, checksums)
+	if err == nil || !strings.Contains(err.Error(), "failed to place distribution archive") {
+		t.Errorf("expected rename error when archive path is directory, got: %v", err)
+	}
+
+	// 5. verifyZipArchive with corrupt zip file
+	corruptZip := filepath.Join(tmpDir, "corrupt.zip")
+	_ = os.WriteFile(corruptZip, []byte("not a zip file"), 0600)
+	if vErr := verifyZipArchive(corruptZip, checksums); vErr == nil || !strings.Contains(vErr.Error(), "failed to open zip archive") {
+		t.Errorf("expected error verifying corrupt zip, got: %v", vErr)
+	}
+}
+
+func TestDetermineArchivePath_EdgeCases(t *testing.T) {
+	p, err := determineArchivePath(".", "")
+	if err != nil {
+		t.Fatalf("unexpected error for dot slug: %v", err)
+	}
+	if !strings.HasSuffix(p, "book-print-ready.zip") {
+		t.Errorf("expected default book-print-ready.zip for dot slug, got: %s", p)
+	}
+}
+
+func TestPackWorkspace_PreflightHashMismatch(t *testing.T) {
+	ctx := context.Background()
+	wsDir, m := setupTestBookWorkspace(t, true, "assemble_complete")
+	defer func() { _ = os.RemoveAll(wsDir) }()
+
+	// Overwrite interior.pdf with different bytes without re-running preflight
+	alteredInterior := []byte("%PDF-1.4 TAMPERED INTERIOR CONTENT")
+	if err := os.WriteFile(filepath.Join(wsDir, "interior.pdf"), alteredInterior, 0600); err != nil {
+		t.Fatalf("failed to overwrite interior.pdf: %v", err)
+	}
+
+	// Packaging must fail because interior deliverable hash changed
+	_, err := PackWorkspace(ctx, PackOptions{WorkspaceDir: wsDir})
+	if err == nil || !strings.Contains(err.Error(), "interior.pdf has changed since preflight validation") {
+		t.Fatalf("expected preflight hash mismatch error for interior.pdf, got: %v", err)
+	}
+
+	// Packaging with --force should succeed despite hash mismatch
+	bundle, fErr := PackWorkspace(ctx, PackOptions{WorkspaceDir: wsDir, Force: true})
+	if fErr != nil {
+		t.Fatalf("expected --force to succeed despite hash mismatch, got: %v", fErr)
+	}
+	if bundle == nil {
+		t.Fatal("expected non-nil release bundle with --force")
+	}
+
+	// Reset interior.pdf to match, but alter cover.pdf
+	origInterior := []byte("%PDF-1.4 Mock Interior PDF Content")
+	_ = os.WriteFile(filepath.Join(wsDir, "interior.pdf"), origInterior, 0600)
+	alteredCover := []byte("%PDF-1.4 TAMPERED COVER CONTENT")
+	_ = os.WriteFile(filepath.Join(wsDir, "cover.pdf"), alteredCover, 0600)
+
+	_, cErr := PackWorkspace(ctx, PackOptions{WorkspaceDir: wsDir})
+	if cErr == nil || !strings.Contains(cErr.Error(), "cover.pdf has changed since preflight validation") {
+		t.Fatalf("expected preflight hash mismatch error for cover.pdf, got: %v", cErr)
+	}
+
+	// Test missing preflight verification hashes
+	m.Progress.PreflightHashes = nil
+	_ = m.Save()
+	_, mErr := PackWorkspace(ctx, PackOptions{WorkspaceDir: wsDir})
+	if mErr == nil || !strings.Contains(mErr.Error(), "preflight verification hashes missing") {
+		t.Fatalf("expected missing verification hashes error, got: %v", mErr)
+	}
+}
+
+func TestPackWorkspace_PathTraversalOutsideWorkspace(t *testing.T) {
+	ctx := context.Background()
+	wsDir, m := setupTestBookWorkspace(t, true, "assemble_complete")
+	defer func() { _ = os.RemoveAll(wsDir) }()
+
+	extDir, err := os.MkdirTemp("", "pithos-external-*")
+	if err != nil {
+		t.Fatalf("failed to create ext dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(extDir) }()
+
+	extFile := filepath.Join(extDir, "outside.pdf")
+	if err := os.WriteFile(extFile, []byte("%PDF-1.4 secret external file"), 0600); err != nil {
+		t.Fatalf("failed to write external file: %v", err)
+	}
+
+	_ = os.Remove(filepath.Join(wsDir, "interior.pdf"))
+	m.AssetRegistry["interior_pdf"] = extFile
+	_ = m.Save()
+
+	_, pErr := PackWorkspace(ctx, PackOptions{WorkspaceDir: wsDir})
+	if pErr == nil || !strings.Contains(pErr.Error(), "resolves outside workspace directory") {
+		t.Fatalf("expected outside workspace error, got: %v", pErr)
+	}
+}
+
+func TestPackWorkspace_SymlinkOutsideWorkspace(t *testing.T) {
+	ctx := context.Background()
+	wsDir, _ := setupTestBookWorkspace(t, true, "assemble_complete")
+	defer func() { _ = os.RemoveAll(wsDir) }()
+
+	extDir, err := os.MkdirTemp("", "pithos-symlink-ext-*")
+	if err != nil {
+		t.Fatalf("failed to create ext dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(extDir) }()
+
+	extFile := filepath.Join(extDir, "outside_target.pdf")
+	if err := os.WriteFile(extFile, []byte("%PDF-1.4 external target"), 0600); err != nil {
+		t.Fatalf("failed to write ext file: %v", err)
+	}
+
+	_ = os.Remove(filepath.Join(wsDir, "interior.pdf"))
+	if err := os.Symlink(extFile, filepath.Join(wsDir, "interior.pdf")); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
+
+	_, pErr := PackWorkspace(ctx, PackOptions{WorkspaceDir: wsDir})
+	if pErr == nil || !strings.Contains(pErr.Error(), "resolves outside workspace directory") {
+		t.Fatalf("expected outside workspace error for symlink, got: %v", pErr)
+	}
+}
+
+func TestPackWorkspace_ValidateDeliverablePathEdgeCases(t *testing.T) {
+	wsDir, err := os.MkdirTemp("", "pithos-val-path-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(wsDir) }()
+
+	if _, err := validateDeliverablePath(wsDir, ""); err == nil {
+		t.Error("expected error for empty candidate path")
+	}
+
+	dirPath := filepath.Join(wsDir, "subdir")
+	if err := os.Mkdir(dirPath, 0750); err != nil {
+		t.Fatalf("failed to create subdir: %v", err)
+	}
+	if _, err := validateDeliverablePath(wsDir, dirPath); err == nil || !strings.Contains(err.Error(), "is a directory") {
+		t.Errorf("expected directory error, got: %v", err)
 	}
 }

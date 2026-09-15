@@ -27,8 +27,8 @@ type PackOptions struct {
 	DryRun       bool
 }
 
-// computeFileSHA256 computes the SHA-256 hexadecimal checksum of a file on disk.
-func computeFileSHA256(filePath string) (string, error) {
+// ComputeFileSHA256 computes the SHA-256 hexadecimal checksum of a file on disk.
+func ComputeFileSHA256(filePath string) (string, error) {
 	//nolint:gosec // filePath is validated within the workspace directory
 	f, err := os.Open(filePath)
 	if err != nil {
@@ -43,42 +43,18 @@ func computeFileSHA256(filePath string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-// computeBytesSHA256 computes the SHA-256 hexadecimal checksum of an in-memory byte slice.
-func computeBytesSHA256(data []byte) string {
+func computeFileSHA256(filePath string) (string, error) {
+	return ComputeFileSHA256(filePath)
+}
+
+// ComputeBytesSHA256 computes the SHA-256 hexadecimal checksum of an in-memory byte slice.
+func ComputeBytesSHA256(data []byte) string {
 	h := sha256.Sum256(data)
 	return hex.EncodeToString(h[:])
 }
 
-// addFileToZip copies an existing file from disk into the zip archive with deflate compression.
-func addFileToZip(zw *zip.Writer, nameInZip, srcPath string) error {
-	info, err := os.Stat(srcPath)
-	if err != nil {
-		return fmt.Errorf("failed to stat file %q: %w", srcPath, err)
-	}
-
-	header, err := zip.FileInfoHeader(info)
-	if err != nil {
-		return fmt.Errorf("failed to create zip header for %q: %w", srcPath, err)
-	}
-	header.Name = nameInZip
-	header.Method = zip.Deflate
-
-	w, err := zw.CreateHeader(header)
-	if err != nil {
-		return fmt.Errorf("failed to create entry %q in zip: %w", nameInZip, err)
-	}
-
-	//nolint:gosec // srcPath is a local deliverable file inside workspace
-	f, err := os.Open(srcPath)
-	if err != nil {
-		return fmt.Errorf("failed to open file %q: %w", srcPath, err)
-	}
-	defer func() { _ = f.Close() }()
-
-	if _, err := io.Copy(w, f); err != nil {
-		return fmt.Errorf("failed to copy file %q to zip: %w", srcPath, err)
-	}
-	return nil
+func computeBytesSHA256(data []byte) string {
+	return ComputeBytesSHA256(data)
 }
 
 // addBytesToZip writes in-memory bytes into the zip archive with deflate compression.
@@ -100,27 +76,93 @@ func addBytesToZip(zw *zip.Writer, nameInZip string, data []byte) error {
 	return nil
 }
 
-func validatePreflight(m *manifest.Manifest, force bool) error {
+func validatePreflight(m *manifest.Manifest, interiorHash, coverHash string, force bool) error {
 	preflightPassed := m.Progress.PreflightPassed
-	if !preflightPassed && !force {
+	if force {
+		if !preflightPassed || len(m.Progress.PreflightHashes) == 0 {
+			logger.Warn("Packaging forced: preflight validation checks bypassed with --force")
+		}
+		return nil
+	}
+	if !preflightPassed {
 		return errors.New("cannot package book: preflight validation has not passed (run 'pithos assemble' or pass --force)")
 	}
-	if !preflightPassed && force {
-		logger.Warn("Packaging forced: preflight validation checks bypassed with --force")
+	if len(m.Progress.PreflightHashes) == 0 {
+		return errors.New("cannot package book: preflight verification hashes missing (run 'pithos assemble' or pass --force)")
+	}
+	if interiorHash != "" {
+		expected, ok := m.Progress.PreflightHashes["interior.pdf"]
+		if !ok || expected != interiorHash {
+			return fmt.Errorf("cannot package book: deliverable interior.pdf has changed since preflight validation (expected %s, got %s; run 'pithos assemble' or pass --force)", expected, interiorHash)
+		}
+	}
+	if coverHash != "" {
+		if expected, ok := m.Progress.PreflightHashes["cover.pdf"]; ok && expected != coverHash {
+			return fmt.Errorf("cannot package book: deliverable cover.pdf has changed since preflight validation (expected %s, got %s; run 'pithos assemble' or pass --force)", expected, coverHash)
+		}
 	}
 	return nil
 }
 
-func resolveAssetPath(wsDir, filename, registeredPath string) (string, error) {
-	p := filepath.Join(wsDir, filename)
-	if _, err := os.Stat(p); err == nil {
-		return p, nil
+// validateDeliverablePath verifies that candidatePath exists, is a regular file, and resolves strictly inside wsDir.
+func validateDeliverablePath(wsDir, candidatePath string) (string, error) {
+	if candidatePath == "" {
+		return "", errors.New("empty path candidate")
 	}
+
+	canonicalWs, err := filepath.Abs(wsDir)
+	if err != nil {
+		return "", fmt.Errorf("failed to determine absolute path for workspace: %w", err)
+	}
+	if evaluatedWs, symErr := filepath.EvalSymlinks(canonicalWs); symErr == nil {
+		canonicalWs = evaluatedWs
+	}
+
+	target := candidatePath
+	if !filepath.IsAbs(target) {
+		target = filepath.Join(wsDir, target)
+	}
+
+	info, err := os.Stat(target)
+	if err != nil {
+		return "", err
+	}
+	if info.IsDir() {
+		return "", fmt.Errorf("path %q is a directory, expected deliverable file", candidatePath)
+	}
+
+	canonicalTarget, err := filepath.Abs(target)
+	if err != nil {
+		return "", fmt.Errorf("failed to determine absolute path for %q: %w", candidatePath, err)
+	}
+	if evaluatedTarget, symErr := filepath.EvalSymlinks(canonicalTarget); symErr == nil {
+		canonicalTarget = evaluatedTarget
+	}
+
+	rel, err := filepath.Rel(canonicalWs, canonicalTarget)
+	if err != nil || strings.HasPrefix(rel, "..") || filepath.IsAbs(rel) {
+		return "", fmt.Errorf("deliverable path %q resolves outside workspace directory", candidatePath)
+	}
+
+	return canonicalTarget, nil
+}
+
+func resolveAssetPath(wsDir, filename, registeredPath string) (string, error) {
+	defaultPath := filepath.Join(wsDir, filename)
+	if p, err := validateDeliverablePath(wsDir, defaultPath); err == nil {
+		return p, nil
+	} else if !os.IsNotExist(err) && !errors.Is(err, os.ErrNotExist) {
+		return "", fmt.Errorf("invalid deliverable %s: %w", filename, err)
+	}
+
 	if registeredPath != "" {
-		if _, err := os.Stat(registeredPath); err == nil {
-			return registeredPath, nil
+		if p, err := validateDeliverablePath(wsDir, registeredPath); err == nil {
+			return p, nil
+		} else if !os.IsNotExist(err) && !errors.Is(err, os.ErrNotExist) {
+			return "", fmt.Errorf("invalid deliverable %s from asset registry: %w", filename, err)
 		}
 	}
+
 	return "", fmt.Errorf("%s not found on disk", filename)
 }
 
@@ -168,20 +210,11 @@ func determineArchivePath(wsDir, outputPath string) (string, error) {
 	return archivePath, nil
 }
 
-func prepareSanitizedManifestAndChecksums(archivePath, interiorPath, coverPath string, m *manifest.Manifest) (map[string]string, []byte, []byte, error) {
-	checksums := make(map[string]string)
-
-	interiorHash, err := computeFileSHA256(interiorPath)
-	if err != nil {
-		return nil, nil, nil, err
+func prepareSanitizedManifestAndChecksums(archivePath, interiorHash, coverHash string, m *manifest.Manifest) (map[string]string, []byte, []byte, error) {
+	checksums := map[string]string{
+		"interior.pdf": interiorHash,
+		"cover.pdf":    coverHash,
 	}
-	checksums["interior.pdf"] = interiorHash
-
-	coverHash, cErr := computeFileSHA256(coverPath)
-	if cErr != nil {
-		return nil, nil, nil, cErr
-	}
-	checksums["cover.pdf"] = coverHash
 
 	sanitizedM, err := m.SanitizedExport()
 	if err != nil {
@@ -224,7 +257,47 @@ func prepareSanitizedManifestAndChecksums(archivePath, interiorPath, coverPath s
 	return checksums, manifestBytes, []byte(sb.String()), nil
 }
 
-func createZipArchive(archivePath, interiorPath, coverPath string, manifestBytes, checksumsBytes []byte) error {
+func verifyZipArchive(zipPath string, expectedChecksums map[string]string) error {
+	zr, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return fmt.Errorf("failed to open zip archive for verification: %w", err)
+	}
+	defer func() { _ = zr.Close() }()
+
+	found := make(map[string]bool)
+	for _, f := range zr.File {
+		expectedHash, ok := expectedChecksums[f.Name]
+		if !ok {
+			continue
+		}
+		rc, err := f.Open()
+		if err != nil {
+			return fmt.Errorf("failed to read entry %q from zip archive: %w", f.Name, err)
+		}
+		h := sha256.New()
+		// Guard against decompression bombs by limiting read to 512MB
+		if _, err := io.Copy(h, io.LimitReader(rc, 512*1024*1024)); err != nil {
+			_ = rc.Close()
+			return fmt.Errorf("failed to hash entry %q from zip archive: %w", f.Name, err)
+		}
+		_ = rc.Close()
+
+		actualHash := hex.EncodeToString(h.Sum(nil))
+		if actualHash != expectedHash {
+			return fmt.Errorf("archive entry %q checksum mismatch: expected %s, got %s", f.Name, expectedHash, actualHash)
+		}
+		found[f.Name] = true
+	}
+
+	for name := range expectedChecksums {
+		if !found[name] {
+			return fmt.Errorf("missing expected entry %q in zip archive", name)
+		}
+	}
+	return nil
+}
+
+func createZipArchive(archivePath string, interiorBytes, coverBytes, manifestBytes, checksumsBytes []byte, checksums map[string]string) error {
 	outDir := filepath.Dir(archivePath)
 	tmpZip, err := os.CreateTemp(outDir, "pithos-pack-*.tmp")
 	if err != nil {
@@ -240,10 +313,10 @@ func createZipArchive(archivePath, interiorPath, coverPath string, manifestBytes
 
 	zw := zip.NewWriter(tmpZip)
 
-	if err := addFileToZip(zw, "interior.pdf", interiorPath); err != nil {
+	if err := addBytesToZip(zw, "interior.pdf", interiorBytes); err != nil {
 		return err
 	}
-	if err := addFileToZip(zw, "cover.pdf", coverPath); err != nil {
+	if err := addBytesToZip(zw, "cover.pdf", coverBytes); err != nil {
 		return err
 	}
 	if err := addBytesToZip(zw, "manifest.json", manifestBytes); err != nil {
@@ -263,6 +336,10 @@ func createZipArchive(archivePath, interiorPath, coverPath string, manifestBytes
 		return fmt.Errorf("failed to close temporary archive: %w", err)
 	}
 	tmpZip = nil
+
+	if err := verifyZipArchive(tmpName, checksums); err != nil {
+		return fmt.Errorf("archive verification failed: %w", err)
+	}
 
 	if err := os.Rename(tmpName, archivePath); err != nil {
 		return fmt.Errorf("failed to place distribution archive at %q: %w", archivePath, err)
@@ -304,10 +381,6 @@ func PackWorkspace(ctx context.Context, opts PackOptions) (*manifest.ReleaseBund
 		return nil, fmt.Errorf("failed to load manifest: %w", err)
 	}
 
-	if valErr := validatePreflight(m, opts.Force); valErr != nil {
-		return nil, valErr
-	}
-
 	interiorPath, coverPath, delivErr := locateDeliverables(wsDir, m)
 	if delivErr != nil {
 		return nil, delivErr
@@ -319,10 +392,32 @@ func PackWorkspace(ctx context.Context, opts PackOptions) (*manifest.ReleaseBund
 	}
 
 	if opts.DryRun {
+		if valErr := validatePreflight(m, "", "", opts.Force); valErr != nil {
+			return nil, valErr
+		}
 		return executeDryRun(wsDir, archivePath, m)
 	}
 
-	checksums, manifestBytes, checksumsBytes, prepErr := prepareSanitizedManifestAndChecksums(archivePath, interiorPath, coverPath, m)
+	// Capture deliverable bytes into memory once to eliminate TOCTOU discrepancies
+	//nolint:gosec // interiorPath is validated to reside strictly within wsDir
+	interiorBytes, err := os.ReadFile(interiorPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read interior deliverable %q: %w", interiorPath, err)
+	}
+	//nolint:gosec // coverPath is validated to reside strictly within wsDir
+	coverBytes, err := os.ReadFile(coverPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read cover deliverable %q: %w", coverPath, err)
+	}
+
+	interiorHash := computeBytesSHA256(interiorBytes)
+	coverHash := computeBytesSHA256(coverBytes)
+
+	if valErr := validatePreflight(m, interiorHash, coverHash, opts.Force); valErr != nil {
+		return nil, valErr
+	}
+
+	checksums, manifestBytes, checksumsBytes, prepErr := prepareSanitizedManifestAndChecksums(archivePath, interiorHash, coverHash, m)
 	if prepErr != nil {
 		return nil, prepErr
 	}
@@ -332,7 +427,7 @@ func PackWorkspace(ctx context.Context, opts PackOptions) (*manifest.ReleaseBund
 		return nil, fmt.Errorf("failed to write checksums file %q: %w", checksumsFilePath, writeErr)
 	}
 
-	if zipErr := createZipArchive(archivePath, interiorPath, coverPath, manifestBytes, checksumsBytes); zipErr != nil {
+	if zipErr := createZipArchive(archivePath, interiorBytes, coverBytes, manifestBytes, checksumsBytes, checksums); zipErr != nil {
 		return nil, zipErr
 	}
 

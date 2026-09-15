@@ -1426,4 +1426,7 @@ func verifyAssembleSuccessManifest(t *testing.T, m2 *manifest.Manifest) {
 	if !m2.Progress.PreflightPassed {
 		t.Errorf("expected PreflightPassed to be true after successful assemble with PDF check")
 	}
+	if len(m2.Progress.PreflightHashes) == 0 || m2.Progress.PreflightHashes["interior.pdf"] == "" {
+		t.Errorf("expected PreflightHashes to contain interior.pdf, got %v", m2.Progress.PreflightHashes)
+	}
 }
