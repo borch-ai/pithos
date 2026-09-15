@@ -200,23 +200,43 @@ func recordPreflightIfPassed(ctx context.Context, opts AssembleOptions, m *manif
 	if opts.DryRun {
 		return nil
 	}
-	if err := runPDFPreflightCheck(ctx, opts, m, pdfPath); err != nil {
-		return fmt.Errorf("pdf preflight check failed: %w", err)
+
+	interiorHashBefore, err := computeFileSHA256(pdfPath)
+	if err != nil {
+		return fmt.Errorf("failed to compute interior PDF preflight hash before check: %w", err)
+	}
+	var coverHashBefore string
+	if coverPDFPath != "" {
+		coverHashBefore, err = computeFileSHA256(coverPDFPath)
+		if err != nil {
+			return fmt.Errorf("failed to compute cover PDF preflight hash before check: %w", err)
+		}
 	}
 
-	interiorHash, err := computeFileSHA256(pdfPath)
-	if err != nil {
-		return fmt.Errorf("failed to compute interior PDF preflight hash: %w", err)
+	if checkErr := runPDFPreflightCheck(ctx, opts, m, pdfPath); checkErr != nil {
+		return fmt.Errorf("pdf preflight check failed: %w", checkErr)
 	}
+
+	interiorHashAfter, postInteriorErr := computeFileSHA256(pdfPath)
+	if postInteriorErr != nil {
+		return fmt.Errorf("failed to compute interior PDF preflight hash after check: %w", postInteriorErr)
+	}
+	if interiorHashBefore != interiorHashAfter {
+		return fmt.Errorf("interior PDF deliverable was modified during preflight verification (before: %s, after: %s)", interiorHashBefore, interiorHashAfter)
+	}
+
 	preflightHashes := map[string]string{
-		"interior.pdf": interiorHash,
+		"interior.pdf": interiorHashAfter,
 	}
 	if coverPDFPath != "" {
-		coverHash, err := computeFileSHA256(coverPDFPath)
-		if err != nil {
-			return fmt.Errorf("failed to compute cover PDF preflight hash: %w", err)
+		coverHashAfter, postCoverErr := computeFileSHA256(coverPDFPath)
+		if postCoverErr != nil {
+			return fmt.Errorf("failed to compute cover PDF preflight hash after check: %w", postCoverErr)
 		}
-		preflightHashes["cover.pdf"] = coverHash
+		if coverHashBefore != coverHashAfter {
+			return fmt.Errorf("cover PDF deliverable was modified during preflight verification (before: %s, after: %s)", coverHashBefore, coverHashAfter)
+		}
+		preflightHashes["cover.pdf"] = coverHashAfter
 	}
 
 	if err := m.RecordPreflightPassed(preflightHashes); err != nil {

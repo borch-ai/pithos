@@ -92,12 +92,19 @@ func validatePreflight(m *manifest.Manifest, interiorHash, coverHash string, for
 	}
 	if interiorHash != "" {
 		expected, ok := m.Progress.PreflightHashes["interior.pdf"]
-		if !ok || expected != interiorHash {
+		if !ok {
+			return errors.New("cannot package book: deliverable interior.pdf has not passed preflight validation (run 'pithos assemble' or pass --force)")
+		}
+		if expected != interiorHash {
 			return fmt.Errorf("cannot package book: deliverable interior.pdf has changed since preflight validation (expected %s, got %s; run 'pithos assemble' or pass --force)", expected, interiorHash)
 		}
 	}
 	if coverHash != "" {
-		if expected, ok := m.Progress.PreflightHashes["cover.pdf"]; ok && expected != coverHash {
+		expected, ok := m.Progress.PreflightHashes["cover.pdf"]
+		if !ok {
+			return errors.New("cannot package book: deliverable cover.pdf has not passed preflight validation (run 'pithos assemble' or pass --force)")
+		}
+		if expected != coverHash {
 			return fmt.Errorf("cannot package book: deliverable cover.pdf has changed since preflight validation (expected %s, got %s; run 'pithos assemble' or pass --force)", expected, coverHash)
 		}
 	}
@@ -127,8 +134,8 @@ func validateDeliverablePath(wsDir, candidatePath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if info.IsDir() {
-		return "", fmt.Errorf("path %q is a directory, expected deliverable file", candidatePath)
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("path %q is not a regular deliverable file", candidatePath)
 	}
 
 	canonicalTarget, err := filepath.Abs(target)
@@ -298,6 +305,17 @@ func verifyZipArchive(zipPath string, expectedChecksums map[string]string) error
 }
 
 func createZipArchive(archivePath string, interiorBytes, coverBytes, manifestBytes, checksumsBytes []byte, checksums map[string]string) error {
+	if info, err := os.Lstat(archivePath); err == nil {
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("archive path %q is a symlink", archivePath)
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("archive path %q is not a regular file", archivePath)
+		}
+	} else if !os.IsNotExist(err) && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("failed to inspect archive path %q: %w", archivePath, err)
+	}
+
 	outDir := filepath.Dir(archivePath)
 	tmpZip, err := os.CreateTemp(outDir, "pithos-pack-*.tmp")
 	if err != nil {
@@ -423,8 +441,9 @@ func PackWorkspace(ctx context.Context, opts PackOptions) (*manifest.ReleaseBund
 	}
 
 	checksumsFilePath := filepath.Join(filepath.Dir(archivePath), "checksums.sha256")
-	if writeErr := os.WriteFile(checksumsFilePath, checksumsBytes, 0600); writeErr != nil {
-		return nil, fmt.Errorf("failed to write checksums file %q: %w", checksumsFilePath, writeErr)
+	customOutput := opts.OutputPath != ""
+	if writeErr := writeChecksumsFile(wsDir, checksumsFilePath, checksumsBytes, customOutput); writeErr != nil {
+		return nil, writeErr
 	}
 
 	if zipErr := createZipArchive(archivePath, interiorBytes, coverBytes, manifestBytes, checksumsBytes, checksums); zipErr != nil {
@@ -443,4 +462,46 @@ func PackWorkspace(ctx context.Context, opts PackOptions) (*manifest.ReleaseBund
 		return nil, fmt.Errorf("failed to create checkpoint after packaging: %w", err)
 	}
 	return m.ReleaseBundle, nil
+}
+
+func writeChecksumsFile(wsDir, filePath string, data []byte, customOutput bool) error {
+	canonicalWs, err := filepath.Abs(wsDir)
+	if err != nil {
+		return fmt.Errorf("failed to determine absolute path for workspace: %w", err)
+	}
+	if evalWs, symErr := filepath.EvalSymlinks(canonicalWs); symErr == nil {
+		canonicalWs = evalWs
+	}
+
+	outDir := filepath.Dir(filePath)
+	canonicalOutDir, err := filepath.Abs(outDir)
+	if err != nil {
+		return fmt.Errorf("failed to determine absolute path for output dir %q: %w", outDir, err)
+	}
+	if evalOutDir, symErr := filepath.EvalSymlinks(canonicalOutDir); symErr == nil {
+		canonicalOutDir = evalOutDir
+	}
+
+	if !customOutput {
+		rel, err := filepath.Rel(canonicalWs, canonicalOutDir)
+		if err != nil || strings.HasPrefix(rel, "..") || filepath.IsAbs(rel) {
+			return fmt.Errorf("output directory %q resolves outside workspace directory", outDir)
+		}
+	}
+
+	if info, err := os.Lstat(filePath); err == nil {
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("checksums file %q is a symlink", filePath)
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("checksums file %q is not a regular file", filePath)
+		}
+	} else if !os.IsNotExist(err) && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("failed to inspect checksums file %q: %w", filePath, err)
+	}
+
+	if err := os.WriteFile(filePath, data, 0600); err != nil {
+		return fmt.Errorf("failed to write checksums file %q: %w", filePath, err)
+	}
+	return nil
 }

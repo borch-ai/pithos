@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/borch-ai/pithos/internal/manifest"
@@ -611,10 +612,19 @@ func TestCreateZipArchive_Errors(t *testing.T) {
 		t.Errorf("expected missing expected entry error, got: %v", err)
 	}
 
-	// 4. Destination path rename failure when target is directory
+	// 4. Destination path failure when target is directory
 	err = createZipArchive(tmpDir, interiorBytes, coverBytes, manifestBytes, checksumsBytes, checksums)
-	if err == nil || !strings.Contains(err.Error(), "failed to place distribution archive") {
-		t.Errorf("expected rename error when archive path is directory, got: %v", err)
+	if err == nil || (!strings.Contains(err.Error(), "failed to place distribution archive") && !strings.Contains(err.Error(), "is not a regular file")) {
+		t.Errorf("expected error when archive path is directory, got: %v", err)
+	}
+
+	// 4b. Destination path failure when target is a symlink
+	symlinkZip := filepath.Join(tmpDir, "symlink.zip")
+	if symErr := os.Symlink(validInterior, symlinkZip); symErr == nil {
+		err = createZipArchive(symlinkZip, interiorBytes, coverBytes, manifestBytes, checksumsBytes, checksums)
+		if err == nil || !strings.Contains(err.Error(), "is a symlink") {
+			t.Errorf("expected symlink error for archive path, got: %v", err)
+		}
 	}
 
 	// 5. verifyZipArchive with corrupt zip file
@@ -749,7 +759,115 @@ func TestPackWorkspace_ValidateDeliverablePathEdgeCases(t *testing.T) {
 	if err := os.Mkdir(dirPath, 0750); err != nil {
 		t.Fatalf("failed to create subdir: %v", err)
 	}
-	if _, err := validateDeliverablePath(wsDir, dirPath); err == nil || !strings.Contains(err.Error(), "is a directory") {
-		t.Errorf("expected directory error, got: %v", err)
+	if _, err := validateDeliverablePath(wsDir, dirPath); err == nil || !strings.Contains(err.Error(), "is not a regular deliverable file") {
+		t.Errorf("expected regular file error for directory, got: %v", err)
+	}
+
+	fifoPath := filepath.Join(wsDir, "test.fifo")
+	if mkErr := syscall.Mkfifo(fifoPath, 0600); mkErr == nil {
+		if _, err := validateDeliverablePath(wsDir, fifoPath); err == nil || !strings.Contains(err.Error(), "is not a regular deliverable file") {
+			t.Errorf("expected regular file error for FIFO, got: %v", err)
+		}
+	}
+}
+
+func TestPackWorkspace_SymlinkChecksumsRejected(t *testing.T) {
+	ctx := context.Background()
+	wsDir, _ := setupTestBookWorkspace(t, true, "assemble_complete")
+	defer func() { _ = os.RemoveAll(wsDir) }()
+
+	distDir := filepath.Join(wsDir, "dist")
+	if err := os.MkdirAll(distDir, 0750); err != nil {
+		t.Fatalf("failed to create dist dir: %v", err)
+	}
+
+	extDir, err := os.MkdirTemp("", "pithos-symlink-target-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(extDir) }()
+
+	targetFile := filepath.Join(extDir, "target.txt")
+	if err := os.WriteFile(targetFile, []byte("target"), 0600); err != nil {
+		t.Fatalf("failed to write target file: %v", err)
+	}
+
+	// Create symlink at dist/checksums.sha256
+	checksumsLink := filepath.Join(distDir, "checksums.sha256")
+	if err := os.Symlink(targetFile, checksumsLink); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
+
+	_, pErr := PackWorkspace(ctx, PackOptions{WorkspaceDir: wsDir})
+	if pErr == nil || !strings.Contains(pErr.Error(), "is a symlink") {
+		t.Fatalf("expected symlink rejection error for checksums file, got: %v", pErr)
+	}
+}
+
+func TestPackWorkspace_MissingCoverPreflightHash(t *testing.T) {
+	ctx := context.Background()
+	wsDir, m := setupTestBookWorkspace(t, true, "assemble_complete")
+	defer func() { _ = os.RemoveAll(wsDir) }()
+
+	// Remove cover.pdf from PreflightHashes while keeping interior.pdf
+	delete(m.Progress.PreflightHashes, "cover.pdf")
+	if err := m.Save(); err != nil {
+		t.Fatalf("failed to save manifest: %v", err)
+	}
+
+	_, err := PackWorkspace(ctx, PackOptions{WorkspaceDir: wsDir})
+	if err == nil || !strings.Contains(err.Error(), "cover.pdf has not passed preflight validation") {
+		t.Fatalf("expected missing cover preflight validation error, got: %v", err)
+	}
+
+	// Force flag should bypass missing cover preflight check
+	bundle, fErr := PackWorkspace(ctx, PackOptions{WorkspaceDir: wsDir, Force: true})
+	if fErr != nil {
+		t.Fatalf("expected --force to succeed despite missing cover preflight hash, got: %v", fErr)
+	}
+	if bundle == nil {
+		t.Fatal("expected non-nil release bundle with --force")
+	}
+}
+
+func TestWriteChecksumsFile_EdgeCases(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos-chk-edge-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	extDir, err := os.MkdirTemp("", "pithos-chk-ext-*")
+	if err != nil {
+		t.Fatalf("failed to create ext dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(extDir) }()
+
+	// 1. Output dir symlink escapes workspace
+	distLink := filepath.Join(tmpDir, "dist")
+	if symErr := os.Symlink(extDir, distLink); symErr != nil {
+		t.Fatalf("failed to create symlink: %v", symErr)
+	}
+	escapedChecksums := filepath.Join(distLink, "checksums.sha256")
+	err = writeChecksumsFile(tmpDir, escapedChecksums, []byte("test"), false)
+	if err == nil || !strings.Contains(err.Error(), "resolves outside workspace directory") {
+		t.Errorf("expected outside workspace error, got: %v", err)
+	}
+
+	// 2. Output path exists and is a directory (non-regular file)
+	subDir := filepath.Join(tmpDir, "some_dir")
+	if mkErr := os.Mkdir(subDir, 0750); mkErr != nil {
+		t.Fatalf("failed to create subDir: %v", mkErr)
+	}
+	err = writeChecksumsFile(tmpDir, subDir, []byte("test"), false)
+	if err == nil || !strings.Contains(err.Error(), "is not a regular file") {
+		t.Errorf("expected not regular file error, got: %v", err)
+	}
+
+	// 3. Write success inside workspace
+	validFile := filepath.Join(tmpDir, "valid_checksums.sha256")
+	err = writeChecksumsFile(tmpDir, validFile, []byte("valid"), false)
+	if err != nil {
+		t.Errorf("expected write success, got: %v", err)
 	}
 }

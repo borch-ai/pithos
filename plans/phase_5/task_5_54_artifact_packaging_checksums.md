@@ -2,7 +2,7 @@
 
 **Status:** Completed
 **Date Completed:** 2026-09-13
-**Unit Test Coverage:** 91.20%
+**Unit Test Coverage:** 91.10%
 **Go Version:** 1.26.6
 
 ## Overview
@@ -49,12 +49,16 @@ None.
 
 #### [NEW] [pack.go](file://../../internal/pipeline/pack.go)
 - Implement `PackWorkspace(ctx context.Context, opts PackOptions) (*manifest.ReleaseBundle, error)`:
-  - Verify `interior.pdf` and `cover.pdf` exist and strictly reside inside workspace root (canonical path validation preventing symlink/traversal escape).
-  - Capture deliverable bytes in memory and verify SHA-256 matches preflight hashes recorded during assemble (or `--force` flag is set).
-  - Write verified captured bytes into zip archive (`dist/<slug>-print-ready.zip`), eliminating TOCTOU discrepancies.
+  - Verify `interior.pdf` and `cover.pdf` exist, are regular files (`!info.Mode().IsRegular()`), and strictly reside inside workspace root (canonical path validation preventing symlink/traversal escape).
+  - Capture deliverable bytes in memory and verify SHA-256 matches preflight hashes recorded during assemble (strictly requiring `cover.pdf` unless `--force` flag is set).
+  - Write verified captured bytes into zip archive (`dist/<slug>-print-ready.zip`), eliminating TOCTOU discrepancies, rejecting symlinked archive targets.
   - Post-verify archive entries bit-for-bit against advertised checksums.
-  - Write `checksums.sha256` file and update `manifest.json` with `ReleaseBundle` metadata.
+  - Write `checksums.sha256` file safely, rejecting symlinks and verifying directory bounds within workspace root.
+  - Update `manifest.json` with `ReleaseBundle` metadata.
   - Create git checkpoint for packaged workspace.
+
+#### [MODIFY] [assemble.go](file://../../internal/pipeline/assemble.go)
+- Preflight TOCTOU hardening: compute and verify deliverable SHA-256 hashes before and after `runPDFPreflightCheck` to ensure deliverables were not modified during verification before recording preflight pass.
 
 ### CLI Layer
 
