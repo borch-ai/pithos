@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/borch-ai/powerword/pkg/telemetry"
 )
@@ -52,10 +53,12 @@ type BookProperties struct {
 
 // Progress tracks the completion state of various pipeline stages.
 type Progress struct {
-	ManuscriptGenerated bool        `json:"manuscript_generated"`
-	CoverImageGenerated bool        `json:"cover_image_generated"`
-	CoverImagePath      string      `json:"cover_image_path,omitempty"`
-	Pages               []PageState `json:"pages"`
+	ManuscriptGenerated bool              `json:"manuscript_generated"`
+	CoverImageGenerated bool              `json:"cover_image_generated"`
+	CoverImagePath      string            `json:"cover_image_path,omitempty"`
+	PreflightPassed     bool              `json:"preflight_passed,omitempty"`
+	PreflightHashes     map[string]string `json:"preflight_hashes,omitempty"`
+	Pages               []PageState       `json:"pages"`
 }
 
 // LayoutGuide represents a logical bounding box in the cover coordinate system.
@@ -100,8 +103,15 @@ type KilnSync struct {
 	CoverPDFPath    string   `json:"cover_pdf_path,omitempty"`
 }
 
+// ReleaseBundle contains metadata and cryptographic checksums for packaged print-ready distribution artifacts.
+type ReleaseBundle struct {
+	ArchivePath string            `json:"archive_path"`
+	PackagedAt  string            `json:"packaged_at"`
+	Checksums   map[string]string `json:"checksums"`
+}
+
 // CurrentSchemaVersion is the latest version of the manifest schema.
-const CurrentSchemaVersion = 3
+const CurrentSchemaVersion = 4
 
 // Manifest is the root structure serving as the checkpoint state file.
 type Manifest struct {
@@ -116,6 +126,7 @@ type Manifest struct {
 	KDPLayout      KDPLayout         `json:"kdp_layout"`
 	Telemetry      TelemetryMetrics  `json:"telemetry"`
 	Kiln           KilnSync          `json:"kiln"`
+	ReleaseBundle  *ReleaseBundle    `json:"release_bundle,omitempty"`
 }
 
 type migrationFunc func(m *Manifest) error
@@ -123,6 +134,7 @@ type migrationFunc func(m *Manifest) error
 var migrations = map[int]migrationFunc{
 	1: migrateV1ToV2,
 	2: migrateV2ToV3,
+	3: migrateV3ToV4,
 }
 
 func migrateV1ToV2(m *Manifest) error {
@@ -132,6 +144,11 @@ func migrateV1ToV2(m *Manifest) error {
 
 func migrateV2ToV3(m *Manifest) error {
 	m.SchemaVersion = 3
+	return nil
+}
+
+func migrateV3ToV4(m *Manifest) error {
+	m.SchemaVersion = 4
 	return nil
 }
 
@@ -270,6 +287,97 @@ func (m *Manifest) UpdatePDFPaths(interiorPath, coverPath string) error {
 	}
 	m.mu.Unlock()
 	return m.Save()
+}
+
+// HasMilestone returns true if the specified milestone is recorded in Kiln milestones.
+func (m *Manifest) HasMilestone(milestone string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, ms := range m.Kiln.Milestones {
+		if ms == milestone {
+			return true
+		}
+	}
+	return false
+}
+
+// SetPreflightPassed updates the preflight check status and saves the manifest.
+// If passed is false, any previously recorded preflight deliverable hashes are cleared.
+func (m *Manifest) SetPreflightPassed(passed bool) error {
+	m.mu.Lock()
+	m.Progress.PreflightPassed = passed
+	if !passed {
+		m.Progress.PreflightHashes = nil
+	}
+	m.mu.Unlock()
+	return m.Save()
+}
+
+// RecordPreflightPassed records that preflight checks succeeded along with verified deliverable hashes.
+func (m *Manifest) RecordPreflightPassed(hashes map[string]string) error {
+	m.mu.Lock()
+	m.Progress.PreflightPassed = true
+	if hashes != nil {
+		m.Progress.PreflightHashes = make(map[string]string, len(hashes))
+		for k, v := range hashes {
+			m.Progress.PreflightHashes[k] = v
+		}
+	} else {
+		m.Progress.PreflightHashes = nil
+	}
+	m.mu.Unlock()
+	return m.Save()
+}
+
+// RecordReleaseBundle sets the release bundle metadata and saves the manifest.
+func (m *Manifest) RecordReleaseBundle(archivePath string, checksums map[string]string) error {
+	m.mu.Lock()
+	m.ReleaseBundle = &ReleaseBundle{
+		ArchivePath: archivePath,
+		PackagedAt:  time.Now().UTC().Format(time.RFC3339),
+		Checksums:   checksums,
+	}
+	m.mu.Unlock()
+	return m.Save()
+}
+
+// SanitizedExport creates a portable copy of the manifest with relative paths suitable for distribution bundles.
+func (m *Manifest) SanitizedExport() (*Manifest, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	data, err := json.Marshal(m)
+	if err != nil {
+		return nil, fmt.Errorf("failed to clone manifest for export: %w", err)
+	}
+
+	var clone Manifest
+	if err := json.Unmarshal(data, &clone); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal cloned manifest: %w", err)
+	}
+
+	clone.filePath = "manifest.json"
+	if clone.Kiln.InteriorPDFPath != "" {
+		clone.Kiln.InteriorPDFPath = filepath.Base(clone.Kiln.InteriorPDFPath)
+	}
+	if clone.Kiln.CoverPDFPath != "" {
+		clone.Kiln.CoverPDFPath = filepath.Base(clone.Kiln.CoverPDFPath)
+	}
+	if clone.Progress.CoverImagePath != "" {
+		clone.Progress.CoverImagePath = filepath.Base(clone.Progress.CoverImagePath)
+	}
+	for k, v := range clone.AssetRegistry {
+		if v != "" {
+			clone.AssetRegistry[k] = filepath.Base(v)
+		}
+	}
+	for i := range clone.Progress.Pages {
+		if clone.Progress.Pages[i].ImagePath != "" {
+			clone.Progress.Pages[i].ImagePath = filepath.Base(clone.Progress.Pages[i].ImagePath)
+		}
+	}
+
+	return &clone, nil
 }
 
 // FilePath returns the file path of the manifest.

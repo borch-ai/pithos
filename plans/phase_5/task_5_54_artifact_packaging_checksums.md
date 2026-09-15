@@ -1,7 +1,9 @@
 # plan: Task 5.54: Print-Ready Artifact Packaging & Integrity Verification (`pithos pack`)
 
-**Status:** Open
-**Go Version:** 1.26+
+**Status:** Completed
+**Date Completed:** 2026-09-15
+**Unit Test Coverage:** 91.00%
+**Go Version:** 1.26.6
 
 ## Overview
 
@@ -39,18 +41,24 @@ None.
       Checksums   map[string]string `json:"checksums"`
   }
   ```
+- Add `PreflightHashes map[string]string` to `Progress` to bind preflight certification to exact deliverable hashes.
 - Add helper method `RecordReleaseBundle(archivePath string, checksums map[string]string) error`.
+- Add helper method `RecordPreflightPassed(hashes map[string]string) error`.
 
 ### Packaging Pipeline
 
 #### [NEW] [pack.go](file://../../internal/pipeline/pack.go)
-- Implement `PackWorkspace(workspaceDir string, opts PackOptions) (*ReleaseBundle, error)`:
-  - Verify `interior.pdf` and `cover.pdf` exist in the workspace directory.
-  - Verify preflight checks are clean (or `--force` flag is set).
-  - Calculate SHA-256 hashes for interior, cover, and manifest.
-  - Write `checksums.sha256` file.
-  - Create zip archive in `<workspace>/dist/<slug>-print-ready.zip`.
+- Implement `PackWorkspace(ctx context.Context, opts PackOptions) (*manifest.ReleaseBundle, error)`:
+  - Verify `interior.pdf` and `cover.pdf` exist, are regular files (`!info.Mode().IsRegular()`), and strictly reside inside workspace root (canonical path validation preventing symlink/traversal escape).
+  - Capture deliverable bytes in memory and verify SHA-256 matches preflight hashes recorded during assemble (strictly requiring `cover.pdf` unless `--force` flag is set).
+  - Write verified captured bytes into zip archive (`dist/<slug>-print-ready.zip`), eliminating TOCTOU discrepancies, rejecting symlinked archive targets.
+  - Post-verify archive entries bit-for-bit against advertised checksums.
+  - Write `checksums.sha256` file safely, rejecting symlinks and verifying directory bounds within workspace root.
   - Update `manifest.json` with `ReleaseBundle` metadata.
+  - Create git checkpoint for packaged workspace.
+
+#### [MODIFY] [assemble.go](file://../../internal/pipeline/assemble.go)
+- Preflight TOCTOU hardening: compute and verify deliverable SHA-256 hashes before and after `runPDFPreflightCheck` to ensure deliverables were not modified during verification before recording preflight pass.
 
 ### CLI Layer
 

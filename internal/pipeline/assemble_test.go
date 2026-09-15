@@ -293,30 +293,7 @@ func TestAssemble_Success(t *testing.T) {
 		t.Fatalf("failed to load manifest: %v", err)
 	}
 
-	if math.Abs(m2.KDPLayout.SpineWidth-0.15) > 1e-9 {
-		t.Errorf("expected SpineWidth 0.15, got %f", m2.KDPLayout.SpineWidth)
-	}
-	if !m2.KDPLayout.SpineTextEligible {
-		t.Error("expected SpineTextEligible to be true")
-	}
-	if len(m2.KDPLayout.Guides) != 1 || m2.KDPLayout.Guides[0].Label != "Spine" {
-		t.Errorf("expected 1 Guide labelled 'Spine', got: %v", m2.KDPLayout.Guides)
-	}
-	if m2.AssetRegistry["interior_pdf"] == "" {
-		t.Error("expected interior_pdf asset to be registered, got empty")
-	}
-	if len(m2.Kiln.Milestones) != 2 || m2.Kiln.Milestones[0] != "initiate_complete" || m2.Kiln.Milestones[1] != "assemble_complete" {
-		t.Errorf("expected milestones [initiate_complete, assemble_complete], got %v", m2.Kiln.Milestones)
-	}
-	if m2.Kiln.InteriorPDFPath == "" {
-		t.Error("expected InteriorPDFPath to be set in Kiln sync data")
-	}
-	if m2.Kiln.InteriorPDFPath != m2.AssetRegistry["interior_pdf"] {
-		t.Errorf("expected Kiln InteriorPDFPath to match AssetRegistry, got %q vs %q", m2.Kiln.InteriorPDFPath, m2.AssetRegistry["interior_pdf"])
-	}
-	if m2.BookProperties.TrimSize != "8.5x8.5" {
-		t.Errorf("expected TrimSize fallback to default '8.5x8.5', got %q", m2.BookProperties.TrimSize)
-	}
+	verifyAssembleSuccessManifest(t, m2)
 }
 
 func TestAssemble_TrimSizeOverride(t *testing.T) {
@@ -982,6 +959,11 @@ func TestAssemble_PDFCheck_Failure(t *testing.T) {
 	} else if !strings.Contains(err.Error(), "pdf preflight check failed") {
 		t.Errorf("expected error to contain 'pdf preflight check failed', got: %v", err)
 	}
+
+	mAfter, loadErr := manifest.LoadManifest(filepath.Join(tmpDir, "manifest.json"))
+	if loadErr == nil && mAfter.Progress.PreflightPassed {
+		t.Error("expected PreflightPassed to be false after PDF check failure")
+	}
 }
 
 func TestAssemble_PDFCheck_CoverFailure(t *testing.T) {
@@ -1348,6 +1330,29 @@ func TestCompileCoverPDF_Branches(t *testing.T) {
 		t.Errorf("expected /path/to/custom_cover.pdf, got %q", resRaw)
 	}
 
+	// 3b. Relative .pdf output in JSON response from MCP tool
+	clientTypstRel, serverTypstRel := mcpsdk.NewInMemoryTransports()
+	relServer := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "mock-rel-typst", Version: "1.0.0"}, nil)
+	relServer.AddTool(&mcpsdk.Tool{
+		Name:        "compile_cover",
+		InputSchema: map[string]any{"type": "object"},
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		return &mcpsdk.CallToolResult{
+			Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: `{"output_pdf": "relative_cover.pdf"}`}},
+		}, nil
+	})
+	sessionRel, _ := relServer.Connect(ctx, serverTypstRel, nil)
+	defer func() { _ = sessionRel.Close() }()
+
+	resRel, errRel := compileCoverPDF(ctx, AssembleOptions{InputDir: tmpDir, TypstTransport: clientTypstRel}, m, 20, "paperback")
+	if errRel != nil {
+		t.Fatalf("unexpected relative cover output error: %v", errRel)
+	}
+	expectedRel := filepath.Join(tmpDir, "relative_cover.pdf")
+	if resRel != expectedRel {
+		t.Errorf("expected %q, got %q", expectedRel, resRel)
+	}
+
 	// 4. Tool call error
 	clientTypstErr, serverTypstErr := mcpsdk.NewInMemoryTransports()
 	errServer := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "mock-err-typst", Version: "1.0.0"}, nil)
@@ -1363,5 +1368,216 @@ func TestCompileCoverPDF_Branches(t *testing.T) {
 	_, errTool := compileCoverPDF(ctx, AssembleOptions{InputDir: tmpDir, TypstTransport: clientTypstErr}, m, 20, "paperback")
 	if errTool == nil || !strings.Contains(errTool.Error(), "cover compilation failed") {
 		t.Fatalf("expected cover compilation failed error, got: %v", errTool)
+	}
+}
+
+func TestAssemble_DryRun_DoesNotSetPreflightPassed(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos-assemble-dryrun-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	optsInit := InitiateOptions{
+		OutputDir:       tmpDir,
+		Theme:           "Parody Theme",
+		TargetPageCount: 10,
+	}
+	m, err := Initiate(optsInit)
+	if err != nil {
+		t.Fatalf("Initiate failed: %v", err)
+	}
+	m.Progress.Pages = make([]manifest.PageState, 10)
+	if saveErr := m.Save(); saveErr != nil {
+		t.Fatalf("failed to save manifest: %v", saveErr)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	clientKDP, serverKDP := mcpsdk.NewInMemoryTransports()
+	_, cleanupKDP := setupMockKDPMathServer(t, ctx, serverKDP)
+	defer cleanupKDP()
+
+	optsAssemble := AssembleOptions{
+		InputDir:         tmpDir,
+		Format:           "paperback",
+		DryRun:           true,
+		KDPMathTransport: clientKDP,
+	}
+
+	_, err = Assemble(ctx, optsAssemble)
+	if err != nil {
+		t.Fatalf("Assemble dry-run failed: %v", err)
+	}
+
+	mAfter, loadErr := manifest.LoadManifest(filepath.Join(tmpDir, "manifest.json"))
+	if loadErr != nil {
+		t.Fatalf("failed to load manifest after dry-run: %v", loadErr)
+	}
+	if mAfter.Progress.PreflightPassed {
+		t.Error("expected PreflightPassed to be false after dry-run assemble")
+	}
+}
+
+func verifyAssembleSuccessManifest(t *testing.T, m2 *manifest.Manifest) {
+	t.Helper()
+	if math.Abs(m2.KDPLayout.SpineWidth-0.15) > 1e-9 {
+		t.Errorf("expected SpineWidth 0.15, got %f", m2.KDPLayout.SpineWidth)
+	}
+	if !m2.KDPLayout.SpineTextEligible {
+		t.Error("expected SpineTextEligible to be true")
+	}
+	if len(m2.KDPLayout.Guides) != 1 || m2.KDPLayout.Guides[0].Label != "Spine" {
+		t.Errorf("expected 1 Guide labelled 'Spine', got: %v", m2.KDPLayout.Guides)
+	}
+	if m2.AssetRegistry["interior_pdf"] == "" {
+		t.Error("expected interior_pdf asset to be registered, got empty")
+	}
+	if len(m2.Kiln.Milestones) != 2 || m2.Kiln.Milestones[0] != "initiate_complete" || m2.Kiln.Milestones[1] != "assemble_complete" {
+		t.Errorf("expected milestones [initiate_complete, assemble_complete], got %v", m2.Kiln.Milestones)
+	}
+	if m2.Kiln.InteriorPDFPath == "" {
+		t.Error("expected InteriorPDFPath to be set in Kiln sync data")
+	}
+	if m2.Kiln.InteriorPDFPath != m2.AssetRegistry["interior_pdf"] {
+		t.Errorf("expected Kiln InteriorPDFPath to match AssetRegistry, got %q vs %q", m2.Kiln.InteriorPDFPath, m2.AssetRegistry["interior_pdf"])
+	}
+	if m2.BookProperties.TrimSize != "8.5x8.5" {
+		t.Errorf("expected TrimSize fallback to default '8.5x8.5', got %q", m2.BookProperties.TrimSize)
+	}
+	if !m2.Progress.PreflightPassed {
+		t.Errorf("expected PreflightPassed to be true after successful assemble with PDF check")
+	}
+	if len(m2.Progress.PreflightHashes) == 0 || m2.Progress.PreflightHashes["interior.pdf"] == "" {
+		t.Errorf("expected PreflightHashes to contain interior.pdf, got %v", m2.Progress.PreflightHashes)
+	}
+}
+
+func TestAssemble_PreflightModificationDetected(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos-assemble-preflight-mod-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	optsInit := InitiateOptions{
+		OutputDir:       tmpDir,
+		Theme:           "Parody Theme",
+		TargetPageCount: 10,
+	}
+	m, err := Initiate(optsInit)
+	if err != nil {
+		t.Fatalf("Initiate failed: %v", err)
+	}
+	m.Progress.Pages = make([]manifest.PageState, 10)
+	if saveErr := m.Save(); saveErr != nil {
+		t.Fatalf("failed to save manifest: %v", saveErr)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	clientKDP, serverKDP := mcpsdk.NewInMemoryTransports()
+	_, cleanupKDP := setupMockKDPMathServer(t, ctx, serverKDP)
+	defer cleanupKDP()
+
+	clientTypst, serverTypst := mcpsdk.NewInMemoryTransports()
+	_, cleanupTypst := setupMockTypstServer(t, ctx, serverTypst)
+	defer cleanupTypst()
+
+	server := mcpsdk.NewServer(&mcpsdk.Implementation{
+		Name:    "mock-pdfcheck-tamper-server",
+		Version: "1.0.0",
+	}, nil)
+
+	server.AddTool(&mcpsdk.Tool{
+		Name: "validate_pdf",
+		InputSchema: map[string]any{
+			"type": "object",
+		},
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		_ = os.WriteFile(filepath.Join(tmpDir, "interior.pdf"), []byte("%PDF-1.4 TAMPERED CONTENT"), 0600)
+		resMap := map[string]interface{}{
+			"valid": true,
+		}
+		resBytes, _ := json.Marshal(resMap)
+		return &mcpsdk.CallToolResult{
+			Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: string(resBytes)}},
+		}, nil
+	})
+
+	clientPDFCheck, serverPDFCheck := mcpsdk.NewInMemoryTransports()
+	session, err := server.Connect(ctx, serverPDFCheck, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = session.Close() }()
+
+	optsAssemble := AssembleOptions{
+		InputDir:          tmpDir,
+		Format:            "paperback",
+		KDPMathTransport:  clientKDP,
+		TypstTransport:    clientTypst,
+		PDFCheckTransport: clientPDFCheck,
+	}
+
+	_, err = Assemble(ctx, optsAssemble)
+	if err == nil {
+		t.Fatal("expected Assemble to fail when deliverable was modified during preflight verification, but it succeeded")
+	}
+	if !strings.Contains(err.Error(), "interior PDF deliverable was modified during preflight verification") {
+		t.Fatalf("expected modification error, got: %v", err)
+	}
+}
+
+func TestRecordPreflightIfPassed_EdgeCases(t *testing.T) {
+	ctx := context.Background()
+	tmpDir, err := os.MkdirTemp("", "pithos-rec-preflight-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	m := manifest.NewManifest("Parody Theme")
+	m.Progress.Pages = make([]manifest.PageState, 10)
+
+	// 1. Dry run returns nil
+	if err := recordPreflightIfPassed(ctx, AssembleOptions{DryRun: true}, m, "", ""); err != nil {
+		t.Errorf("expected nil error on dry run, got: %v", err)
+	}
+
+	// 2. Missing interior PDF returns error
+	if err := recordPreflightIfPassed(ctx, AssembleOptions{}, m, filepath.Join(tmpDir, "missing.pdf"), ""); err == nil {
+		t.Error("expected error for missing interior pdf")
+	}
+
+	interiorPath := filepath.Join(tmpDir, "interior.pdf")
+	if err := os.WriteFile(interiorPath, []byte("%PDF-1.4 Interior"), 0600); err != nil {
+		t.Fatalf("failed to write interior: %v", err)
+	}
+
+	// 3. Missing cover PDF returns error
+	if err := recordPreflightIfPassed(ctx, AssembleOptions{}, m, interiorPath, filepath.Join(tmpDir, "missing_cover.pdf")); err == nil {
+		t.Error("expected error for missing cover pdf")
+	}
+
+	coverPath := filepath.Join(tmpDir, "cover.pdf")
+	if err := os.WriteFile(coverPath, []byte("%PDF-1.4 Cover"), 0600); err != nil {
+		t.Fatalf("failed to write cover: %v", err)
+	}
+
+	// 4. Preflight check failure
+	m.BookProperties.TrimSize = "invalid_trim"
+	if err := recordPreflightIfPassed(ctx, AssembleOptions{}, m, interiorPath, coverPath); err == nil {
+		t.Error("expected preflight check error for invalid trim size")
+	}
+
+	// 5. Relative paths normalized to opts.InputDir
+	optsRel := AssembleOptions{
+		InputDir: tmpDir,
+	}
+	if err := recordPreflightIfPassed(ctx, optsRel, m, "interior.pdf", "cover.pdf"); err == nil {
+		t.Error("expected preflight check error for invalid trim size with relative paths")
 	}
 }

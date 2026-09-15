@@ -142,6 +142,11 @@ func Assemble(ctx context.Context, opts AssembleOptions) (*manifest.Manifest, er
 		}
 	}()
 
+	// Invalidate preflight certification before compiling new PDFs
+	if setErr := m.SetPreflightPassed(false); setErr != nil {
+		return nil, fmt.Errorf("failed to reset preflight status: %w", setErr)
+	}
+
 	// 5. Compile the interior PDF
 	pdfPath, err := compileInteriorPDF(ctx, opts, m, &typstClient)
 	if err != nil {
@@ -158,14 +163,17 @@ func Assemble(ctx context.Context, opts AssembleOptions) (*manifest.Manifest, er
 		return nil, cErr
 	}
 	if coverPDFPath != "" {
+		if !filepath.IsAbs(coverPDFPath) {
+			coverPDFPath = filepath.Join(opts.InputDir, coverPDFPath)
+		}
 		if err := m.RegisterAsset("cover_pdf", coverPDFPath); err != nil {
 			return nil, fmt.Errorf("failed to register cover PDF asset: %w", err)
 		}
 	}
 
 	// Run PDF preflight checks (Interior and optionally Cover PDF)
-	if err := runPDFPreflightCheck(ctx, opts, m, pdfPath); err != nil {
-		return nil, fmt.Errorf("pdf preflight check failed: %w", err)
+	if err := recordPreflightIfPassed(ctx, opts, m, pdfPath, coverPDFPath); err != nil {
+		return nil, err
 	}
 
 	if err := m.UpdatePDFPaths(pdfPath, coverPDFPath); err != nil {
@@ -191,22 +199,110 @@ func Assemble(ctx context.Context, opts AssembleOptions) (*manifest.Manifest, er
 	return m, nil
 }
 
-func compileInteriorPDF(ctx context.Context, opts AssembleOptions, m *manifest.Manifest, sharedClients ...**mcp.PluginClient) (string, error) {
-	manuscriptPath := filepath.Join(opts.InputDir, "manuscript.md")
-	if _, err := os.Stat(manuscriptPath); err != nil {
-		if !os.IsNotExist(err) {
-			return "", fmt.Errorf("failed to check manuscript.md status: %w", err)
-		}
-		if len(m.Progress.Pages) == 0 {
-			return "", errors.New("cannot assemble book: manuscript.md is missing and no pages are generated in the manifest")
-		}
-		if exportErr := exportManuscriptToMarkdown(opts.InputDir, m.BookProperties.Style, m.BookProperties.CharacterProfile, m.Progress.Pages); exportErr != nil {
-			return "", fmt.Errorf("failed to export manuscript.md: %w", exportErr)
+func recordPreflightIfPassed(ctx context.Context, opts AssembleOptions, m *manifest.Manifest, pdfPath, coverPDFPath string) error {
+	if opts.DryRun {
+		return nil
+	}
+
+	if !filepath.IsAbs(pdfPath) {
+		pdfPath = filepath.Join(opts.InputDir, pdfPath)
+	}
+	if coverPDFPath != "" && !filepath.IsAbs(coverPDFPath) {
+		coverPDFPath = filepath.Join(opts.InputDir, coverPDFPath)
+	}
+
+	interiorHashBefore, err := computeFileSHA256(pdfPath)
+	if err != nil {
+		return fmt.Errorf("failed to compute interior PDF preflight hash before check: %w", err)
+	}
+	var coverHashBefore string
+	if coverPDFPath != "" {
+		coverHashBefore, err = computeFileSHA256(coverPDFPath)
+		if err != nil {
+			return fmt.Errorf("failed to compute cover PDF preflight hash before check: %w", err)
 		}
 	}
-	imagesDir := filepath.Join(opts.InputDir, "images")
-	outputPath := filepath.Join(opts.InputDir, "interior.pdf")
 
+	if checkErr := runPDFPreflightCheck(ctx, opts, m, pdfPath); checkErr != nil {
+		return fmt.Errorf("pdf preflight check failed: %w", checkErr)
+	}
+
+	interiorHashAfter, postInteriorErr := computeFileSHA256(pdfPath)
+	if postInteriorErr != nil {
+		return fmt.Errorf("failed to compute interior PDF preflight hash after check: %w", postInteriorErr)
+	}
+	if interiorHashBefore != interiorHashAfter {
+		return fmt.Errorf("interior PDF deliverable was modified during preflight verification (before: %s, after: %s)", interiorHashBefore, interiorHashAfter)
+	}
+
+	preflightHashes := map[string]string{
+		"interior.pdf": interiorHashAfter,
+	}
+	if coverPDFPath != "" {
+		coverHashAfter, postCoverErr := computeFileSHA256(coverPDFPath)
+		if postCoverErr != nil {
+			return fmt.Errorf("failed to compute cover PDF preflight hash after check: %w", postCoverErr)
+		}
+		if coverHashBefore != coverHashAfter {
+			return fmt.Errorf("cover PDF deliverable was modified during preflight verification (before: %s, after: %s)", coverHashBefore, coverHashAfter)
+		}
+		preflightHashes["cover.pdf"] = coverHashAfter
+	}
+
+	if err := m.RecordPreflightPassed(preflightHashes); err != nil {
+		return fmt.Errorf("failed to record preflight passed: %w", err)
+	}
+	return nil
+}
+
+func ensureManuscriptMarkdown(inputDir string, m *manifest.Manifest) error {
+	manuscriptPath := filepath.Join(inputDir, "manuscript.md")
+	if _, err := os.Stat(manuscriptPath); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("failed to check manuscript.md status: %w", err)
+	}
+	if len(m.Progress.Pages) == 0 {
+		return errors.New("cannot assemble book: manuscript.md is missing and no pages are generated in the manifest")
+	}
+	if exportErr := exportManuscriptToMarkdown(inputDir, m.BookProperties.Style, m.BookProperties.CharacterProfile, m.Progress.Pages); exportErr != nil {
+		return fmt.Errorf("failed to export manuscript.md: %w", exportErr)
+	}
+	return nil
+}
+
+func parseCompileInteriorResponse(resText, outputPath, inputDir string) (string, error) {
+	var result struct {
+		OutputPDF string `json:"output_pdf"`
+		PageCount int    `json:"page_count"`
+	}
+	if err := json.Unmarshal([]byte(resText), &result); err == nil {
+		if result.OutputPDF != "" {
+			if !filepath.IsAbs(result.OutputPDF) {
+				return filepath.Join(inputDir, result.OutputPDF), nil
+			}
+			return result.OutputPDF, nil
+		}
+		return outputPath, nil
+	}
+
+	trimmedRes := strings.TrimSpace(resText)
+	if strings.HasSuffix(strings.ToLower(trimmedRes), ".pdf") {
+		if !filepath.IsAbs(trimmedRes) {
+			return filepath.Join(inputDir, trimmedRes), nil
+		}
+		return trimmedRes, nil
+	}
+
+	return "", fmt.Errorf("unexpected non-JSON response from compile_interior tool (raw: %q)", resText)
+}
+
+func compileInteriorPDF(ctx context.Context, opts AssembleOptions, m *manifest.Manifest, sharedClients ...**mcp.PluginClient) (string, error) {
+	if err := ensureManuscriptMarkdown(opts.InputDir, m); err != nil {
+		return "", err
+	}
+
+	outputPath := filepath.Join(opts.InputDir, "interior.pdf")
 	if opts.DryRun {
 		if err := os.WriteFile(outputPath, []byte("SIMULATED PDF CONTENT"), 0600); err != nil {
 			return "", fmt.Errorf("failed to write simulated PDF: %w", err)
@@ -231,8 +327,8 @@ func compileInteriorPDF(ctx context.Context, opts AssembleOptions, m *manifest.M
 	defer cleanup()
 
 	args := map[string]interface{}{
-		"manuscript_path": manuscriptPath,
-		"images_dir":      imagesDir,
+		"manuscript_path": filepath.Join(opts.InputDir, "manuscript.md"),
+		"images_dir":      filepath.Join(opts.InputDir, "images"),
 		"output_path":     outputPath,
 		"page_size":       pageSize,
 		"bleed":           bleedVal,
@@ -245,24 +341,7 @@ func compileInteriorPDF(ctx context.Context, opts AssembleOptions, m *manifest.M
 		return "", fmt.Errorf("interior compilation failed: %w", err)
 	}
 
-	var result struct {
-		OutputPDF string `json:"output_pdf"`
-		PageCount int    `json:"page_count"`
-	}
-	if err := json.Unmarshal([]byte(resText), &result); err == nil {
-		if result.OutputPDF != "" {
-			return result.OutputPDF, nil
-		}
-		return outputPath, nil
-	}
-
-	// Fallback to checking if the raw response text is a plain path pointing to a PDF file
-	trimmedRes := strings.TrimSpace(resText)
-	if strings.HasSuffix(strings.ToLower(trimmedRes), ".pdf") {
-		return trimmedRes, nil
-	}
-
-	return "", fmt.Errorf("unexpected non-JSON response from compile_interior tool (raw: %q)", resText)
+	return parseCompileInteriorResponse(resText, outputPath, opts.InputDir)
 }
 
 func compileCoverPDF(ctx context.Context, opts AssembleOptions, m *manifest.Manifest, pageCount int, format string, typstClients ...*mcp.PluginClient) (string, error) {
@@ -332,11 +411,18 @@ func compileCoverPDF(ctx context.Context, opts AssembleOptions, m *manifest.Mani
 		return "", fmt.Errorf("cover compilation failed: %w", err)
 	}
 
+	return parseCompileCoverResponse(resText, outputPath, opts.InputDir)
+}
+
+func parseCompileCoverResponse(resText, outputPath, inputDir string) (string, error) {
 	var result struct {
 		OutputPDF string `json:"output_pdf"`
 	}
 	if err := json.Unmarshal([]byte(resText), &result); err == nil {
 		if result.OutputPDF != "" {
+			if !filepath.IsAbs(result.OutputPDF) {
+				return filepath.Join(inputDir, result.OutputPDF), nil
+			}
 			return result.OutputPDF, nil
 		}
 		return outputPath, nil
@@ -344,6 +430,9 @@ func compileCoverPDF(ctx context.Context, opts AssembleOptions, m *manifest.Mani
 
 	trimmedRes := strings.TrimSpace(resText)
 	if strings.HasSuffix(strings.ToLower(trimmedRes), ".pdf") {
+		if !filepath.IsAbs(trimmedRes) {
+			return filepath.Join(inputDir, trimmedRes), nil
+		}
 		return trimmedRes, nil
 	}
 
@@ -402,6 +491,9 @@ func runPDFPreflightCheck(ctx context.Context, opts AssembleOptions, m *manifest
 
 	coverPDFPath := m.AssetRegistry["cover_pdf"]
 	if coverPDFPath != "" {
+		if !filepath.IsAbs(coverPDFPath) {
+			coverPDFPath = filepath.Join(opts.InputDir, coverPDFPath)
+		}
 		return validateCoverPDF(ctx, mcpClient, coverPDFPath, expectedWidth, expectedHeight, m, opts.PaperType)
 	}
 
