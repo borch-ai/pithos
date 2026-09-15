@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/borch-ai/pithos/internal/logger"
@@ -152,6 +153,53 @@ func validateDeliverablePath(wsDir, candidatePath string) (string, error) {
 	}
 
 	return canonicalTarget, nil
+}
+
+// readDeliverableFile opens candidatePath with O_NOFOLLOW and O_NONBLOCK, verifies that the open
+// file descriptor represents a regular file confined to wsDir, and reads the file contents safely.
+func readDeliverableFile(wsDir, candidatePath string) ([]byte, error) {
+	canonicalPath, err := validateDeliverablePath(wsDir, candidatePath)
+	if err != nil {
+		return nil, err
+	}
+
+	//nolint:gosec // canonicalPath is strictly validated within wsDir
+	f, err := os.OpenFile(canonicalPath, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open deliverable file %q: %w", candidatePath, err)
+	}
+	defer func() { _ = f.Close() }()
+
+	info, err := f.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("failed to inspect open deliverable file descriptor %q: %w", candidatePath, err)
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("deliverable file %q is not a regular file", candidatePath)
+	}
+
+	// Re-verify that canonicalPath still resides within canonical wsDir
+	canonicalWs, err := filepath.Abs(wsDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to determine absolute path for workspace: %w", err)
+	}
+	if evalWs, symErr := filepath.EvalSymlinks(canonicalWs); symErr == nil {
+		canonicalWs = evalWs
+	}
+	evalTarget, symErr := filepath.EvalSymlinks(canonicalPath)
+	if symErr != nil {
+		return nil, fmt.Errorf("failed to evaluate symlinks for deliverable %q: %w", candidatePath, symErr)
+	}
+	rel, err := filepath.Rel(canonicalWs, evalTarget)
+	if err != nil || strings.HasPrefix(rel, "..") || filepath.IsAbs(rel) {
+		return nil, fmt.Errorf("deliverable path %q resolves outside workspace directory", candidatePath)
+	}
+
+	data, err := io.ReadAll(io.LimitReader(f, 512*1024*1024))
+	if err != nil {
+		return nil, fmt.Errorf("failed to read deliverable file %q: %w", candidatePath, err)
+	}
+	return data, nil
 }
 
 func resolveAssetPath(wsDir, filename, registeredPath string) (string, error) {
@@ -381,6 +429,26 @@ func executeDryRun(wsDir, archivePath string, m *manifest.Manifest) (*manifest.R
 	return m.ReleaseBundle, nil
 }
 
+func loadAndValidateManifest(wsDir string) (*manifest.Manifest, error) {
+	manifestPath := filepath.Join(wsDir, "manifest.json")
+	manifestInfo, err := os.Lstat(manifestPath)
+	if err != nil {
+		return nil, fmt.Errorf("manifest.json not found in workspace %q: %w", wsDir, err)
+	}
+	if manifestInfo.Mode()&os.ModeSymlink != 0 {
+		return nil, fmt.Errorf("manifest.json in workspace %q is a symlink", wsDir)
+	}
+	if !manifestInfo.Mode().IsRegular() {
+		return nil, fmt.Errorf("manifest.json in workspace %q is not a regular file", wsDir)
+	}
+
+	m, err := manifest.LoadManifest(manifestPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load manifest: %w", err)
+	}
+	return m, nil
+}
+
 // PackWorkspace verifies deliverables and preflight gates, computes cryptographic checksums,
 // and packages print-ready assets into a distribution archive.
 func PackWorkspace(ctx context.Context, opts PackOptions) (*manifest.ReleaseBundle, error) {
@@ -389,14 +457,9 @@ func PackWorkspace(ctx context.Context, opts PackOptions) (*manifest.ReleaseBund
 	}
 
 	wsDir := filepath.Clean(opts.WorkspaceDir)
-	manifestPath := filepath.Join(wsDir, "manifest.json")
-	if _, err := os.Stat(manifestPath); err != nil {
-		return nil, fmt.Errorf("manifest.json not found in workspace %q: %w", wsDir, err)
-	}
-
-	m, err := manifest.LoadManifest(manifestPath)
+	m, err := loadAndValidateManifest(wsDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load manifest: %w", err)
+		return nil, err
 	}
 
 	interiorPath, coverPath, delivErr := locateDeliverables(wsDir, m)
@@ -417,13 +480,11 @@ func PackWorkspace(ctx context.Context, opts PackOptions) (*manifest.ReleaseBund
 	}
 
 	// Capture deliverable bytes into memory once to eliminate TOCTOU discrepancies
-	//nolint:gosec // interiorPath is validated to reside strictly within wsDir
-	interiorBytes, err := os.ReadFile(interiorPath)
+	interiorBytes, err := readDeliverableFile(wsDir, interiorPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read interior deliverable %q: %w", interiorPath, err)
 	}
-	//nolint:gosec // coverPath is validated to reside strictly within wsDir
-	coverBytes, err := os.ReadFile(coverPath)
+	coverBytes, err := readDeliverableFile(wsDir, coverPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read cover deliverable %q: %w", coverPath, err)
 	}

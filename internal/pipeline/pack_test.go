@@ -871,3 +871,104 @@ func TestWriteChecksumsFile_EdgeCases(t *testing.T) {
 		t.Errorf("expected write success, got: %v", err)
 	}
 }
+
+func TestPackWorkspace_SymlinkManifestRejected(t *testing.T) {
+	ctx := context.Background()
+	wsDir, _ := setupTestBookWorkspace(t, true, "assemble_complete")
+	defer func() { _ = os.RemoveAll(wsDir) }()
+
+	extDir, err := os.MkdirTemp("", "pithos-manifest-target-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(extDir) }()
+
+	realManifest := filepath.Join(extDir, "real_manifest.json")
+	if err := os.WriteFile(realManifest, []byte("{}"), 0600); err != nil {
+		t.Fatalf("failed to write real manifest: %v", err)
+	}
+
+	manifestPath := filepath.Join(wsDir, "manifest.json")
+	_ = os.Remove(manifestPath)
+	if err := os.Symlink(realManifest, manifestPath); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
+
+	_, pErr := PackWorkspace(ctx, PackOptions{WorkspaceDir: wsDir})
+	if pErr == nil || !strings.Contains(pErr.Error(), "is a symlink") {
+		t.Fatalf("expected symlink error for manifest.json, got: %v", pErr)
+	}
+}
+
+func TestPackWorkspace_NonRegularManifestRejected(t *testing.T) {
+	ctx := context.Background()
+	wsDir, _ := setupTestBookWorkspace(t, true, "assemble_complete")
+	defer func() { _ = os.RemoveAll(wsDir) }()
+
+	manifestPath := filepath.Join(wsDir, "manifest.json")
+	_ = os.Remove(manifestPath)
+	if err := os.Mkdir(manifestPath, 0750); err != nil {
+		t.Fatalf("failed to create dir in place of manifest: %v", err)
+	}
+
+	_, pErr := PackWorkspace(ctx, PackOptions{WorkspaceDir: wsDir})
+	if pErr == nil || !strings.Contains(pErr.Error(), "is not a regular file") {
+		t.Fatalf("expected non-regular file error for manifest.json, got: %v", pErr)
+	}
+}
+
+func TestReadDeliverableFile_Errors(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pithos-read-deliv-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	// Non-existent file
+	_, err = readDeliverableFile(tmpDir, filepath.Join(tmpDir, "missing.pdf"))
+	if err == nil {
+		t.Error("expected error for missing file, got nil")
+	}
+
+	// Directory
+	subDir := filepath.Join(tmpDir, "dir.pdf")
+	if mkdirErr := os.Mkdir(subDir, 0750); mkdirErr != nil {
+		t.Fatal(mkdirErr)
+	}
+	_, err = readDeliverableFile(tmpDir, subDir)
+	if err == nil || !strings.Contains(err.Error(), "is not a regular deliverable file") {
+		t.Errorf("expected non-regular error for directory, got: %v", err)
+	}
+
+	// Symlink to external file
+	extDir, mkDirErr := os.MkdirTemp("", "pithos-ext-deliv-*")
+	if mkDirErr != nil {
+		t.Fatal(mkDirErr)
+	}
+	defer func() { _ = os.RemoveAll(extDir) }()
+	extFile := filepath.Join(extDir, "ext.pdf")
+	if writeErr := os.WriteFile(extFile, []byte("EXTERNAL"), 0600); writeErr != nil {
+		t.Fatal(writeErr)
+	}
+	symFile := filepath.Join(tmpDir, "sym.pdf")
+	if symErr := os.Symlink(extFile, symFile); symErr != nil {
+		t.Fatal(symErr)
+	}
+	_, err = readDeliverableFile(tmpDir, symFile)
+	if err == nil || !strings.Contains(err.Error(), "resolves outside workspace directory") {
+		t.Errorf("expected outside workspace error for symlink, got: %v", err)
+	}
+
+	// Regular file success
+	realFile := filepath.Join(tmpDir, "real.pdf")
+	if writePdfErr := os.WriteFile(realFile, []byte("PDF"), 0600); writePdfErr != nil {
+		t.Fatal(writePdfErr)
+	}
+	data, err := readDeliverableFile(tmpDir, realFile)
+	if err != nil {
+		t.Fatalf("unexpected read error: %v", err)
+	}
+	if string(data) != "PDF" {
+		t.Errorf("expected PDF, got %s", string(data))
+	}
+}

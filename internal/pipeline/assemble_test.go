@@ -1330,6 +1330,29 @@ func TestCompileCoverPDF_Branches(t *testing.T) {
 		t.Errorf("expected /path/to/custom_cover.pdf, got %q", resRaw)
 	}
 
+	// 3b. Relative .pdf output in JSON response from MCP tool
+	clientTypstRel, serverTypstRel := mcpsdk.NewInMemoryTransports()
+	relServer := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "mock-rel-typst", Version: "1.0.0"}, nil)
+	relServer.AddTool(&mcpsdk.Tool{
+		Name:        "compile_cover",
+		InputSchema: map[string]any{"type": "object"},
+	}, func(ctx context.Context, req *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+		return &mcpsdk.CallToolResult{
+			Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: `{"output_pdf": "relative_cover.pdf"}`}},
+		}, nil
+	})
+	sessionRel, _ := relServer.Connect(ctx, serverTypstRel, nil)
+	defer func() { _ = sessionRel.Close() }()
+
+	resRel, errRel := compileCoverPDF(ctx, AssembleOptions{InputDir: tmpDir, TypstTransport: clientTypstRel}, m, 20, "paperback")
+	if errRel != nil {
+		t.Fatalf("unexpected relative cover output error: %v", errRel)
+	}
+	expectedRel := filepath.Join(tmpDir, "relative_cover.pdf")
+	if resRel != expectedRel {
+		t.Errorf("expected %q, got %q", expectedRel, resRel)
+	}
+
 	// 4. Tool call error
 	clientTypstErr, serverTypstErr := mcpsdk.NewInMemoryTransports()
 	errServer := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "mock-err-typst", Version: "1.0.0"}, nil)
@@ -1548,5 +1571,13 @@ func TestRecordPreflightIfPassed_EdgeCases(t *testing.T) {
 	m.BookProperties.TrimSize = "invalid_trim"
 	if err := recordPreflightIfPassed(ctx, AssembleOptions{}, m, interiorPath, coverPath); err == nil {
 		t.Error("expected preflight check error for invalid trim size")
+	}
+
+	// 5. Relative paths normalized to opts.InputDir
+	optsRel := AssembleOptions{
+		InputDir: tmpDir,
+	}
+	if err := recordPreflightIfPassed(ctx, optsRel, m, "interior.pdf", "cover.pdf"); err == nil {
+		t.Error("expected preflight check error for invalid trim size with relative paths")
 	}
 }

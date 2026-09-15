@@ -163,6 +163,9 @@ func Assemble(ctx context.Context, opts AssembleOptions) (*manifest.Manifest, er
 		return nil, cErr
 	}
 	if coverPDFPath != "" {
+		if !filepath.IsAbs(coverPDFPath) {
+			coverPDFPath = filepath.Join(opts.InputDir, coverPDFPath)
+		}
 		if err := m.RegisterAsset("cover_pdf", coverPDFPath); err != nil {
 			return nil, fmt.Errorf("failed to register cover PDF asset: %w", err)
 		}
@@ -199,6 +202,13 @@ func Assemble(ctx context.Context, opts AssembleOptions) (*manifest.Manifest, er
 func recordPreflightIfPassed(ctx context.Context, opts AssembleOptions, m *manifest.Manifest, pdfPath, coverPDFPath string) error {
 	if opts.DryRun {
 		return nil
+	}
+
+	if !filepath.IsAbs(pdfPath) {
+		pdfPath = filepath.Join(opts.InputDir, pdfPath)
+	}
+	if coverPDFPath != "" && !filepath.IsAbs(coverPDFPath) {
+		coverPDFPath = filepath.Join(opts.InputDir, coverPDFPath)
 	}
 
 	interiorHashBefore, err := computeFileSHA256(pdfPath)
@@ -401,11 +411,18 @@ func compileCoverPDF(ctx context.Context, opts AssembleOptions, m *manifest.Mani
 		return "", fmt.Errorf("cover compilation failed: %w", err)
 	}
 
+	return parseCompileCoverResponse(resText, outputPath, opts.InputDir)
+}
+
+func parseCompileCoverResponse(resText, outputPath, inputDir string) (string, error) {
 	var result struct {
 		OutputPDF string `json:"output_pdf"`
 	}
 	if err := json.Unmarshal([]byte(resText), &result); err == nil {
 		if result.OutputPDF != "" {
+			if !filepath.IsAbs(result.OutputPDF) {
+				return filepath.Join(inputDir, result.OutputPDF), nil
+			}
 			return result.OutputPDF, nil
 		}
 		return outputPath, nil
@@ -413,6 +430,9 @@ func compileCoverPDF(ctx context.Context, opts AssembleOptions, m *manifest.Mani
 
 	trimmedRes := strings.TrimSpace(resText)
 	if strings.HasSuffix(strings.ToLower(trimmedRes), ".pdf") {
+		if !filepath.IsAbs(trimmedRes) {
+			return filepath.Join(inputDir, trimmedRes), nil
+		}
 		return trimmedRes, nil
 	}
 
@@ -471,6 +491,9 @@ func runPDFPreflightCheck(ctx context.Context, opts AssembleOptions, m *manifest
 
 	coverPDFPath := m.AssetRegistry["cover_pdf"]
 	if coverPDFPath != "" {
+		if !filepath.IsAbs(coverPDFPath) {
+			coverPDFPath = filepath.Join(opts.InputDir, coverPDFPath)
+		}
 		return validateCoverPDF(ctx, mcpClient, coverPDFPath, expectedWidth, expectedHeight, m, opts.PaperType)
 	}
 
