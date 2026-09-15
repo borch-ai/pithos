@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"testing"
 
 	"github.com/borch-ai/pithos/internal/manifest"
@@ -764,7 +763,7 @@ func TestPackWorkspace_ValidateDeliverablePathEdgeCases(t *testing.T) {
 	}
 
 	fifoPath := filepath.Join(wsDir, "test.fifo")
-	if mkErr := syscall.Mkfifo(fifoPath, 0600); mkErr == nil {
+	if mkErr := createTestFIFO(fifoPath); mkErr == nil {
 		if _, err := validateDeliverablePath(wsDir, fifoPath); err == nil || !strings.Contains(err.Error(), "is not a regular deliverable file") {
 			t.Errorf("expected regular file error for FIFO, got: %v", err)
 		}

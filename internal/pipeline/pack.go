@@ -13,7 +13,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/borch-ai/pithos/internal/logger"
@@ -163,10 +162,9 @@ func readDeliverableFile(wsDir, candidatePath string) ([]byte, error) {
 		return nil, err
 	}
 
-	//nolint:gosec // canonicalPath is strictly validated within wsDir
-	f, err := os.OpenFile(canonicalPath, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	f, err := openDeliverableHandle(canonicalPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open deliverable file %q: %w", candidatePath, err)
+		return nil, err
 	}
 	defer func() { _ = f.Close() }()
 
